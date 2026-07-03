@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login | Proyecto Unicornio</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="card form-card">
+        <a class="back-link" href="/">Volver</a>
+        <h1>Acceso</h1>
+        <p>Usa una cuenta demo para entrar al area privada inicial.</p>
+        <div class="feature-row">
+          <span class="feature-pill">admin@unicornio.local</span>
+          <span class="feature-pill">Demo1234!</span>
+        </div>
+        <form id="login-form" class="stack">
+          <label>
+            <span>Email</span>
+            <input type="email" name="email" placeholder="admin@unicornio.local" required />
+          </label>
+          <label>
+            <span>Contraseña</span>
+            <input type="password" name="password" placeholder="Demo1234!" required />
+          </label>
+          <p id="login-error" class="error" hidden></p>
+          <button class="button primary" type="submit">Entrar</button>
+        </form>
+      </section>
+    </main>
+    <script src="/js/api.js"></script>
+    <script src="/js/login.js"></script>
+  </body>
+</html>

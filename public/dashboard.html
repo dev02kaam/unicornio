@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard | Proyecto Unicornio</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <main class="shell dashboard-shell">
+      <section class="dashboard-hero card">
+        <div class="hero-copy">
+          <span class="badge">Area privada</span>
+          <h1>Bienvenido</h1>
+          <p id="dashboard-intro">Estructura inicial. Los módulos funcionales se añadirán en fases posteriores.</p>
+        </div>
+        <div class="profile-panel">
+          <div class="profile-chip">
+            <span>Nombre</span>
+            <strong id="user-name">-</strong>
+          </div>
+          <div class="profile-chip">
+            <span>Email</span>
+            <strong id="user-email">-</strong>
+          </div>
+          <div class="profile-chip">
+            <span>Rol</span>
+            <strong id="user-role">-</strong>
+          </div>
+        </div>
+        <div class="action-row">
+          <button id="logout-button" class="button secondary" type="button">Cerrar sesión</button>
+        </div>
+      </section>
+
+      <section id="admin-panel" class="card admin-panel" hidden>
+        <div class="section-header">
+          <div>
+            <span class="badge">Administración</span>
+            <h2>Crear nuevos usuarios</h2>
+          </div>
+          <p>Acción disponible solo para administradores.</p>
+        </div>
+
+        <form id="create-user-form" class="stack admin-form">
+          <label>
+            <span>Nombre</span>
+            <input type="text" name="name" placeholder="Nuevo usuario" required />
+          </label>
+          <label>
+            <span>Email</span>
+            <input type="email" name="email" placeholder="nuevo@unicornio.local" required />
+          </label>
+          <label>
+            <span>Contraseña</span>
+            <input type="password" name="password" placeholder="Demo1234!" required />
+          </label>
+          <label>
+            <span>Rol</span>
+            <select name="role">
+              <option value="STUDENT">STUDENT</option>
+              <option value="FAMILY">FAMILY</option>
+              <option value="SCHOOL">SCHOOL</option>
+              <option value="PROFESSIONAL">PROFESSIONAL</option>
+              <option value="ADMIN">ADMIN</option>
+            </select>
+          </label>
+          <p id="create-user-error" class="error" hidden></p>
+          <p id="create-user-success" class="success" hidden></p>
+          <button class="button primary" type="submit">Crear usuario</button>
+        </form>
+      </section>
+
+      <section id="admin-users-panel" class="card admin-panel" hidden>
+        <div class="section-header">
+          <div>
+            <span class="badge">Usuarios</span>
+            <h2>Listado rápido</h2>
+          </div>
+          <button id="refresh-users-button" class="button secondary" type="button">Actualizar</button>
+        </div>
+        <div id="users-list" class="users-list"></div>
+      </section>
+
+      <section id="user-panel" class="card user-panel" hidden>
+        <div class="section-header">
+          <div>
+            <span class="badge">Tu perfil</span>
+            <h2>Espacio personal</h2>
+          </div>
+        </div>
+        <p class="panel-copy">
+          Aquí solo verás tu información básica y el acceso para cerrar sesión. La base está pensada para crecer por fases.
+        </p>
+      </section>
+    </main>
+    <script src="/js/api.js"></script>
+    <script src="/js/dashboard.js"></script>
+  </body>
+</html>
