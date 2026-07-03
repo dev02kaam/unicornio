@@ -1,11 +1,13 @@
-const nameElement = document.getElementById('user-name');
-const emailElement = document.getElementById('user-email');
-const roleElement = document.getElementById('user-role');
+const profileButton = document.getElementById('profile-button');
+const profileModal = document.getElementById('profile-modal');
+const profileCloseButton = document.getElementById('profile-close-button');
+const modalLogoutButton = document.getElementById('modal-logout-button');
+const profileNameElement = document.getElementById('profile-name');
+const profileEmailElement = document.getElementById('profile-email');
 const introElement = document.getElementById('dashboard-intro');
-const logoutButton = document.getElementById('logout-button');
+const logoutButton = modalLogoutButton;
 const adminPanel = document.getElementById('admin-panel');
 const adminUsersPanel = document.getElementById('admin-users-panel');
-const userPanel = document.getElementById('user-panel');
 const createUserForm = document.getElementById('create-user-form');
 const createUserError = document.getElementById('create-user-error');
 const createUserSuccess = document.getElementById('create-user-success');
@@ -48,7 +50,6 @@ function renderUsers(users) {
             <span>${user.email}</span>
           </div>
           <div class="user-meta">
-            <span>${user.role}</span>
             <span>${user.isActive ? 'Activo' : 'Inactivo'}</span>
           </div>
         </article>
@@ -62,13 +63,43 @@ async function loadAdminUsers() {
   renderUsers(response.data.users);
 }
 
+function openProfileModal() {
+  if (!profileModal) {
+    return;
+  }
+
+  profileModal.hidden = false;
+  profileModal.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('modal-open');
+}
+
+function closeProfileModal() {
+  if (!profileModal) {
+    return;
+  }
+
+  profileModal.hidden = true;
+  profileModal.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('modal-open');
+}
+
+async function doLogout() {
+  try {
+    await apiRequest('/auth/logout', { method: 'POST' });
+  } catch (_error) {
+    // Logout demo: limpiar la sesion local aunque el token sea stateless.
+  } finally {
+    clearToken();
+    window.location.href = '/login.html';
+  }
+}
+
 async function loadProfile() {
   try {
     const response = await apiRequest('/auth/me');
     currentUser = response.data.user;
-    nameElement.textContent = currentUser.name;
-    emailElement.textContent = currentUser.email;
-    roleElement.textContent = currentUser.role;
+    profileNameElement.textContent = currentUser.name;
+    profileEmailElement.textContent = currentUser.email;
 
     const isAdmin = String(currentUser.role || '').toUpperCase() === 'ADMIN';
 
@@ -76,11 +107,9 @@ async function loadProfile() {
       introElement.textContent = 'Tienes acceso de administración para crear usuarios y revisar el listado básico.';
       setPanelVisible(adminPanel, true, 'grid');
       setPanelVisible(adminUsersPanel, true, 'grid');
-      setPanelVisible(userPanel, false);
       await loadAdminUsers();
     } else {
-      introElement.textContent = 'Acceso personal listo. Puedes revisar tu perfil y cerrar sesión cuando quieras.';
-      setPanelVisible(userPanel, true, 'grid');
+      introElement.textContent = 'Acceso personal listo. Puedes revisar tu perfil cuando quieras.';
       setPanelVisible(adminPanel, false);
       setPanelVisible(adminUsersPanel, false);
     }
@@ -89,6 +118,17 @@ async function loadProfile() {
     window.location.href = '/login.html';
   }
 }
+
+profileButton?.addEventListener('click', openProfileModal);
+profileCloseButton?.addEventListener('click', closeProfileModal);
+profileModal?.querySelector('[data-close-profile]')?.addEventListener('click', closeProfileModal);
+modalLogoutButton?.addEventListener('click', doLogout);
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !profileModal.hidden) {
+    closeProfileModal();
+  }
+});
 
 if (createUserForm) {
   createUserForm.addEventListener('submit', async (event) => {
@@ -130,16 +170,5 @@ if (refreshUsersButton) {
     }
   });
 }
-
-logoutButton.addEventListener('click', async () => {
-  try {
-    await apiRequest('/auth/logout', { method: 'POST' });
-  } catch (_error) {
-    // Logout demo: limpiar la sesion local aunque el token sea stateless.
-  } finally {
-    clearToken();
-    window.location.href = '/login.html';
-  }
-});
 
 loadProfile();

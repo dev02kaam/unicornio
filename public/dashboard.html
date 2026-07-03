@@ -14,23 +14,10 @@
           <h1>Bienvenido</h1>
           <p id="dashboard-intro">Estructura inicial. Los módulos funcionales se añadirán en fases posteriores.</p>
         </div>
-        <div class="profile-panel">
-          <div class="profile-chip">
-            <span>Nombre</span>
-            <strong id="user-name">-</strong>
-          </div>
-          <div class="profile-chip">
-            <span>Email</span>
-            <strong id="user-email">-</strong>
-          </div>
-          <div class="profile-chip">
-            <span>Rol</span>
-            <strong id="user-role">-</strong>
-          </div>
-        </div>
-        <div class="action-row">
-          <button id="logout-button" class="button secondary" type="button">Cerrar sesión</button>
-        </div>
+
+        <button id="profile-button" class="account-trigger" type="button" aria-label="Abrir perfil">
+          <span class="avatar-badge avatar-large" aria-hidden="true">U</span>
+        </button>
       </section>
 
       <section id="admin-panel" class="card admin-panel" hidden>
@@ -81,19 +68,49 @@
         </div>
         <div id="users-list" class="users-list"></div>
       </section>
+    </main>
 
-      <section id="user-panel" class="card user-panel" hidden>
+    <section id="profile-modal" class="profile-modal" hidden aria-hidden="true">
+      <div class="profile-modal__backdrop" data-close-profile></div>
+      <div class="profile-modal__panel card" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title">
         <div class="section-header">
           <div>
-            <span class="badge">Tu perfil</span>
-            <h2>Espacio personal</h2>
+            <span class="badge">Perfil</span>
+            <h2 id="profile-modal-title">Datos y preferencias</h2>
+          </div>
+          <button id="profile-close-button" class="button secondary" type="button">Cerrar</button>
+        </div>
+
+        <div class="profile-grid">
+          <div class="profile-chip">
+            <span>Nombre</span>
+            <strong id="profile-name">-</strong>
+          </div>
+          <div class="profile-chip">
+            <span>Email</span>
+            <strong id="profile-email">-</strong>
+          </div>
+          <div class="preferences-card">
+            <span class="profile-caption">Preferencias rápidas</span>
+            <div class="preferences">
+              <label class="toggle-row">
+                <input type="checkbox" checked />
+                <span>Mostrar pantalla de bienvenida</span>
+              </label>
+              <label class="toggle-row">
+                <input type="checkbox" checked />
+                <span>Recordar sesión en este navegador</span>
+              </label>
+            </div>
           </div>
         </div>
-        <p class="panel-copy">
-          Aquí solo verás tu información básica y el acceso para cerrar sesión. La base está pensada para crecer por fases.
-        </p>
-      </section>
-    </main>
+
+        <div class="action-row modal-actions">
+          <button id="modal-logout-button" class="button secondary" type="button">Cerrar sesión</button>
+        </div>
+      </div>
+    </section>
+
     <script src="/js/api.js"></script>
     <script src="/js/dashboard.js"></script>
   </body>
