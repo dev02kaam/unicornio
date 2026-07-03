@@ -1,0 +1,143 @@
+{
+  "version": 1,
+  "skills": {
+    "babysit-pr": {
+      "source": "openai/codex",
+      "sourceType": "github",
+      "skillPath": ".codex/skills/babysit-pr/SKILL.md",
+      "computedHash": "fac391d7638d6d8dd3024315f9504d51dcf848a0d325f47db26156d9d6909925"
+    },
+    "code-breaking-changes": {
+      "source": "openai/codex",
+      "sourceType": "github",
+      "skillPath": ".codex/skills/code-review-breaking-changes/SKILL.md",
+      "computedHash": "01767baa7690c886cad10078c49063847dbf84bdda12febae903d6dd0fe17fd8"
+    },
+    "code-review": {
+      "source": "openai/codex",
+      "sourceType": "github",
+      "skillPath": ".codex/skills/code-review/SKILL.md",
+      "computedHash": "992227cceb18444dc3d66d4b637d86fdbc7874723c4653cb853897311fdfea76"
+    },
+    "code-review-change-size": {
+      "source": "openai/codex",
+      "sourceType": "github",
+      "skillPath": ".codex/skills/code-review-change-size/SKILL.md",
+      "computedHash": "a0684890dcf190bd626bc662df9ee9cc25c155ac2f7285c87973160446dc3370"
+    },
+    "code-review-context": {
+      "source": "openai/codex",
+      "sourceType": "github",
+      "skillPath": ".codex/skills/code-review-context/SKILL.md",
+      "computedHash": "b12e6bb888925d4f21b43baead061c623c3a2163ce9a067363cfa1b38788389f"
+    },
+    "code-review-testing": {
+      "source": "openai/codex",
+      "sourceType": "github",
+      "skillPath": ".codex/skills/code-review-testing/SKILL.md",
+      "computedHash": "a56ec27977ec246ea1df843c0ed18ad73d6ebb16dc862718449bff1dc027da66"
+    },
+    "codex-bug": {
+      "source": "openai/codex",
+      "sourceType": "github",
+      "skillPath": ".codex/skills/codex-bug/SKILL.md",
+      "computedHash": "98d5c9b9b6ac6539953d61cf7a31d13fe5fa5d119f37065bcfe4892ba933b076"
+    },
+    "codex-issue-digest": {
+      "source": "openai/codex",
+      "sourceType": "github",
+      "skillPath": ".codex/skills/codex-issue-digest/SKILL.md",
+      "computedHash": "3128c3f578b41ed00793a3179389bd8297ed8cb7f4ab915f6adf440fac0112c4"
+    },
+    "codex-pr-body": {
+      "source": "openai/codex",
+      "sourceType": "github",
+      "skillPath": ".codex/skills/codex-pr-body/SKILL.md",
+      "computedHash": "d368598bdff980068cd7bce6739d26318f4d06df4a3a814b518059fe16b7b16c"
+    },
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/find-skills/SKILL.md",
+      "computedHash": "781bd6d3f9b19f8c9af6b53d8d0e4876d0183841b565db34ca7092ffa412d111"
+    },
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/frontend-design/SKILL.md",
+      "computedHash": "93f53fd1c0352d3d7ec17b8f73d7351bf76f4821e55d123c9d2abc2c53ba48e4"
+    },
+    "github-actions-docs": {
+      "source": "xixu-me/skills",
+      "sourceType": "github",
+      "skillPath": "skills/github-actions-docs/SKILL.md",
+      "computedHash": "ead3fa2aff18e829c468dee593e1dc897aa95dc7a07d9ff8ff9f30c296b19af8"
+    },
+    "path-types": {
+      "source": "openai/codex",
+      "sourceType": "github",
+      "skillPath": ".codex/skills/path-types/SKILL.md",
+      "computedHash": "81061dd0a98861c637fd5aa9bf26cfeb74a5b90c92ab51d1374bb9f8fe40403b"
+    },
+    "pushing-ci-changes": {
+      "source": "openai/codex",
+      "sourceType": "github",
+      "skillPath": ".codex/skills/pushing-ci-changes/SKILL.md",
+      "computedHash": "3aa06efd8d92b4ab0b2fe1843107c28a52d2379ef6859ddf8606206aab380650"
+    },
+    "remote-tests": {
+      "source": "openai/codex",
+      "sourceType": "github",
+      "skillPath": ".codex/skills/remote-tests/SKILL.md",
+      "computedHash": "cd3fc90432fe89f33f8ae16ab4d3033529e54873f5a5e265dff46eb3cdeeebc1"
+    },
+    "shadcn": {
+      "source": "shadcn/ui",
+      "sourceType": "github",
+      "skillPath": "skills/shadcn/SKILL.md",
+      "computedHash": "4f78ff7cd3a4f637b6fe30dbbab4a80a19dd63fa62d9352bed461ccfdbcbbf43"
+    },
+    "supabase-postgres-best-practices": {
+      "source": "supabase/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/supabase-postgres-best-practices/SKILL.md",
+      "computedHash": "3639bed1f40b3fbadae79fee631c42c89b2d1f5c30b05d5aa3cca06422a6bbbc"
+    },
+    "tdd": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/tdd/SKILL.md",
+      "computedHash": "f23403cf05c3a4b0dec9983f7818cf1b53ebddd9cc406593fa46d9694b8c259a"
+    },
+    "test-tui": {
+      "source": "openai/codex",
+      "sourceType": "github",
+      "skillPath": ".codex/skills/test-tui/SKILL.md",
+      "computedHash": "193e90b4fe453f6a137de775db9eed63691de9f8ee46d58db06ce8764594ecbf"
+    },
+    "update-v8-version": {
+      "source": "openai/codex",
+      "sourceType": "github",
+      "skillPath": ".codex/skills/update-v8-version/SKILL.md",
+      "computedHash": "7d1867b6b3f08bbf8c087bea3c1e9875c207f4987a68739b43af3a784cf48e81"
+    },
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-best-practices/SKILL.md",
+      "computedHash": "ca7b0c0c6e5f2750043f7f0cd72d16ac4e2abc48f9b5500d047a4b77a2506212"
+    },
+    "web-design-guidelines": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/web-design-guidelines/SKILL.md",
+      "computedHash": "f3bc47f890f42a44db1007ab390709ec368e4b8c089baee6b0007182236ac474"
+    },
+    "webapp-testing": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/webapp-testing/SKILL.md",
+      "computedHash": "3f14af7f5690695209c22fbf8c8d133769a86d64892602c09bb13f135e14e857"
+    }
+  }
+}
