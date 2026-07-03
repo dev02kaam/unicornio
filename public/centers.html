@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Centros | Proyecto Unicornio</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <main class="shell dashboard-shell org-shell">
+      <section class="card org-hero">
+        <div class="hero-copy">
+          <span class="badge">Organización</span>
+          <h1>Centros</h1>
+          <p>Consulta los centros disponibles, crea nuevos si eres administrador y entra a sus grupos con un clic.</p>
+          <div class="action-row dashboard-links">
+            <a class="button secondary" href="/dashboard.html">Volver al dashboard</a>
+            <a class="button secondary" href="/groups.html">Ir a grupos</a>
+          </div>
+        </div>
+        <div class="org-highlight">
+          <span>Base activa</span>
+          <strong id="center-count">0 centros</strong>
+          <small id="center-role-note">Cargando acceso...</small>
+        </div>
+      </section>
+
+      <section id="center-form-card" class="card org-panel">
+        <div class="section-header">
+          <div>
+            <span class="badge">Nuevo centro</span>
+            <h2>Crear centro</h2>
+          </div>
+          <p>Solo disponible para administradores.</p>
+        </div>
+
+        <form id="center-form" class="stack org-form-grid">
+          <label>
+            <span>Nombre</span>
+            <input type="text" name="name" placeholder="Colegio Unicornio Sur" required />
+          </label>
+          <label>
+            <span>Código</span>
+            <input type="text" name="code" placeholder="CUS" />
+          </label>
+          <label>
+            <span>Tipo</span>
+            <select name="type">
+              <option value="">Sin definir</option>
+              <option value="PRIMARY">Primary</option>
+              <option value="SECONDARY">Secondary</option>
+              <option value="PRIMARY_SECONDARY">Primary / Secondary</option>
+              <option value="OTHER">Other</option>
+            </select>
+          </label>
+          <label>
+            <span>Curso escolar</span>
+            <input type="text" name="academicYearId" placeholder="academic-year-1" />
+            <small class="field-note">Opcional. Si lo dejas vacio, se usa el curso activo.</small>
+          </label>
+          <label class="org-form-wide">
+            <span>Ciudad</span>
+            <input type="text" name="city" placeholder="Madrid" />
+          </label>
+          <p id="center-form-error" class="error" hidden></p>
+          <p id="center-form-success" class="success" hidden></p>
+          <button class="button primary org-form-submit" type="submit">Crear centro</button>
+        </form>
+      </section>
+
+      <section class="card org-panel">
+        <div class="section-header">
+          <div>
+            <span class="badge">Listado</span>
+            <h2>Centros disponibles</h2>
+          </div>
+          <button id="refresh-centers" class="button secondary" type="button">Actualizar</button>
+        </div>
+        <div id="centers-list" class="org-list"></div>
+      </section>
+    </main>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/centers.js"></script>
+  </body>
+</html>

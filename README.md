@@ -8,7 +8,8 @@ Base tecnica inicial de Proyecto Unicornio: una aplicacion web cliente-servidor 
 - Servidor Node.js con Express.
 - Frontend minimo en HTML, CSS y JavaScript puro.
 - Autenticacion con JWT.
-- Módulo de usuarios.
+- Modulo de usuarios.
+- Modulo organizativo de centros, grupos y asignaciones.
 - Seguridad basica.
 - Area privada demo.
 - Alta de usuarios desde el panel de administracion.
@@ -22,7 +23,7 @@ Base tecnica inicial de Proyecto Unicornio: una aplicacion web cliente-servidor 
 - Estadisticas.
 - Consentimientos.
 - Informes.
-- Lógica clinica o psicologica.
+- Logica clinica o psicologica.
 
 ## Requisitos
 
@@ -62,6 +63,8 @@ Copiar `.env.example` a `.env` y ajustar:
 - `admin@unicornio.local`
 - `profesional@unicornio.local`
 - `alumno@unicornio.local`
+- `school@unicornio.local`
+- `familia@unicornio.local`
 
 Contrasenha demo:
 
@@ -87,6 +90,32 @@ Contrasenha demo:
 - `PATCH /api/users/:id`
 - `PATCH /api/users/:id/deactivate`
 
+### Centers
+
+- `GET /api/centers`
+- `POST /api/centers`
+- `GET /api/centers/:centerId`
+- `PATCH /api/centers/:centerId`
+- `DELETE /api/centers/:centerId`
+- `GET /api/centers/:centerId/groups`
+- `POST /api/centers/:centerId/groups`
+- `GET /api/centers/:centerId/users`
+
+### Groups
+
+- `GET /api/groups/:groupId`
+- `PATCH /api/groups/:groupId`
+- `DELETE /api/groups/:groupId`
+- `GET /api/groups/:groupId/users`
+
+### Assignments
+
+- `POST /api/centers/:centerId/users/:userId`
+- `DELETE /api/centers/:centerId/users/:userId`
+- `POST /api/groups/:groupId/users/:userId`
+- `DELETE /api/groups/:groupId/users/:userId`
+- `GET /api/users/:userId/assignments`
+
 ## Notas de seguridad
 
 - Las contrasenas se guardan con hash.
@@ -106,7 +135,7 @@ proyecto-unicornio/
 
 ## Proximos pasos
 
-- Añadir persistencia real.
+- Anadir persistencia real.
 - Crear cuestionarios.
-- Añadir centros, consentimientos, resultados y alertas.
+- Anadir consentimientos, resultados y alertas.
 - Endurecer privacidad y auditoria.

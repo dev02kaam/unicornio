@@ -16,6 +16,10 @@ function normalizeRole(value) {
   return Object.values(ROLES).includes(value) ? value : ROLES.STUDENT;
 }
 
+function isOneOf(value, allowedValues) {
+  return allowedValues.includes(value);
+}
+
 function pickDefined(input, keys) {
   return keys.reduce((result, key) => {
     if (input[key] !== undefined) {
@@ -30,6 +34,6 @@ module.exports = {
   isNonEmptyString,
   validatePassword,
   normalizeRole,
+  isOneOf,
   pickDefined,
 };
-

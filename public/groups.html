@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Grupos | Proyecto Unicornio</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <main class="shell dashboard-shell org-shell">
+      <section class="card org-hero">
+        <div class="hero-copy">
+          <span class="badge">Organización</span>
+          <h1>Grupos</h1>
+          <p>Explora los grupos del centro seleccionado y crea nuevos si tu rol tiene permiso.</p>
+          <div class="action-row dashboard-links">
+            <a class="button secondary" href="/dashboard.html">Volver al dashboard</a>
+            <a class="button secondary" href="/centers.html">Ir a centros</a>
+          </div>
+        </div>
+        <div class="org-highlight">
+          <span>Centro actual</span>
+          <strong id="selected-center-label">Sin seleccionar</strong>
+          <small id="group-role-note">Cargando acceso...</small>
+        </div>
+      </section>
+
+      <section class="card org-panel">
+        <div class="section-header">
+          <div>
+            <span class="badge">Centro</span>
+            <h2>Elegir centro</h2>
+          </div>
+          <p>Los grupos se cargan según el centro seleccionado.</p>
+        </div>
+
+        <div class="org-toolbar">
+          <label class="org-toolbar-field">
+            <span>Centro</span>
+            <select id="center-select"></select>
+          </label>
+          <button id="refresh-groups" class="button secondary" type="button">Actualizar</button>
+        </div>
+      </section>
+
+      <section id="group-form-card" class="card org-panel">
+        <div class="section-header">
+          <div>
+            <span class="badge">Nuevo grupo</span>
+            <h2>Crear grupo</h2>
+          </div>
+          <p>Disponible para administradores y responsables de centro.</p>
+        </div>
+
+        <form id="group-form" class="stack org-form-grid">
+          <label>
+            <span>Nombre</span>
+            <input type="text" name="name" placeholder="1º A" required />
+          </label>
+          <label>
+            <span>Código</span>
+            <input type="text" name="code" placeholder="1A" />
+          </label>
+          <label>
+            <span>Etapa</span>
+            <select name="stage">
+              <option value="">Sin definir</option>
+              <option value="PRIMARY">Primary</option>
+              <option value="SECONDARY">Secondary</option>
+              <option value="BACHILLERATO">Bachillerato</option>
+              <option value="OTHER">Other</option>
+            </select>
+          </label>
+          <label>
+            <span>Curso escolar</span>
+            <input type="text" name="academicYearId" placeholder="academic-year-1" />
+            <small class="field-note">Opcional. Si lo dejas vacio, se usa el curso activo del centro.</small>
+          </label>
+          <label>
+            <span>Curso</span>
+            <input type="text" name="course" placeholder="1" />
+          </label>
+          <label>
+            <span>Turno</span>
+            <input type="text" name="shift" placeholder="Morning" />
+          </label>
+          <p id="group-form-error" class="error" hidden></p>
+          <p id="group-form-success" class="success" hidden></p>
+          <button class="button primary org-form-submit" type="submit">Crear grupo</button>
+        </form>
+      </section>
+
+      <section class="card org-panel">
+        <div class="section-header">
+          <div>
+            <span class="badge">Listado</span>
+            <h2>Grupos del centro</h2>
+          </div>
+          <span id="group-count" class="org-counter">0 grupos</span>
+        </div>
+        <div id="groups-list" class="org-list"></div>
+      </section>
+    </main>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/groups.js"></script>
+  </body>
+</html>
