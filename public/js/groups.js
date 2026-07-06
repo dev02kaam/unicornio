@@ -23,6 +23,8 @@ const clearGroupFiltersButton = document.getElementById('clear-group-filters');
 const groupForm = document.getElementById('group-form');
 const groupFormError = document.getElementById('group-form-error');
 const groupFormSuccess = document.getElementById('group-form-success');
+const groupFeedback = document.getElementById('group-feedback');
+const groupFormSubmitButton = groupForm?.querySelector('button[type="submit"]');
 const groupsHead = document.getElementById('groups-head');
 const groupsBody = document.getElementById('groups-body');
 const groupCount = document.getElementById('group-count');
@@ -130,6 +132,26 @@ function setMessage(element, message, isError = false) {
   element.hidden = !message;
   element.classList.toggle('error', isError);
   element.classList.toggle('success', !isError);
+}
+
+function setBanner(message, variant = 'success') {
+  if (!groupFeedback) {
+    return;
+  }
+
+  groupFeedback.textContent = message;
+  groupFeedback.hidden = !message;
+  groupFeedback.classList.remove('status-banner--success', 'status-banner--error', 'status-banner--loading');
+  groupFeedback.classList.add(`status-banner--${variant}`);
+}
+
+function setGroupFormLoading(isLoading) {
+  if (!groupFormSubmitButton) {
+    return;
+  }
+
+  groupFormSubmitButton.disabled = isLoading;
+  groupFormSubmitButton.textContent = isLoading ? 'Creando...' : 'Crear grupo';
 }
 
 function canCreateGroups() {
@@ -828,9 +850,11 @@ groupForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   setMessage(groupFormError, '', true);
   setMessage(groupFormSuccess, '', false);
+  setBanner('', 'success');
 
   if (!currentCenterId) {
     setMessage(groupFormError, 'Selecciona un centro antes de crear el grupo.', true);
+    setBanner('Selecciona un centro antes de crear el grupo.', 'error');
     return;
   }
 
@@ -845,11 +869,14 @@ groupForm?.addEventListener('submit', async (event) => {
   };
 
   try {
+    setGroupFormLoading(true);
+    setBanner('Creando grupo...', 'loading');
     const response = await apiRequest(`/centers/${currentCenterId}/groups`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
 
+    setBanner('Grupo creado correctamente.', 'success');
     setMessage(groupFormSuccess, 'Grupo creado correctamente.');
     groupForm.reset();
     if (groupAcademicYearPicker) {
@@ -857,9 +884,12 @@ groupForm?.addEventListener('submit', async (event) => {
     }
     selectedGroupId = response.data.group.id;
     await loadGroups(currentCenterId);
-    await openGroupManager(selectedGroupId);
+    closeModalById('create-group-modal');
   } catch (error) {
+    setBanner(error.message || 'No se pudo crear el grupo.', 'error');
     setMessage(groupFormError, error.message, true);
+  } finally {
+    setGroupFormLoading(false);
   }
 });
 
