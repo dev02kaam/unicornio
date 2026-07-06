@@ -7,7 +7,7 @@ function createDemoAcademicYears() {
       label: '2025-2026',
       startDate: '2025-09-01',
       endDate: '2026-06-30',
-      stage: 'PRIMARY_SECONDARY',
+      stage: 'PRIMARIA_SECUNDARIA',
       isCurrent: true,
       isActive: true,
       createdAt: now,

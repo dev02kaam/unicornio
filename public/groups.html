@@ -12,7 +12,7 @@
         <div class="hero-copy">
           <span class="badge">Organización</span>
           <h1>Grupos</h1>
-          <p>Explora los grupos del centro seleccionado y crea nuevos si tu rol tiene permiso.</p>
+          <p>Explora los grupos de tu centro con filtros en tiempo real, crea nuevos si tu rol tiene permiso y abre la gestión con un clic.</p>
           <div class="action-row dashboard-links">
             <a class="button secondary" href="/dashboard.html">Volver al dashboard</a>
             <a class="button secondary" href="/centers.html">Ir a centros</a>
@@ -28,31 +28,56 @@
       <section class="card org-panel">
         <div class="section-header">
           <div>
-            <span class="badge">Centro</span>
-            <h2>Elegir centro</h2>
+            <span class="badge">Filtros</span>
+            <h2>Buscar grupos</h2>
           </div>
-          <p>Los grupos se cargan según el centro seleccionado.</p>
+          <p>Combina varios filtros y se aplican al instante.</p>
         </div>
 
         <div class="org-toolbar">
-          <label class="org-toolbar-field">
-            <span>Centro</span>
-            <select id="center-select"></select>
+          <label class="org-toolbar-field org-toolbar-field--wide">
+            <span>Búsqueda global</span>
+            <input id="group-global-search" type="search" placeholder="Código, nombre, etapa, curso..." />
           </label>
-          <button id="refresh-groups" class="button secondary" type="button">Actualizar</button>
+          <div class="toolbar-group">
+            <button id="add-group-filter" class="button secondary" type="button">Añadir filtro</button>
+            <button id="clear-group-filters" class="button secondary" type="button">Limpiar</button>
+            <button id="refresh-groups" class="button secondary" type="button">Actualizar</button>
+            <button class="button secondary" type="button" data-open-modal="create-group-modal">Crear grupo</button>
+            <button class="button secondary" type="button" data-open-modal="group-columns-modal">Columnas</button>
+          </div>
         </div>
+        <div id="group-filters-list" class="filter-builder"></div>
       </section>
 
-      <section id="group-form-card" class="card org-panel">
+      <section class="card org-panel">
         <div class="section-header">
           <div>
-            <span class="badge">Nuevo grupo</span>
-            <h2>Crear grupo</h2>
+            <span class="badge">Listado</span>
+            <h2>Grupos del centro</h2>
           </div>
-          <p>Disponible para administradores y responsables de centro.</p>
+          <span id="group-count" class="org-counter">0 grupos</span>
         </div>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead id="groups-head"></thead>
+            <tbody id="groups-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
 
-        <form id="group-form" class="stack org-form-grid">
+    <section id="create-group-modal" class="modal" hidden aria-hidden="true">
+      <div class="modal__backdrop" data-close-modal="create-group-modal"></div>
+      <div class="modal__panel modal__panel--small" role="dialog" aria-modal="true" aria-labelledby="create-group-title">
+        <div class="modal__header">
+          <div>
+            <span class="badge">Nuevo grupo</span>
+            <h2 id="create-group-title">Crear grupo</h2>
+          </div>
+          <button class="button secondary" type="button" data-close-modal="create-group-modal">Cerrar</button>
+        </div>
+        <form id="group-form" class="dialog-form-grid">
           <label>
             <span>Nombre</span>
             <input type="text" name="name" placeholder="1º A" required />
@@ -65,16 +90,16 @@
             <span>Etapa</span>
             <select name="stage">
               <option value="">Sin definir</option>
-              <option value="PRIMARY">Primary</option>
-              <option value="SECONDARY">Secondary</option>
+              <option value="PRIMARIA">Primaria</option>
+              <option value="SECUNDARIA">Secundaria</option>
               <option value="BACHILLERATO">Bachillerato</option>
-              <option value="OTHER">Other</option>
+              <option value="OTRA">Otra</option>
             </select>
           </label>
           <label>
             <span>Curso escolar</span>
-            <input type="text" name="academicYearId" placeholder="academic-year-1" />
-            <small class="field-note">Opcional. Si lo dejas vacio, se usa el curso activo del centro.</small>
+            <input type="text" name="academicYearId" placeholder="2025-2026" />
+            <small class="field-note">Opcional. Si lo dejas vacío, se usa el curso activo del centro.</small>
           </label>
           <label>
             <span>Curso</span>
@@ -82,27 +107,79 @@
           </label>
           <label>
             <span>Turno</span>
-            <input type="text" name="shift" placeholder="Morning" />
+            <input type="text" name="shift" placeholder="Mañana" />
           </label>
           <p id="group-form-error" class="error" hidden></p>
           <p id="group-form-success" class="success" hidden></p>
-          <button class="button primary org-form-submit" type="submit">Crear grupo</button>
-        </form>
-      </section>
-
-      <section class="card org-panel">
-        <div class="section-header">
-          <div>
-            <span class="badge">Listado</span>
-            <h2>Grupos del centro</h2>
+          <div class="modal__footer">
+            <button class="button primary" type="submit">Crear grupo</button>
           </div>
-          <span id="group-count" class="org-counter">0 grupos</span>
+        </form>
+      </div>
+    </section>
+
+    <section id="group-columns-modal" class="modal" hidden aria-hidden="true">
+      <div class="modal__backdrop" data-close-modal="group-columns-modal"></div>
+      <div class="modal__panel modal__panel--small" role="dialog" aria-modal="true" aria-labelledby="group-columns-title">
+        <div class="modal__header">
+          <div>
+            <span class="badge">Columnas</span>
+            <h2 id="group-columns-title">Configurar tabla</h2>
+          </div>
+          <button class="button secondary" type="button" data-close-modal="group-columns-modal">Cerrar</button>
         </div>
-        <div id="groups-list" class="org-list"></div>
-      </section>
-    </main>
+        <div id="group-columns-list" class="column-manager-list"></div>
+        <p class="field-note">Arrastra para cambiar el orden y oculta o recupera las columnas cuando quieras.</p>
+      </div>
+    </section>
+
+    <section id="group-members-modal" class="modal" hidden aria-hidden="true">
+      <div class="modal__backdrop" data-close-modal="group-members-modal"></div>
+      <div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="group-members-title">
+        <div class="modal__header">
+          <div>
+            <span class="badge">Usuarios</span>
+            <h2 id="group-members-title">Gestionar grupo</h2>
+          </div>
+          <button class="button secondary" type="button" data-close-modal="group-members-modal">Cerrar</button>
+        </div>
+        <div class="modal__body">
+          <div class="group-management-grid">
+            <div class="group-management-card">
+              <div class="group-management-card__header">
+                <strong id="selected-group-name">Sin grupo</strong>
+                <span id="selected-group-meta" class="org-counter">-</span>
+              </div>
+              <p id="group-members-note" class="field-note">Selecciona un grupo para ver sus miembros.</p>
+              <div id="group-members-list" class="org-list compact-list"></div>
+            </div>
+
+            <div class="group-management-card">
+              <div class="group-management-card__header">
+                <strong>Añadir usuario</strong>
+                <span id="available-users-count" class="org-counter">0</span>
+              </div>
+
+              <label class="org-toolbar-field">
+                <span>Usuarios del centro</span>
+                <select id="available-user-select"></select>
+              </label>
+
+              <button id="add-user-to-group-button" class="button primary" type="button">
+                Añadir al grupo
+              </button>
+
+              <p class="field-note">
+                Se muestran los usuarios activos del centro que todavía no están en este grupo.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <script src="/js/api.js"></script>
+    <script src="/js/ui.js"></script>
     <script src="/js/groups.js"></script>
   </body>
 </html>

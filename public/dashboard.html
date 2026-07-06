@@ -28,49 +28,61 @@
         <div class="section-header">
           <div>
             <span class="badge">Administración</span>
-            <h2>Crear nuevos usuarios</h2>
+            <h2>Usuarios</h2>
           </div>
-          <p>Acción disponible solo para administradores.</p>
+          <div class="toolbar-group">
+            <button class="button secondary" type="button" data-open-modal="create-user-modal">Crear usuario</button>
+            <button class="button secondary" type="button" data-open-modal="admin-users-columns-modal">Columnas</button>
+          </div>
         </div>
-
-        <form id="create-user-form" class="stack admin-form">
-          <label>
-            <span>Nombre</span>
-            <input type="text" name="name" placeholder="Nuevo usuario" required />
-          </label>
-          <label>
-            <span>Email</span>
-            <input type="email" name="email" placeholder="nuevo@unicornio.local" required />
-          </label>
-          <label>
-            <span>Contraseña</span>
-            <input type="password" name="password" placeholder="Demo1234!" required />
-          </label>
-          <label>
-            <span>Rol</span>
-            <select name="role">
-              <option value="STUDENT">STUDENT</option>
-              <option value="FAMILY">FAMILY</option>
-              <option value="SCHOOL">SCHOOL</option>
-              <option value="PROFESSIONAL">PROFESSIONAL</option>
-              <option value="ADMIN">ADMIN</option>
-            </select>
-          </label>
-          <p id="create-user-error" class="error" hidden></p>
-          <p id="create-user-success" class="success" hidden></p>
-          <button class="button primary" type="submit">Crear usuario</button>
-        </form>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead id="admin-users-head"></thead>
+            <tbody id="admin-users-body"></tbody>
+          </table>
+        </div>
       </section>
 
-      <section id="admin-users-panel" class="card admin-panel" hidden>
+      <section id="school-panel" class="card org-panel" hidden>
         <div class="section-header">
           <div>
-            <span class="badge">Usuarios</span>
-            <h2>Listado rápido</h2>
+            <span class="badge">Tu centro</span>
+            <h2>Espacio de escuela</h2>
           </div>
-          <button id="refresh-users-button" class="button secondary" type="button">Actualizar</button>
+          <p id="school-panel-note">Cargando centro vinculado...</p>
         </div>
-        <div id="users-list" class="users-list"></div>
+
+        <div id="school-center-card" class="org-card">
+          <div class="org-card__top">
+            <div>
+              <span id="school-center-city" class="org-kicker">-</span>
+              <h3 id="school-center-name">-</h3>
+              <p id="school-center-line">-</p>
+            </div>
+            <span id="school-center-groups" class="org-pill">0 grupos</span>
+          </div>
+          <div class="org-card__meta">
+            <span id="school-center-users">Usuarios: 0</span>
+            <span id="school-center-status">Activo: -</span>
+          </div>
+          <div class="action-row">
+            <a class="button secondary" href="/centers.html">Ver centros</a>
+            <a id="school-groups-link" class="button secondary" href="/groups.html">Ver grupos</a>
+          </div>
+        </div>
+
+        <div class="school-grid">
+          <article class="dashboard-quickcard">
+            <span class="quickcard-label">Acceso rápido</span>
+            <strong>Gestión básica</strong>
+            <p class="quickcard-email">Centros, grupos y asignaciones vinculadas al centro de escuela.</p>
+          </article>
+          <article class="dashboard-quickcard">
+            <span class="quickcard-label">Grupos visibles</span>
+            <strong id="school-groups-count">0</strong>
+            <p class="quickcard-email">Tu centro puede tener varios grupos activos este curso.</p>
+          </article>
+        </div>
       </section>
     </main>
 
@@ -115,7 +127,71 @@
       </div>
     </section>
 
+    <section id="create-user-modal" class="modal" hidden aria-hidden="true">
+      <div class="modal__backdrop" data-close-modal="create-user-modal"></div>
+      <div class="modal__panel modal__panel--small" role="dialog" aria-modal="true" aria-labelledby="create-user-modal-title">
+        <div class="modal__header">
+          <div>
+            <span class="badge">Nuevo usuario</span>
+            <h2 id="create-user-modal-title">Crear usuario</h2>
+          </div>
+          <button class="button secondary" type="button" data-close-modal="create-user-modal">Cerrar</button>
+        </div>
+        <form id="create-user-form" class="dialog-form-grid">
+          <label>
+            <span>Nombre</span>
+            <input type="text" name="name" placeholder="Nuevo usuario" required />
+          </label>
+          <label>
+            <span>Email</span>
+            <input type="email" name="email" placeholder="nuevo@unicornio.local" required />
+          </label>
+          <label>
+            <span>Contraseña</span>
+            <input type="password" name="password" placeholder="Demo1234!" required />
+          </label>
+          <label>
+            <span>Rol</span>
+            <select name="role">
+              <option value="STUDENT">Alumno</option>
+              <option value="FAMILY">Familia</option>
+              <option value="SCHOOL">Centro</option>
+              <option value="PROFESSIONAL">Profesional</option>
+              <option value="ADMIN">Administrador</option>
+            </select>
+          </label>
+          <label>
+            <span>Centro</span>
+            <select name="schoolId" id="admin-school-select">
+              <option value="">Sin vincular</option>
+            </select>
+          </label>
+          <p id="create-user-error" class="error" hidden></p>
+          <p id="create-user-success" class="success" hidden></p>
+          <div class="modal__footer">
+            <button class="button primary" type="submit">Crear usuario</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section id="admin-users-columns-modal" class="modal" hidden aria-hidden="true">
+      <div class="modal__backdrop" data-close-modal="admin-users-columns-modal"></div>
+      <div class="modal__panel modal__panel--small" role="dialog" aria-modal="true" aria-labelledby="admin-users-columns-title">
+        <div class="modal__header">
+          <div>
+            <span class="badge">Columnas</span>
+            <h2 id="admin-users-columns-title">Configurar tabla</h2>
+          </div>
+          <button class="button secondary" type="button" data-close-modal="admin-users-columns-modal">Cerrar</button>
+        </div>
+        <div id="admin-users-columns-list" class="column-manager-list"></div>
+        <p class="field-note">Arrastra para cambiar el orden y marca o desmarca columnas para ocultarlas o volver a mostrarlas.</p>
+      </div>
+    </section>
+
     <script src="/js/api.js"></script>
+    <script src="/js/ui.js"></script>
     <script src="/js/dashboard.js"></script>
   </body>
 </html>

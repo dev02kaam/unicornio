@@ -12,7 +12,7 @@
         <div class="hero-copy">
           <span class="badge">Organización</span>
           <h1>Centros</h1>
-          <p>Consulta los centros disponibles, crea nuevos si eres administrador y entra a sus grupos con un clic.</p>
+          <p id="center-hero-copy">Consulta tu centro vinculado o, si eres administrador, gestiona la red de centros.</p>
           <div class="action-row dashboard-links">
             <a class="button secondary" href="/dashboard.html">Volver al dashboard</a>
             <a class="button secondary" href="/groups.html">Ir a grupos</a>
@@ -25,16 +25,68 @@
         </div>
       </section>
 
-      <section id="center-form-card" class="card org-panel">
+      <section id="school-center-panel" class="card org-panel" hidden>
         <div class="section-header">
           <div>
-            <span class="badge">Nuevo centro</span>
-            <h2>Crear centro</h2>
+            <span class="badge">Mi centro</span>
+            <h2>Datos del centro vinculado</h2>
           </div>
-          <p>Solo disponible para administradores.</p>
+          <p id="school-center-note">Cargando centro...</p>
         </div>
 
-        <form id="center-form" class="stack org-form-grid">
+        <article class="org-card org-card--active">
+          <div class="org-card__top">
+            <div>
+              <span id="school-center-city" class="org-kicker">-</span>
+              <h3 id="school-center-name">-</h3>
+              <p id="school-center-line">-</p>
+            </div>
+            <span id="school-center-status" class="org-pill">Activo: -</span>
+          </div>
+          <div class="org-card__meta">
+            <span id="school-center-code">Código: -</span>
+            <span id="school-center-year">Curso: -</span>
+            <span id="school-center-groups">Grupos: 0</span>
+            <span id="school-center-users">Usuarios: 0</span>
+          </div>
+          <div class="action-row">
+            <a id="school-center-groups-link" class="button secondary" href="/groups.html">Ver grupos del centro</a>
+          </div>
+        </article>
+      </section>
+
+      <section id="centers-list-panel" class="card org-panel">
+        <div class="section-header">
+          <div>
+            <span class="badge">Listado</span>
+            <h2>Centros disponibles</h2>
+          </div>
+          <div id="centers-toolbar" class="toolbar-group">
+            <button id="refresh-centers" class="button secondary" type="button">Actualizar</button>
+            <button class="button secondary" type="button" data-open-modal="create-center-modal">Crear centro</button>
+            <button class="button secondary" type="button" data-open-modal="center-columns-modal">Columnas</button>
+          </div>
+        </div>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead id="centers-head"></thead>
+            <tbody id="centers-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <section id="create-center-modal" class="modal" hidden aria-hidden="true">
+      <div class="modal__backdrop" data-close-modal="create-center-modal"></div>
+      <div class="modal__panel modal__panel--small" role="dialog" aria-modal="true" aria-labelledby="create-center-title">
+        <div class="modal__header">
+          <div>
+            <span class="badge">Nuevo centro</span>
+            <h2 id="create-center-title">Crear centro</h2>
+          </div>
+          <button class="button secondary" type="button" data-close-modal="create-center-modal">Cerrar</button>
+        </div>
+        <form id="center-form" class="dialog-form-grid">
           <label>
             <span>Nombre</span>
             <input type="text" name="name" placeholder="Colegio Unicornio Sur" required />
@@ -47,16 +99,16 @@
             <span>Tipo</span>
             <select name="type">
               <option value="">Sin definir</option>
-              <option value="PRIMARY">Primary</option>
-              <option value="SECONDARY">Secondary</option>
-              <option value="PRIMARY_SECONDARY">Primary / Secondary</option>
-              <option value="OTHER">Other</option>
+              <option value="PRIMARIA">Primaria</option>
+              <option value="SECUNDARIA">Secundaria</option>
+              <option value="PRIMARIA_SECUNDARIA">Primaria y secundaria</option>
+              <option value="OTRO">Otro</option>
             </select>
           </label>
           <label>
             <span>Curso escolar</span>
-            <input type="text" name="academicYearId" placeholder="academic-year-1" />
-            <small class="field-note">Opcional. Si lo dejas vacio, se usa el curso activo.</small>
+            <input type="text" name="academicYearId" placeholder="2025-2026" />
+            <small class="field-note">Opcional. Si lo dejas vacío, se usa el curso activo.</small>
           </label>
           <label class="org-form-wide">
             <span>Ciudad</span>
@@ -64,23 +116,30 @@
           </label>
           <p id="center-form-error" class="error" hidden></p>
           <p id="center-form-success" class="success" hidden></p>
-          <button class="button primary org-form-submit" type="submit">Crear centro</button>
-        </form>
-      </section>
-
-      <section class="card org-panel">
-        <div class="section-header">
-          <div>
-            <span class="badge">Listado</span>
-            <h2>Centros disponibles</h2>
+          <div class="modal__footer">
+            <button class="button primary" type="submit">Crear centro</button>
           </div>
-          <button id="refresh-centers" class="button secondary" type="button">Actualizar</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="center-columns-modal" class="modal" hidden aria-hidden="true">
+      <div class="modal__backdrop" data-close-modal="center-columns-modal"></div>
+      <div class="modal__panel modal__panel--small" role="dialog" aria-modal="true" aria-labelledby="center-columns-title">
+        <div class="modal__header">
+          <div>
+            <span class="badge">Columnas</span>
+            <h2 id="center-columns-title">Configurar tabla</h2>
+          </div>
+          <button class="button secondary" type="button" data-close-modal="center-columns-modal">Cerrar</button>
         </div>
-        <div id="centers-list" class="org-list"></div>
-      </section>
-    </main>
+        <div id="center-columns-list" class="column-manager-list"></div>
+        <p class="field-note">Arrastra para cambiar el orden y oculta o recupera las columnas cuando quieras.</p>
+      </div>
+    </section>
 
     <script src="/js/api.js"></script>
+    <script src="/js/ui.js"></script>
     <script src="/js/centers.js"></script>
   </body>
 </html>

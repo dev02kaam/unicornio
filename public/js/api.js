@@ -33,9 +33,9 @@ async function apiRequest(path, options = {}) {
   if (!response.ok) {
     const error = new Error(payload.message || 'Error en la peticion.');
     error.payload = payload;
+    error.status = response.status;
     throw error;
   }
 
   return payload;
 }
-
