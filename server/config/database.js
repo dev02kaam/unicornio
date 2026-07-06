@@ -17,12 +17,12 @@ const state = {
 };
 
 const sequences = {
-  users: 5,
+  users: 6,
   academicYears: 1,
   centers: 2,
   groups: 4,
-  userCenterAssignments: 4,
-  userGroupAssignments: 3,
+  userCenterAssignments: 5,
+  userGroupAssignments: 2,
 };
 
 const database = {

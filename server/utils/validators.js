@@ -16,6 +16,10 @@ function normalizeRole(value) {
   return Object.values(ROLES).includes(value) ? value : ROLES.STUDENT;
 }
 
+function isRole(value) {
+  return Object.values(ROLES).includes(value);
+}
+
 function isOneOf(value, allowedValues) {
   return allowedValues.includes(value);
 }
@@ -34,6 +38,7 @@ module.exports = {
   isNonEmptyString,
   validatePassword,
   normalizeRole,
+  isRole,
   isOneOf,
   pickDefined,
 };

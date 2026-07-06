@@ -4,13 +4,25 @@ const profileCloseButton = document.getElementById('profile-close-button');
 const modalLogoutButton = document.getElementById('modal-logout-button');
 const profileNameElement = document.getElementById('profile-name');
 const profileEmailElement = document.getElementById('profile-email');
+const userDetailModal = document.getElementById('user-detail-modal');
+const userDetailNameElement = document.getElementById('user-detail-name');
+const userDetailEmailElement = document.getElementById('user-detail-email');
+const userDetailRoleElement = document.getElementById('user-detail-role');
+const userDetailSchoolElement = document.getElementById('user-detail-school');
+const userDetailLinkedStudentElement = document.getElementById('user-detail-linked-student');
+const userDetailAssignmentsElement = document.getElementById('user-detail-assignments');
 const introElement = document.getElementById('dashboard-intro');
 const adminPanel = document.getElementById('admin-panel');
 const createUserForm = document.getElementById('create-user-form');
 const createUserError = document.getElementById('create-user-error');
 const createUserSuccess = document.getElementById('create-user-success');
 const refreshUsersButton = document.getElementById('refresh-users-button');
+const createUserRoleSelect = document.getElementById('create-user-role');
+const createUserCenterField = document.getElementById('create-user-center-field');
+const createUserStudentField = document.getElementById('create-user-student-field');
 const adminSchoolSelect = document.getElementById('admin-school-select');
+const adminStudentSelect = document.getElementById('admin-student-select');
+const createUserHint = document.getElementById('create-user-hint');
 const adminUsersHead = document.getElementById('admin-users-head');
 const adminUsersBody = document.getElementById('admin-users-body');
 const schoolPanel = document.getElementById('school-panel');
@@ -26,6 +38,7 @@ const schoolGroupsCount = document.getElementById('school-groups-count');
 
 let currentUser = null;
 let availableCenters = [];
+let availableCenterStudents = [];
 let adminUsers = [];
 
 const centerTypeLabels = {
@@ -38,7 +51,8 @@ const centerTypeLabels = {
 const roleLabels = {
   ADMIN: 'Administrador',
   SCHOOL: 'Centro',
-  PROFESSIONAL: 'Profesional',
+  TEACHER: 'Profesor',
+  PROFESSIONAL: 'Profesional autorizado',
   STUDENT: 'Alumno',
   FAMILY: 'Familia',
 };
@@ -53,6 +67,7 @@ const adminUserColumns = setupColumnManager({
     { id: 'email', label: 'Email', visible: true },
     { id: 'role', label: 'Rol', visible: true },
     { id: 'school', label: 'Centro', visible: true },
+    { id: 'linkedStudent', label: 'Estudiante vinculado', visible: true },
     { id: 'status', label: 'Estado', visible: true },
     { id: 'actions', label: 'Acciones', visible: true },
   ],
@@ -98,6 +113,106 @@ function getCenterLabel(centerId) {
   return center ? center.name : 'Sin vincular';
 }
 
+function getUserLabel(userId) {
+  const user = adminUsers.find((item) => item.id === userId) || availableCenterStudents.find((item) => item.id === userId);
+  return user ? user.name : 'Sin vincular';
+}
+
+function isRoleRequiringCenter(role) {
+  return ['SCHOOL', 'TEACHER', 'PROFESSIONAL', 'STUDENT'].includes(String(role || '').toUpperCase());
+}
+
+function isFamilyRole(role) {
+  return String(role || '').toUpperCase() === 'FAMILY';
+}
+
+function updateCreateUserHint() {
+  if (!createUserHint || !createUserRoleSelect) {
+    return;
+  }
+
+  const role = createUserRoleSelect.value;
+  if (isFamilyRole(role)) {
+    createUserHint.textContent = 'Las familias solo necesitan un estudiante vinculado.';
+    return;
+  }
+
+  if (isRoleRequiringCenter(role)) {
+    createUserHint.textContent = role === 'TEACHER'
+      ? 'El profesor se asigna a un centro y a sus grupos.'
+      : 'Este tipo de usuario necesita un centro asignado.';
+    return;
+  }
+
+  createUserHint.textContent = 'El tipo de cuenta determina qué relaciones se deben completar.';
+}
+
+function updateCreateUserFieldVisibility() {
+  if (!createUserRoleSelect) {
+    return;
+  }
+
+  const role = createUserRoleSelect.value;
+  const requiresCenter = isRoleRequiringCenter(role);
+  const requiresStudent = isFamilyRole(role);
+
+  if (createUserCenterField) {
+    createUserCenterField.hidden = !requiresCenter;
+  }
+
+  if (createUserStudentField) {
+    createUserStudentField.hidden = !requiresStudent;
+  }
+
+  if (requiresStudent && isFamilyRole(role)) {
+    renderFamilyStudentOptions(adminStudentSelect?.value || '');
+  }
+
+  updateCreateUserHint();
+}
+
+function renderStudentOptions(students, selectedId = '') {
+  if (!adminStudentSelect) {
+    return;
+  }
+
+  availableCenterStudents = students;
+
+  if (!students.length) {
+    adminStudentSelect.innerHTML = '<option value="">No hay estudiantes en este centro</option>';
+    adminStudentSelect.disabled = true;
+    return;
+  }
+
+  adminStudentSelect.disabled = false;
+  adminStudentSelect.innerHTML = `
+    <option value="">Selecciona un estudiante</option>
+    ${students.map((student) => `<option value="${student.id}" ${student.id === selectedId ? 'selected' : ''}>${student.name} (${student.email})</option>`).join('')}
+  `;
+}
+
+function renderFamilyStudentOptions(selectedId = '') {
+  const students = adminUsers.filter((user) => String(user.role || '').toUpperCase() === 'STUDENT' && user.isActive);
+  renderStudentOptions(students, selectedId);
+}
+
+async function loadStudentsForCenter(centerId) {
+  if (!adminStudentSelect) {
+    return;
+  }
+
+  if (!centerId) {
+    adminStudentSelect.innerHTML = '<option value="">Selecciona un centro primero</option>';
+    adminStudentSelect.disabled = true;
+    availableCenterStudents = [];
+    return;
+  }
+
+  const response = await apiRequest(`/centers/${centerId}/users`);
+  const students = (response.data.users || []).filter((user) => String(user.role || '').toUpperCase() === 'STUDENT' && user.isActive);
+  renderStudentOptions(students);
+}
+
 function renderAdminUsersTable() {
   if (!adminUsersHead || !adminUsersBody) {
     return;
@@ -140,6 +255,10 @@ function renderAdminUsersTable() {
           return `<td>${getCenterLabel(user.schoolId)}</td>`;
         }
 
+        if (column.id === 'linkedStudent') {
+          return `<td>${user.linkedStudentId ? getUserLabel(user.linkedStudentId) : 'Sin vincular'}</td>`;
+        }
+
         if (column.id === 'status') {
           return `<td>${user.isActive ? 'Activo' : 'Inactivo'}</td>`;
         }
@@ -160,14 +279,81 @@ function renderAdminUsersTable() {
     .join('');
 }
 
+adminUsersBody?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-row-user]');
+  if (!button) {
+    return;
+  }
+
+  openUserDetail(button.getAttribute('data-row-user'));
+});
+
 function renderAdminUsers(users) {
   adminUsers = users;
   renderAdminUsersTable();
 }
 
+function renderUserAssignments(assignments) {
+  if (!userDetailAssignmentsElement) {
+    return;
+  }
+
+  const centerAssignments = assignments?.centers || [];
+  const groupAssignments = assignments?.groups || [];
+  const items = [];
+
+  items.push(`<div class="toggle-row"><span>Centros: ${centerAssignments.length}</span></div>`);
+  centerAssignments.forEach((assignment) => {
+    items.push(`<div class="toggle-row"><span>${assignment.center?.name || 'Centro sin nombre'}</span></div>`);
+  });
+
+  items.push(`<div class="toggle-row"><span>Grupos: ${groupAssignments.length}</span></div>`);
+  groupAssignments.forEach((assignment) => {
+    items.push(`<div class="toggle-row"><span>${assignment.group?.name || 'Grupo sin nombre'}</span></div>`);
+  });
+
+  userDetailAssignmentsElement.innerHTML = items.join('');
+}
+
+async function openUserDetail(userId) {
+  try {
+    const [userResponse, assignmentsResponse] = await Promise.all([
+      apiRequest(`/users/${userId}`),
+      apiRequest(`/users/${userId}/assignments`),
+    ]);
+
+    const user = userResponse.data.user;
+    const assignments = assignmentsResponse.data;
+
+    if (userDetailNameElement) {
+      userDetailNameElement.textContent = user.name || '-';
+    }
+    if (userDetailEmailElement) {
+      userDetailEmailElement.textContent = user.email || '-';
+    }
+    if (userDetailRoleElement) {
+      userDetailRoleElement.textContent = roleLabels[user.role] || user.role || '-';
+    }
+    if (userDetailSchoolElement) {
+      userDetailSchoolElement.textContent = getCenterLabel(user.schoolId);
+    }
+    if (userDetailLinkedStudentElement) {
+      userDetailLinkedStudentElement.textContent = user.linkedStudentId ? getUserLabel(user.linkedStudentId) : 'Sin vincular';
+    }
+
+    renderUserAssignments(assignments);
+    openModalById('user-detail-modal');
+  } catch (error) {
+    setMessage(createUserError, error.message, true);
+  }
+}
+
 async function loadAdminUsers() {
   const response = await apiRequest('/users');
   renderAdminUsers(response.data.users || []);
+  if (isFamilyRole(createUserRoleSelect?.value)) {
+    renderFamilyStudentOptions(adminStudentSelect?.value || '');
+  }
 }
 
 async function loadCentersForAdmin() {
@@ -186,6 +372,12 @@ async function loadCentersForAdmin() {
   `;
 
   renderAdminUsersTable();
+  updateCreateUserFieldVisibility();
+  if (isFamilyRole(createUserRoleSelect?.value)) {
+    renderFamilyStudentOptions();
+  } else if (isRoleRequiringCenter(createUserRoleSelect?.value) && adminSchoolSelect.value) {
+    await loadStudentsForCenter(adminSchoolSelect.value);
+  }
 }
 
 function renderSchoolPanel(assignments) {
@@ -251,9 +443,9 @@ async function loadProfile() {
     profileNameElement.textContent = currentUser.name;
     profileEmailElement.textContent = currentUser.email;
 
-    const role = String(currentUser.role || '').toUpperCase();
-    const assignmentsResponse = await apiRequest(`/users/${currentUser.id}/assignments`);
-    const assignments = assignmentsResponse.data;
+  const role = String(currentUser.role || '').toUpperCase();
+  const assignmentsResponse = await apiRequest(`/users/${currentUser.id}/assignments`);
+  const assignments = assignmentsResponse.data;
 
     if (role === 'ADMIN') {
       introElement.textContent = 'Tienes acceso de administración para crear usuarios y revisar el listado básico.';
@@ -266,8 +458,10 @@ async function loadProfile() {
 
     setPanelVisible(adminPanel, false);
 
-    if (role === 'SCHOOL') {
-      introElement.textContent = 'Tu centro está listo. Desde aquí puedes revisar grupos y gestionar la base organizativa.';
+    if (role === 'SCHOOL' || role === 'TEACHER') {
+      introElement.textContent = role === 'TEACHER'
+        ? 'Tu grupo y tu centro están listos. Desde aquí puedes revisar cuestionarios y actividad del alumnado.'
+        : 'Tu centro está listo. Desde aquí puedes revisar grupos y gestionar la base organizativa.';
       renderSchoolPanel(assignments);
       return;
     }
@@ -284,10 +478,18 @@ profileButton?.addEventListener('click', () => openModalById('profile-modal'));
 profileCloseButton?.addEventListener('click', () => closeModalById('profile-modal'));
 profileModal?.querySelector('[data-close-profile]')?.addEventListener('click', () => closeModalById('profile-modal'));
 modalLogoutButton?.addEventListener('click', doLogout);
+userDetailModal?.querySelector('[data-close-modal="user-detail-modal"]')?.addEventListener('click', () => closeModalById('user-detail-modal'));
 
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && profileModal && !profileModal.hidden) {
-    closeModalById('profile-modal');
+  if (event.key === 'Escape') {
+    if (userDetailModal && !userDetailModal.hidden) {
+      closeModalById('user-detail-modal');
+      return;
+    }
+
+    if (profileModal && !profileModal.hidden) {
+      closeModalById('profile-modal');
+    }
   }
 });
 
@@ -298,16 +500,28 @@ if (createUserForm) {
     setMessage(createUserSuccess, '', false);
 
     const formData = new FormData(createUserForm);
+    const role = formData.get('role');
     const payload = {
       name: formData.get('name'),
       email: formData.get('email'),
       password: formData.get('password'),
-      role: formData.get('role'),
-      schoolId: formData.get('schoolId') || null,
+      role,
+      schoolId: isRoleRequiringCenter(role) ? (formData.get('schoolId') || null) : null,
+      linkedStudentId: isFamilyRole(role) ? (formData.get('linkedStudentId') || null) : null,
     };
 
-    if (payload.role === 'SCHOOL' && !payload.schoolId) {
-      setMessage(createUserError, 'Selecciona un centro para vincular el usuario de escuela.', true);
+    if (isRoleRequiringCenter(payload.role) && !payload.schoolId) {
+      setMessage(createUserError, 'Selecciona un centro para este usuario.', true);
+      return;
+    }
+
+    if (isFamilyRole(payload.role) && !payload.linkedStudentId) {
+      setMessage(createUserError, 'Selecciona un estudiante vinculado para la familia.', true);
+      return;
+    }
+
+    if (isFamilyRole(payload.role) && payload.linkedStudentId && adminStudentSelect && !availableCenterStudents.some((student) => student.id === payload.linkedStudentId)) {
+      setMessage(createUserError, 'El estudiante vinculado no existe o no está disponible.', true);
       return;
     }
 
@@ -321,6 +535,7 @@ if (createUserForm) {
       createUserForm.reset();
       await loadCentersForAdmin();
       await loadAdminUsers();
+      updateCreateUserFieldVisibility();
     } catch (error) {
       const wait = error.payload?.data?.retryAfterMinutes;
       const extra = wait ? ` Prueba de nuevo en ${wait} min.` : '';
@@ -338,5 +553,37 @@ if (refreshUsersButton) {
     }
   });
 }
+
+createUserRoleSelect?.addEventListener('change', async () => {
+  updateCreateUserFieldVisibility();
+  if (!isFamilyRole(createUserRoleSelect.value)) {
+    if (isRoleRequiringCenter(createUserRoleSelect.value) && adminSchoolSelect?.value) {
+      try {
+        await loadStudentsForCenter(adminSchoolSelect.value);
+      } catch (error) {
+        setMessage(createUserError, error.message, true);
+      }
+    }
+    return;
+  }
+
+  renderFamilyStudentOptions(adminStudentSelect?.value || '');
+});
+
+adminSchoolSelect?.addEventListener('change', async () => {
+  const role = createUserRoleSelect?.value || 'STUDENT';
+
+  if (!isRoleRequiringCenter(role)) {
+    return;
+  }
+
+  try {
+    await loadStudentsForCenter(adminSchoolSelect.value);
+  } catch (error) {
+    setMessage(createUserError, error.message, true);
+  }
+});
+
+updateCreateUserFieldVisibility();
 
 loadProfile();

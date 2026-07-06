@@ -1,4 +1,5 @@
 const {
+  listAcademicYears,
   listCentersForUser,
   getCenterDetails,
   createCenter,
@@ -18,6 +19,14 @@ const {
   getAssignmentsForUserRequest,
 } = require('../services/organization.service');
 const { sendSuccess } = require('../utils/response');
+
+function listAcademicYearsController(_req, res, next) {
+  try {
+    return sendSuccess(res, { academicYears: listAcademicYears() }, 'Cursos escolares cargados.');
+  } catch (error) {
+    return next(error);
+  }
+}
 
 function listCentersController(req, res, next) {
   try {
@@ -172,6 +181,7 @@ function getUserAssignmentsController(req, res, next) {
 }
 
 module.exports = {
+  listAcademicYearsController,
   listCentersController,
   createCenterController,
   getCenterController,

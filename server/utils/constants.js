@@ -1,6 +1,7 @@
 const ROLES = Object.freeze({
   ADMIN: 'ADMIN',
   SCHOOL: 'SCHOOL',
+  TEACHER: 'TEACHER',
   PROFESSIONAL: 'PROFESSIONAL',
   STUDENT: 'STUDENT',
   FAMILY: 'FAMILY',
@@ -22,6 +23,7 @@ const ACADEMIC_YEAR_STAGES = Object.freeze({
 
 const CENTER_ASSIGNMENT_ROLES = Object.freeze({
   SCHOOL_MANAGER: 'RESPONSABLE_CENTRO',
+  TEACHER: 'PROFESOR',
   PROFESSIONAL: 'PROFESSIONAL',
   STUDENT: 'ALUMNO',
   FAMILY: 'FAMILIA',
@@ -30,6 +32,7 @@ const CENTER_ASSIGNMENT_ROLES = Object.freeze({
 
 const GROUP_ASSIGNMENT_ROLES = Object.freeze({
   TUTOR: 'TUTOR',
+  TEACHER: 'PROFESOR',
   PROFESSIONAL: 'PROFESSIONAL',
   STUDENT: 'ALUMNO',
   FAMILY: 'FAMILIA',
@@ -44,6 +47,7 @@ const PUBLIC_USER_FIELDS = [
   'isActive',
   'schoolId',
   'groupId',
+  'linkedStudentId',
   'ageRange',
   'createdAt',
   'updatedAt',

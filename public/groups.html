@@ -18,8 +18,10 @@
             <a class="button secondary" href="/centers.html">Ir a centros</a>
           </div>
         </div>
-        <div class="org-highlight">
-          <span>Centro actual</span>
+        <button id="profile-button" class="account-trigger" type="button" aria-label="Abrir perfil">
+          <span class="avatar-badge avatar-large" aria-hidden="true">U</span>
+        </button>
+        <div hidden>
           <strong id="selected-center-label">Sin seleccionar</strong>
           <small id="group-role-note">Cargando acceso...</small>
         </div>
@@ -98,8 +100,23 @@
           </label>
           <label>
             <span>Curso escolar</span>
-            <input type="text" name="academicYearId" placeholder="2025-2026" />
-            <small class="field-note">Opcional. Si lo dejas vacío, se usa el curso activo del centro.</small>
+            <div id="group-academic-year-picker" class="picker-field picker-field--year">
+              <button id="group-academic-year-trigger" class="picker-field__trigger" type="button" aria-expanded="false" aria-controls="group-academic-year-panel">
+                <span class="picker-field__eyebrow">Año inicial</span>
+                <strong id="group-academic-year-display" class="picker-field__value">Año inicial</strong>
+                <span id="group-academic-year-summary" class="picker-field__summary">Selecciona un curso</span>
+                <span class="picker-field__icon" aria-hidden="true">▾</span>
+              </button>
+              <input type="hidden" name="academicYearId" id="group-academic-year-hidden" />
+              <div id="group-academic-year-panel" class="picker-panel picker-panel--years" aria-hidden="true">
+                <div class="picker-panel__top picker-panel__top--years">
+                  <button id="group-academic-year-prev" class="picker-panel__nav" type="button" aria-label="Década anterior">‹</button>
+                  <strong id="group-academic-year-range" class="picker-panel__title">2020 - 2029</strong>
+                  <button id="group-academic-year-next" class="picker-panel__nav" type="button" aria-label="Siguiente década">›</button>
+                </div>
+                <div id="group-academic-year-grid" class="year-grid" role="listbox" aria-label="Años disponibles"></div>
+              </div>
+            </div>
           </label>
           <label>
             <span>Curso</span>
@@ -107,7 +124,22 @@
           </label>
           <label>
             <span>Turno</span>
-            <input type="text" name="shift" placeholder="Mañana" />
+            <div class="shift-picker" role="radiogroup" aria-label="Seleccionar turno">
+              <label class="shift-picker__option">
+                <input type="radio" name="shift" value="Mañana" checked />
+                <span>
+                  <strong>Mañana</strong>
+                  <small>Horario diurno</small>
+                </span>
+              </label>
+              <label class="shift-picker__option">
+                <input type="radio" name="shift" value="Tarde" />
+                <span>
+                  <strong>Tarde</strong>
+                  <small>Horario vespertino</small>
+                </span>
+              </label>
+            </div>
           </label>
           <p id="group-form-error" class="error" hidden></p>
           <p id="group-form-success" class="success" hidden></p>
@@ -144,17 +176,31 @@
           <button class="button secondary" type="button" data-close-modal="group-members-modal">Cerrar</button>
         </div>
         <div class="modal__body">
-          <div class="group-management-grid">
-            <div class="group-management-card">
-              <div class="group-management-card__header">
-                <strong id="selected-group-name">Sin grupo</strong>
-                <span id="selected-group-meta" class="org-counter">-</span>
+          <article id="selected-group-detail" class="org-card group-detail-card">
+            <div class="org-card__top">
+              <div>
+                <span id="selected-group-kicker" class="org-kicker">Detalle</span>
+                <h3 id="selected-group-name">Sin grupo</h3>
+                <p id="selected-group-summary">Selecciona un grupo para ver sus datos.</p>
               </div>
-              <p id="group-members-note" class="field-note">Selecciona un grupo para ver sus miembros.</p>
+              <span id="selected-group-meta" class="org-pill">-</span>
+            </div>
+            <div class="org-card__meta">
+              <span id="selected-group-center">-</span>
+              <span id="group-members-note">Selecciona un grupo para ver sus miembros.</span>
+            </div>
+          </article>
+
+          <div class="group-management-grid">
+            <div id="group-members-card" class="group-management-card">
+              <div class="group-management-card__header">
+                <strong>Usuarios asignados</strong>
+                <span class="org-counter">-</span>
+              </div>
               <div id="group-members-list" class="org-list compact-list"></div>
             </div>
 
-            <div class="group-management-card">
+            <div id="group-available-users-card" class="group-management-card">
               <div class="group-management-card__header">
                 <strong>Añadir usuario</strong>
                 <span id="available-users-count" class="org-counter">0</span>
@@ -178,8 +224,50 @@
       </div>
     </section>
 
+    <section id="profile-modal" class="profile-modal" hidden aria-hidden="true">
+      <div class="profile-modal__backdrop" data-close-profile></div>
+      <div class="profile-modal__panel card" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title">
+        <div class="section-header">
+          <div>
+            <span class="badge">Perfil</span>
+            <h2 id="profile-modal-title">Datos y preferencias</h2>
+          </div>
+          <button id="profile-close-button" class="button secondary" type="button">Cerrar</button>
+        </div>
+
+        <div class="profile-grid">
+          <div class="profile-chip">
+            <span>Nombre</span>
+            <strong id="profile-name">-</strong>
+          </div>
+          <div class="profile-chip">
+            <span>Email</span>
+            <strong id="profile-email">-</strong>
+          </div>
+          <div class="preferences-card">
+            <span class="profile-caption">Preferencias rápidas</span>
+            <div class="preferences">
+              <label class="toggle-row">
+                <input type="checkbox" checked />
+                <span>Mostrar pantalla de bienvenida</span>
+              </label>
+              <label class="toggle-row">
+                <input type="checkbox" checked />
+                <span>Recordar sesión en este navegador</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="action-row modal-actions">
+          <button id="modal-logout-button" class="button secondary" type="button">Cerrar sesión</button>
+        </div>
+      </div>
+    </section>
+
     <script src="/js/api.js"></script>
     <script src="/js/ui.js"></script>
+    <script src="/js/form-helpers.js"></script>
     <script src="/js/groups.js"></script>
   </body>
 </html>

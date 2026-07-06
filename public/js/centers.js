@@ -1,3 +1,28 @@
+const profileButton = document.getElementById('profile-button');
+const profileModal = document.getElementById('profile-modal');
+const profileCloseButton = document.getElementById('profile-close-button');
+const modalLogoutButton = document.getElementById('modal-logout-button');
+const profileNameElement = document.getElementById('profile-name');
+const profileEmailElement = document.getElementById('profile-email');
+const centerAcademicYearPickerRoot = document.getElementById('center-academic-year-picker');
+const centerAcademicYearTrigger = document.getElementById('center-academic-year-trigger');
+const centerAcademicYearPanel = document.getElementById('center-academic-year-panel');
+const centerAcademicYearGrid = document.getElementById('center-academic-year-grid');
+const centerAcademicYearRange = document.getElementById('center-academic-year-range');
+const centerAcademicYearPrev = document.getElementById('center-academic-year-prev');
+const centerAcademicYearNext = document.getElementById('center-academic-year-next');
+const centerAcademicYearDisplay = document.getElementById('center-academic-year-display');
+const centerAcademicYearSummary = document.getElementById('center-academic-year-summary');
+const centerAcademicYearHidden = document.getElementById('center-academic-year-hidden');
+const centerCityPickerRoot = document.getElementById('center-city-picker');
+const centerCityTrigger = document.getElementById('center-city-trigger');
+const centerCityPanel = document.getElementById('center-city-panel');
+const centerCitySearch = document.getElementById('center-city-search');
+const centerCityMenu = document.getElementById('center-city-menu');
+const centerCityHidden = document.getElementById('center-city-hidden');
+const centerCityDisplay = document.getElementById('center-city-display');
+const centerCitySummary = document.getElementById('center-city-summary');
+const centerCityClear = document.getElementById('center-city-clear');
 const centerCount = document.getElementById('center-count');
 const centerRoleNote = document.getElementById('center-role-note');
 const centerHeroCopy = document.getElementById('center-hero-copy');
@@ -24,6 +49,10 @@ const schoolCenterGroupsLink = document.getElementById('school-center-groups-lin
 let centersCurrentUser = null;
 let centersData = [];
 let currentCenterSummary = null;
+let currentCenterRole = '';
+let centerCityCombobox = null;
+let centerAcademicYearPicker = null;
+const formHelpers = window.UnicornioFormHelpers || {};
 
 const centerTypeLabels = {
   PRIMARIA: 'Primaria',
@@ -107,7 +136,9 @@ function renderSchoolCenter(center) {
   }
 
   setPanelVisible(schoolCenterPanel, true, 'grid');
-  schoolCenterNote.textContent = 'Solo ves el centro enlazado a tu cuenta.';
+  schoolCenterNote.textContent = currentCenterRole === 'FAMILY'
+    ? 'Solo ves el centro del estudiante vinculado a tu cuenta.'
+    : 'Solo ves el centro enlazado a tu cuenta.';
   schoolCenterCity.textContent = center.city || 'Sin ciudad';
   schoolCenterName.textContent = center.name;
   schoolCenterLine.textContent = formatCenterLine(center);
@@ -193,7 +224,7 @@ function renderCenters(centers) {
   centersData = centers;
   centerCount.textContent = `${centers.length} ${centers.length === 1 ? 'centro' : 'centros'}`;
 
-  if (getUserRole() === 'SCHOOL') {
+  if (getUserRole() === 'SCHOOL' || getUserRole() === 'TEACHER') {
     renderSchoolCenter(centers[0] || null);
     return;
   }
@@ -209,7 +240,8 @@ async function loadCenters() {
 async function loadProfile() {
   const response = await apiRequest('/auth/me');
   centersCurrentUser = response.data.user;
-  const role = getUserRole();
+  currentCenterRole = getUserRole();
+  const role = currentCenterRole;
 
   if (role === 'ADMIN') {
     centerRoleNote.textContent = 'Puedes crear, editar y revisar todos los centros.';
@@ -225,15 +257,79 @@ async function loadProfile() {
     return;
   }
 
-  centerRoleNote.textContent = 'Solo verás el centro asignado a tu cuenta.';
-  centerHeroCopy.textContent = 'Tu cuenta de centro solo muestra sus propios datos y accesos vinculados.';
+  if (role === 'TEACHER') {
+    centerRoleNote.textContent = 'Ves el centro al que perteneces y los accesos de tu grupo.';
+    centerHeroCopy.textContent = 'El profesor consulta su centro, sus grupos y la actividad asociada.';
+  } else if (role === 'FAMILY') {
+    centerRoleNote.textContent = 'Ves el centro del estudiante vinculado y la información relacionada.';
+    centerHeroCopy.textContent = 'La familia consulta el centro derivado del alumno vinculado y su contexto básico.';
+  } else {
+    centerRoleNote.textContent = 'Solo verás el centro asignado a tu cuenta.';
+    centerHeroCopy.textContent = 'Tu cuenta de centro solo muestra sus propios datos y accesos vinculados.';
+  }
   setPanelVisible(centersListPanel, false);
   setPanelVisible(schoolCenterPanel, true, 'grid');
 }
 
+async function loadAccountSheet() {
+  if (!profileNameElement || !profileEmailElement) {
+    return;
+  }
+
+  const response = await apiRequest('/auth/me');
+  const user = response.data.user;
+  profileNameElement.textContent = user.name || '-';
+  profileEmailElement.textContent = user.email || '-';
+}
+
+function initializeFormHelpers() {
+  if (typeof formHelpers.setupAcademicYearPicker === 'function') {
+    centerAcademicYearPicker = formHelpers.setupAcademicYearPicker({
+      rootId: centerAcademicYearPickerRoot,
+      triggerId: centerAcademicYearTrigger,
+      panelId: centerAcademicYearPanel,
+      gridId: centerAcademicYearGrid,
+      rangeId: centerAcademicYearRange,
+      prevId: centerAcademicYearPrev,
+      nextId: centerAcademicYearNext,
+      hiddenId: centerAcademicYearHidden,
+      displayId: centerAcademicYearDisplay,
+      summaryId: centerAcademicYearSummary,
+      initialYear: new Date().getFullYear(),
+    });
+  }
+
+  if (typeof formHelpers.setupCityCombobox === 'function') {
+    centerCityCombobox = formHelpers.setupCityCombobox({
+      rootId: centerCityPickerRoot,
+      triggerId: centerCityTrigger,
+      panelId: centerCityPanel,
+      searchId: centerCitySearch,
+      menuId: centerCityMenu,
+      hiddenId: centerCityHidden,
+      displayId: centerCityDisplay,
+      summaryId: centerCitySummary,
+      clearId: centerCityClear,
+    });
+  }
+}
+
+async function doLogout() {
+  try {
+    await apiRequest('/auth/logout', { method: 'POST' });
+  } catch (_error) {
+    // Demo logout: limpiar la sesión local aunque el token sea stateless.
+  } finally {
+    clearToken();
+    window.location.href = '/login.html';
+  }
+}
+
 async function init() {
   try {
+    initializeFormHelpers();
     await loadProfile();
+    await loadAccountSheet();
     await loadCenters();
   } catch (_error) {
     clearToken();
@@ -263,9 +359,28 @@ centerForm?.addEventListener('submit', async (event) => {
 
     setMessage(centerFormSuccess, 'Centro creado correctamente.');
     centerForm.reset();
+    if (centerCityCombobox) {
+      centerCityCombobox.setValue('');
+    } else if (centerCityHidden) {
+      centerCityHidden.value = '';
+    }
+    if (centerAcademicYearPicker) {
+      centerAcademicYearPicker.setValue(new Date().getFullYear());
+    }
     await loadCenters();
   } catch (error) {
     setMessage(centerFormError, error.message, true);
+  }
+});
+
+profileButton?.addEventListener('click', () => openModalById('profile-modal'));
+profileCloseButton?.addEventListener('click', () => closeModalById('profile-modal'));
+profileModal?.querySelector('[data-close-profile]')?.addEventListener('click', () => closeModalById('profile-modal'));
+modalLogoutButton?.addEventListener('click', doLogout);
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && profileModal && !profileModal.hidden) {
+    closeModalById('profile-modal');
   }
 });
 

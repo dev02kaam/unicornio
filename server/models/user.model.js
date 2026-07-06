@@ -17,6 +17,7 @@ function createUserModel(input) {
     isActive: input.isActive ?? true,
     schoolId: input.schoolId ?? null,
     groupId: input.groupId ?? null,
+    linkedStudentId: input.linkedStudentId ?? null,
     ageRange: input.ageRange ?? null,
     createdAt: input.createdAt,
     updatedAt: input.updatedAt,
@@ -24,4 +25,3 @@ function createUserModel(input) {
 }
 
 module.exports = { sanitizeUser, createUserModel };
-

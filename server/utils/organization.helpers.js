@@ -13,6 +13,10 @@ function isSchool(user) {
   return String(user?.role || '').toUpperCase() === 'SCHOOL';
 }
 
+function isTeacher(user) {
+  return String(user?.role || '').toUpperCase() === 'TEACHER';
+}
+
 function isProfessional(user) {
   return String(user?.role || '').toUpperCase() === 'PROFESSIONAL';
 }
@@ -39,6 +43,18 @@ function getUserGroupAssignments(userId, { activeOnly = true } = {}) {
   return getCollection('userGroupAssignments').filter((assignment) => (
     assignment.userId === String(userId) && (!activeOnly || assignment.isActive)
   ));
+}
+
+function findPrimaryCenterIdForUser(userId) {
+  const assignments = getUserCenterAssignments(userId);
+  const primaryAssignment = assignments.find((assignment) => assignment.isPrimary) || assignments[0] || null;
+  return primaryAssignment ? primaryAssignment.centerId : null;
+}
+
+function findPrimaryGroupIdForUser(userId) {
+  const assignments = getUserGroupAssignments(userId);
+  const primaryAssignment = assignments.find((assignment) => assignment.isPrimary) || assignments[0] || null;
+  return primaryAssignment ? primaryAssignment.groupId : null;
 }
 
 function getCenterAssignments(centerId, { activeOnly = true } = {}) {
@@ -90,7 +106,15 @@ function hasCenterAccess(user, centerId) {
     return true;
   }
 
-  return getUserCenterAssignments(user.id).some((assignment) => assignment.centerId === String(centerId));
+  if (getUserCenterAssignments(user.id).some((assignment) => assignment.centerId === String(centerId))) {
+    return true;
+  }
+
+  if (String(user?.role || '').toUpperCase() === 'FAMILY' && user.linkedStudentId) {
+    return findPrimaryCenterIdForUser(user.linkedStudentId) === String(centerId);
+  }
+
+  return false;
 }
 
 function hasGroupAccess(user, groupId) {
@@ -107,7 +131,15 @@ function hasGroupAccess(user, groupId) {
   }
 
   const group = findGroupById(groupId);
-  return group ? hasCenterAccess(user, group.centerId) : false;
+  if (!group) {
+    return false;
+  }
+
+  if (String(user?.role || '').toUpperCase() === 'FAMILY' && user.linkedStudentId) {
+    return findPrimaryGroupIdForUser(user.linkedStudentId) === group.id;
+  }
+
+  return hasCenterAccess(user, group.centerId);
 }
 
 function canManageCenter(user, centerId) {
@@ -119,7 +151,7 @@ function canManageCenter(user, centerId) {
     return true;
   }
 
-  if (!isSchool(user)) {
+  if (!isSchool(user) && !isTeacher(user)) {
     return false;
   }
 
@@ -187,6 +219,7 @@ function getUserAssignments(userId) {
 module.exports = {
   isAdmin,
   isSchool,
+  isTeacher,
   isProfessional,
   findAcademicYearById,
   findCenterById,

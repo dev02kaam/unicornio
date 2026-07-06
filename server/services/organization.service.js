@@ -68,6 +68,69 @@ function getCurrentAcademicYear() {
   return academicYears.find((year) => year.isActive && year.isCurrent) || academicYears.find((year) => year.isActive) || null;
 }
 
+function findAcademicYearByLabel(label) {
+  if (!label) {
+    return null;
+  }
+
+  const normalizedLabel = String(label).trim();
+  return (database.getCollection('academicYears') || []).find((year) => String(year.label || '').trim() === normalizedLabel) || null;
+}
+
+function createAcademicYearForLabel(label, startYear) {
+  const normalizedLabel = String(label || '').trim();
+  const yearStart = Number(startYear);
+  if (!normalizedLabel || Number.isNaN(yearStart)) {
+    return null;
+  }
+
+  const academicYears = database.getCollection('academicYears') || [];
+  const now = new Date().toISOString();
+  const academicYear = createAcademicYearModel({
+    id: database.nextId('academicYears', 'academic-year'),
+    label: normalizedLabel,
+    startDate: `${yearStart}-09-01`,
+    endDate: `${yearStart + 1}-06-30`,
+    stage: null,
+    isCurrent: false,
+    isActive: true,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  academicYears.push(academicYear);
+  database.setCollection('academicYears', academicYears);
+  return academicYear;
+}
+
+function resolveAcademicYearId(inputValue) {
+  if (!inputValue) {
+    return getCurrentAcademicYear()?.id || null;
+  }
+
+  const rawValue = String(inputValue).trim();
+  if (!rawValue) {
+    return getCurrentAcademicYear()?.id || null;
+  }
+
+  const existingById = findAcademicYearById(rawValue);
+  if (existingById) {
+    return existingById.id;
+  }
+
+  const existingByLabel = findAcademicYearByLabel(rawValue);
+  if (existingByLabel) {
+    return existingByLabel.id;
+  }
+
+  const startYear = /^\d{4}$/.test(rawValue) ? Number(rawValue) : Number(String(rawValue).match(/^(\d{4})-\d{4}$/)?.[1]);
+  if (!Number.isNaN(startYear)) {
+    return createAcademicYearForLabel(`${startYear}-${startYear + 1}`, startYear)?.id || null;
+  }
+
+  return null;
+}
+
 function assertUserExists(userId) {
   const user = findUserById(userId);
   if (!user) {
@@ -182,8 +245,7 @@ function listCentersForUser(user) {
     return centers.map(buildCenterSummary);
   }
 
-  const centerIds = new Set(getUserCenterAssignments(user.id).map((assignment) => assignment.centerId));
-  return centers.filter((center) => centerIds.has(center.id) && center.isActive).map(buildCenterSummary);
+  return centers.filter((center) => center.isActive && hasCenterAccess(user, center.id)).map(buildCenterSummary);
 }
 
 function getCenterDetails(centerId, user = null) {
@@ -204,7 +266,7 @@ function createCenter(data, user) {
   const name = normalizeText(data.name);
   const code = normalizeOptionalText(data.code);
   const type = normalizeEnumValue(data.type, Object.values(CENTER_TYPES), 'tipo de centro', null);
-  const academicYearId = normalizeOptionalText(data.academicYearId) || getCurrentAcademicYear()?.id || null;
+  const academicYearId = resolveAcademicYearId(data.academicYearId);
   const city = normalizeOptionalText(data.city);
 
   if (!name) {
@@ -258,7 +320,7 @@ function updateCenter(centerId, data, user) {
   }
 
   if (data.academicYearId !== undefined) {
-    const academicYearId = normalizeOptionalText(data.academicYearId);
+    const academicYearId = resolveAcademicYearId(data.academicYearId);
     assertAcademicYearExists(academicYearId);
     center.academicYearId = academicYearId;
   }
@@ -324,9 +386,12 @@ function listGroupsForCenter(centerId, user) {
     throw new AppError('No autorizado para ver los grupos de este centro.', 403);
   }
 
-  return getCenterGroups(center.id)
-    .filter((group) => group.isActive)
-    .map(buildGroupSummary);
+  const groups = getCenterGroups(center.id).filter((group) => group.isActive);
+  if (String(user?.role || '').toUpperCase() === 'FAMILY') {
+    return groups.filter((group) => hasGroupAccess(user, group.id)).map(buildGroupSummary);
+  }
+
+  return groups.map(buildGroupSummary);
 }
 
 function getGroupDetails(groupId, user = null) {
@@ -347,7 +412,7 @@ function createGroup(centerId, data, user) {
   const name = normalizeText(data.name);
   const code = normalizeOptionalText(data.code);
   const stage = normalizeEnumValue(data.stage, Object.values(ACADEMIC_YEAR_STAGES), 'etapa educativa', null);
-  const academicYearId = normalizeOptionalText(data.academicYearId) || center.academicYearId || getCurrentAcademicYear()?.id || null;
+  const academicYearId = resolveAcademicYearId(data.academicYearId || center.academicYearId || getCurrentAcademicYear()?.id || null);
   const course = normalizeOptionalText(data.course);
   const shift = normalizeOptionalText(data.shift);
 
@@ -403,7 +468,7 @@ function updateGroup(groupId, data, user) {
   }
 
   if (data.academicYearId !== undefined) {
-    const academicYearId = normalizeOptionalText(data.academicYearId);
+    const academicYearId = resolveAcademicYearId(data.academicYearId);
     assertAcademicYearExists(academicYearId);
     group.academicYearId = academicYearId;
   }
@@ -452,6 +517,8 @@ function normalizeCenterAssignmentRole(role, user) {
   switch (String(user?.role || '').toUpperCase()) {
     case 'SCHOOL':
       return CENTER_ASSIGNMENT_ROLES.SCHOOL_MANAGER;
+    case 'TEACHER':
+      return CENTER_ASSIGNMENT_ROLES.TEACHER;
     case 'PROFESSIONAL':
       return CENTER_ASSIGNMENT_ROLES.PROFESSIONAL;
     case 'STUDENT':
@@ -469,6 +536,8 @@ function normalizeGroupAssignmentRole(role, user) {
   }
 
   switch (String(user?.role || '').toUpperCase()) {
+    case 'TEACHER':
+      return GROUP_ASSIGNMENT_ROLES.TEACHER;
     case 'PROFESSIONAL':
       return GROUP_ASSIGNMENT_ROLES.PROFESSIONAL;
     case 'STUDENT':
@@ -486,6 +555,10 @@ function assignUserToCenter(centerId, userId, data, actorUser) {
 
   if (!canManageCenter(actorUser, center.id) && !isAdmin(actorUser)) {
     throw new AppError('No autorizado para asignar usuarios a este centro.', 403);
+  }
+
+  if (String(user.role || '').toUpperCase() === 'FAMILY') {
+    throw new AppError('Las familias no se asignan directamente a un centro.', 400);
   }
 
   const assignments = database.getCollection('userCenterAssignments') || [];
@@ -611,8 +684,12 @@ function assignUserToGroup(groupId, userId, data, actorUser) {
   const group = assertGroupExists(groupId);
   const user = assertUserExists(userId);
 
-  if (!canManageGroup(actorUser, group.id) && !isAdmin(actorUser)) {
-    throw new AppError('No autorizado para asignar usuarios a este grupo.', 403);
+  if (!isSchool(actorUser)) {
+    throw new AppError('Solo el centro puede asignar usuarios a grupos.', 403);
+  }
+
+  if (String(user.role || '').toUpperCase() === 'FAMILY') {
+    throw new AppError('Las familias no se asignan directamente a grupos.', 400);
   }
 
   const center = assertCenterExists(group.centerId);
@@ -676,8 +753,8 @@ function removeUserFromGroup(groupId, userId, actorUser) {
   const group = assertGroupExists(groupId);
   const user = assertUserExists(userId);
 
-  if (!canManageGroup(actorUser, group.id) && !isAdmin(actorUser)) {
-    throw new AppError('No autorizado para quitar usuarios de este grupo.', 403);
+  if (!isSchool(actorUser)) {
+    throw new AppError('Solo el centro puede quitar usuarios de grupos.', 403);
   }
 
   const assignments = database.getCollection('userGroupAssignments') || [];
@@ -705,7 +782,12 @@ function listCenterUsersForRequest(centerId, user) {
     throw new AppError('No autorizado para ver los usuarios de este centro.', 403);
   }
 
-  return getCenterUsers(center.id);
+  const centerUsers = getCenterUsers(center.id);
+  if (String(user?.role || '').toUpperCase() === 'FAMILY' && user.linkedStudentId) {
+    return centerUsers.filter((entry) => entry.user.id === String(user.linkedStudentId));
+  }
+
+  return centerUsers;
 }
 
 function listGroupUsersForRequest(groupId, user) {
@@ -714,7 +796,12 @@ function listGroupUsersForRequest(groupId, user) {
     throw new AppError('No autorizado para ver los usuarios de este grupo.', 403);
   }
 
-  return getGroupUsers(group.id);
+  const groupUsers = getGroupUsers(group.id);
+  if (String(user?.role || '').toUpperCase() === 'FAMILY' && user.linkedStudentId) {
+    return groupUsers.filter((entry) => entry.user.id === String(user.linkedStudentId));
+  }
+
+  return groupUsers;
 }
 
 function getAssignmentsForUserRequest(targetUserId, actorUser) {

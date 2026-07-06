@@ -127,6 +127,46 @@
       </div>
     </section>
 
+    <section id="user-detail-modal" class="modal" hidden aria-hidden="true">
+      <div class="modal__backdrop" data-close-modal="user-detail-modal"></div>
+      <div class="modal__panel modal__panel--small" role="dialog" aria-modal="true" aria-labelledby="user-detail-modal-title">
+        <div class="modal__header">
+          <div>
+            <span class="badge">Usuario</span>
+            <h2 id="user-detail-modal-title">Detalle de usuario</h2>
+          </div>
+          <button class="button secondary" type="button" data-close-modal="user-detail-modal">Cerrar</button>
+        </div>
+
+        <div class="profile-grid">
+          <div class="profile-chip">
+            <span>Nombre</span>
+            <strong id="user-detail-name">-</strong>
+          </div>
+          <div class="profile-chip">
+            <span>Email</span>
+            <strong id="user-detail-email">-</strong>
+          </div>
+          <div class="profile-chip">
+            <span>Rol</span>
+            <strong id="user-detail-role">-</strong>
+          </div>
+          <div class="profile-chip">
+            <span>Centro</span>
+            <strong id="user-detail-school">-</strong>
+          </div>
+          <div class="profile-chip">
+            <span>Estudiante vinculado</span>
+            <strong id="user-detail-linked-student">-</strong>
+          </div>
+          <div class="preferences-card">
+            <span class="profile-caption">Asignaciones</span>
+            <div id="user-detail-assignments" class="preferences"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="create-user-modal" class="modal" hidden aria-hidden="true">
       <div class="modal__backdrop" data-close-modal="create-user-modal"></div>
       <div class="modal__panel modal__panel--small" role="dialog" aria-modal="true" aria-labelledby="create-user-modal-title">
@@ -152,20 +192,30 @@
           </label>
           <label>
             <span>Rol</span>
-            <select name="role">
+            <select id="create-user-role" name="role">
               <option value="STUDENT">Alumno</option>
               <option value="FAMILY">Familia</option>
               <option value="SCHOOL">Centro</option>
-              <option value="PROFESSIONAL">Profesional</option>
+              <option value="TEACHER">Profesor</option>
+              <option value="PROFESSIONAL">Profesional autorizado</option>
               <option value="ADMIN">Administrador</option>
             </select>
           </label>
-          <label>
+          <label id="create-user-center-field">
             <span>Centro</span>
             <select name="schoolId" id="admin-school-select">
               <option value="">Sin vincular</option>
             </select>
+            <small class="field-note">Obligatorio para alumnos, profesores, profesionales autorizados y cuentas de centro.</small>
           </label>
+          <label id="create-user-student-field" hidden>
+            <span>Estudiante vinculado</span>
+            <select id="admin-student-select" name="linkedStudentId">
+              <option value="">Selecciona un estudiante</option>
+            </select>
+            <small class="field-note">Solo para familias. Se usa para permisos y privacidad.</small>
+          </label>
+          <p id="create-user-hint" class="field-note">El tipo de cuenta determina qué relaciones se deben completar.</p>
           <p id="create-user-error" class="error" hidden></p>
           <p id="create-user-success" class="success" hidden></p>
           <div class="modal__footer">

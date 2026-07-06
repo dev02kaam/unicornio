@@ -1,3 +1,19 @@
+const profileButton = document.getElementById('profile-button');
+const profileModal = document.getElementById('profile-modal');
+const profileCloseButton = document.getElementById('profile-close-button');
+const modalLogoutButton = document.getElementById('modal-logout-button');
+const profileNameElement = document.getElementById('profile-name');
+const profileEmailElement = document.getElementById('profile-email');
+const groupAcademicYearPickerRoot = document.getElementById('group-academic-year-picker');
+const groupAcademicYearTrigger = document.getElementById('group-academic-year-trigger');
+const groupAcademicYearPanel = document.getElementById('group-academic-year-panel');
+const groupAcademicYearGrid = document.getElementById('group-academic-year-grid');
+const groupAcademicYearRange = document.getElementById('group-academic-year-range');
+const groupAcademicYearPrev = document.getElementById('group-academic-year-prev');
+const groupAcademicYearNext = document.getElementById('group-academic-year-next');
+const groupAcademicYearDisplay = document.getElementById('group-academic-year-display');
+const groupAcademicYearSummary = document.getElementById('group-academic-year-summary');
+const groupAcademicYearHidden = document.getElementById('group-academic-year-hidden');
 const selectedCenterLabel = document.getElementById('selected-center-label');
 const groupRoleNote = document.getElementById('group-role-note');
 const groupGlobalSearch = document.getElementById('group-global-search');
@@ -14,7 +30,13 @@ const refreshGroupsButton = document.getElementById('refresh-groups');
 const groupMembersNote = document.getElementById('group-members-note');
 const selectedGroupName = document.getElementById('selected-group-name');
 const selectedGroupMeta = document.getElementById('selected-group-meta');
+const selectedGroupDetail = document.getElementById('selected-group-detail');
+const selectedGroupKicker = document.getElementById('selected-group-kicker');
+const selectedGroupSummary = document.getElementById('selected-group-summary');
+const selectedGroupCenter = document.getElementById('selected-group-center');
 const groupMembersList = document.getElementById('group-members-list');
+const groupMembersCard = document.getElementById('group-members-card');
+const groupAvailableUsersCard = document.getElementById('group-available-users-card');
 const availableUserSelect = document.getElementById('available-user-select');
 const availableUsersCount = document.getElementById('available-users-count');
 const addUserToGroupButton = document.getElementById('add-user-to-group-button');
@@ -29,6 +51,9 @@ let currentCenterUsers = [];
 let currentGroupUsers = [];
 let groupFilters = [];
 let filterSeed = 0;
+let currentGroupsRole = '';
+let groupAcademicYearPicker = null;
+const formHelpers = window.UnicornioFormHelpers || {};
 
 const stageLabels = {
   PRIMARIA: 'Primaria',
@@ -110,6 +135,10 @@ function setMessage(element, message, isError = false) {
 function canCreateGroups() {
   const role = String(groupsCurrentUser?.role || '').toUpperCase();
   return role === 'ADMIN' || role === 'SCHOOL';
+}
+
+function canManageGroupMembers() {
+  return String(groupsCurrentUser?.role || '').toUpperCase() === 'SCHOOL';
 }
 
 function getCenterById(centerId) {
@@ -408,6 +437,16 @@ function renderGroupsTable() {
         }
 
         if (column.id === 'actions') {
+          if (!canManageGroupMembers()) {
+            return `
+              <td class="table-cell-actions">
+                <button class="button ghost table-row-action" type="button" data-group-view="${group.id}">
+                  Ver
+                </button>
+              </td>
+            `;
+          }
+
           return `
             <td class="table-cell-actions">
               <button class="button ghost table-row-action" type="button" data-group-manage="${group.id}">
@@ -474,11 +513,12 @@ function renderGroupMembers(groupUsers) {
     return;
   }
 
+  const editable = canManageGroupMembers();
   if (groupUsers.length === 0) {
     groupMembersList.innerHTML = `
       <article class="empty-state">
         <strong>Este grupo no tiene usuarios</strong>
-        <p>Selecciona un usuario del centro para añadirlo.</p>
+        <p>${editable ? 'Selecciona un usuario del centro para añadirlo.' : 'La gestión de usuarios la realiza el centro.'}</p>
       </article>
     `;
     return;
@@ -494,9 +534,7 @@ function renderGroupMembers(groupUsers) {
           </div>
           <div class="user-meta">
             <span>${assignment.role}</span>
-            <button class="button secondary button-small" type="button" data-group-remove="${user.id}">
-              Quitar
-            </button>
+            ${editable ? `<button class="button secondary button-small" type="button" data-group-remove="${user.id}">Quitar</button>` : ''}
           </div>
         </article>
       `,
@@ -505,10 +543,18 @@ function renderGroupMembers(groupUsers) {
 }
 
 function renderAvailableUsers(centerUsers, groupUsers) {
-  if (!availableUserSelect) {
+  if (!availableUserSelect || !groupAvailableUsersCard) {
     return;
   }
 
+  if (!canManageGroupMembers()) {
+    groupAvailableUsersCard.hidden = true;
+    availableUserSelect.innerHTML = '';
+    availableUsersCount.textContent = '0';
+    return;
+  }
+
+  groupAvailableUsersCard.hidden = false;
   const groupUserIds = new Set(groupUsers.map(({ user }) => user.id));
   const availableUsers = centerUsers.filter(({ user }) => user.isActive && !groupUserIds.has(user.id));
 
@@ -535,6 +581,9 @@ function renderGroupSelection(groupId) {
   if (!group) {
     if (selectedGroupName) selectedGroupName.textContent = 'Sin grupo';
     if (selectedGroupMeta) selectedGroupMeta.textContent = '-';
+    if (selectedGroupKicker) selectedGroupKicker.textContent = 'Detalle';
+    if (selectedGroupSummary) selectedGroupSummary.textContent = 'Selecciona un grupo para ver sus datos.';
+    if (selectedGroupCenter) selectedGroupCenter.textContent = '-';
     if (groupMembersNote) groupMembersNote.textContent = 'Selecciona un grupo para ver sus miembros.';
     renderGroupMembers([]);
     renderAvailableUsers([], []);
@@ -543,7 +592,20 @@ function renderGroupSelection(groupId) {
 
   if (selectedGroupName) selectedGroupName.textContent = group.name;
   if (selectedGroupMeta) selectedGroupMeta.textContent = `${group.usersCount || 0} usuarios`;
-  if (groupMembersNote) groupMembersNote.textContent = `Gestiona usuarios del grupo ${group.name}.`;
+  if (selectedGroupKicker) {
+    selectedGroupKicker.textContent = canManageGroupMembers() ? 'Gestión' : 'Detalle del grupo';
+  }
+  if (selectedGroupSummary) {
+    selectedGroupSummary.textContent = canManageGroupMembers()
+      ? 'Gestiona miembros y revisa quién está dentro del grupo.'
+      : 'Consulta la composición del grupo y sus miembros asignados.';
+  }
+  if (selectedGroupCenter) selectedGroupCenter.textContent = group.center?.name || 'Sin centro';
+  if (groupMembersNote) {
+    groupMembersNote.textContent = canManageGroupMembers()
+      ? `Gestiona usuarios del grupo ${group.name}.`
+      : 'La gestión de usuarios la realiza el centro.';
+  }
 
   if (currentCenterId) {
     Promise.all([
@@ -558,21 +620,77 @@ function renderGroupSelection(groupId) {
       setMessage(groupFormError, error.message, true);
     });
   }
+
+  if (groupMembersCard) {
+    groupMembersCard.classList.toggle('group-management-card--readonly', !canManageGroupMembers());
+  }
+
+  if (selectedGroupDetail) {
+    selectedGroupDetail.classList.toggle('group-detail-card--readonly', !canManageGroupMembers());
+  }
 }
 
 async function openGroupManager(groupId) {
+  if (!canManageGroupMembers()) {
+    selectedGroupId = groupId;
+  }
   renderGroupSelection(groupId);
+  const title = document.getElementById('group-members-title');
+  if (title) {
+    title.textContent = canManageGroupMembers() ? 'Gestionar grupo' : 'Ver grupo';
+  }
   openModalById('group-members-modal');
 }
 
 async function loadProfile() {
   const response = await apiRequest('/auth/me');
   groupsCurrentUser = response.data.user;
+  currentGroupsRole = String(groupsCurrentUser?.role || '').toUpperCase();
 
   if (groupRoleNote) {
     groupRoleNote.textContent = canCreateGroups()
-      ? 'Tienes permisos para crear grupos.'
+      ? (canManageGroupMembers() ? 'Tienes permisos para crear y gestionar grupos.' : 'Puedes crear grupos, pero la gestión de usuarios la realiza el centro.')
       : 'Solo puedes consultar los grupos asignados.';
+  }
+}
+
+async function loadAccountSheet() {
+  if (!profileNameElement || !profileEmailElement) {
+    return;
+  }
+
+  const response = await apiRequest('/auth/me');
+  const user = response.data.user;
+  profileNameElement.textContent = user.name || '-';
+  profileEmailElement.textContent = user.email || '-';
+}
+
+async function doLogout() {
+  try {
+    await apiRequest('/auth/logout', { method: 'POST' });
+  } catch (_error) {
+    // Demo logout: limpiar la sesión local aunque el token sea stateless.
+  } finally {
+    clearToken();
+    window.location.href = '/login.html';
+  }
+}
+
+function initializeFormHelpers() {
+  if (typeof formHelpers.setupAcademicYearPicker === 'function') {
+    groupAcademicYearPicker = formHelpers.setupAcademicYearPicker({
+      rootId: groupAcademicYearPickerRoot,
+      triggerId: groupAcademicYearTrigger,
+      panelId: groupAcademicYearPanel,
+      gridId: groupAcademicYearGrid,
+      rangeId: groupAcademicYearRange,
+      prevId: groupAcademicYearPrev,
+      nextId: groupAcademicYearNext,
+      hiddenId: groupAcademicYearHidden,
+      displayId: groupAcademicYearDisplay,
+      summaryId: groupAcademicYearSummary,
+      initialYear: new Date().getFullYear(),
+    });
   }
 }
 
@@ -734,6 +852,9 @@ groupForm?.addEventListener('submit', async (event) => {
 
     setMessage(groupFormSuccess, 'Grupo creado correctamente.');
     groupForm.reset();
+    if (groupAcademicYearPicker) {
+      groupAcademicYearPicker.setValue(new Date().getFullYear());
+    }
     selectedGroupId = response.data.group.id;
     await loadGroups(currentCenterId);
     await openGroupManager(selectedGroupId);
@@ -751,8 +872,19 @@ refreshGroupsButton?.addEventListener('click', async () => {
 });
 
 groupsBody?.addEventListener('click', async (event) => {
+  const viewButton = event.target.closest('[data-group-view]');
+  if (viewButton) {
+    await openGroupManager(viewButton.getAttribute('data-group-view'));
+    return;
+  }
+
   const button = event.target.closest('[data-group-manage]');
   if (!button) {
+    return;
+  }
+
+  if (!canManageGroupMembers()) {
+    await openGroupManager(button.getAttribute('data-group-manage'));
     return;
   }
 
@@ -762,6 +894,10 @@ groupsBody?.addEventListener('click', async (event) => {
 groupMembersList?.addEventListener('click', async (event) => {
   const button = event.target.closest('[data-group-remove]');
   if (!button) {
+    return;
+  }
+
+  if (!canManageGroupMembers()) {
     return;
   }
 
@@ -782,6 +918,10 @@ groupMembersList?.addEventListener('click', async (event) => {
 });
 
 addUserToGroupButton?.addEventListener('click', async () => {
+  if (!canManageGroupMembers()) {
+    return;
+  }
+
   const group = getSelectedGroup();
   const userId = availableUserSelect?.value;
 
@@ -804,7 +944,9 @@ addUserToGroupButton?.addEventListener('click', async () => {
 
 async function init() {
   try {
+    initializeFormHelpers();
     await loadProfile();
+    await loadAccountSheet();
     await loadCentersAndGroups();
     renderFilterBuilder();
 
@@ -829,3 +971,14 @@ async function init() {
 }
 
 init();
+
+profileButton?.addEventListener('click', () => openModalById('profile-modal'));
+profileCloseButton?.addEventListener('click', () => closeModalById('profile-modal'));
+profileModal?.querySelector('[data-close-profile]')?.addEventListener('click', () => closeModalById('profile-modal'));
+modalLogoutButton?.addEventListener('click', doLogout);
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && profileModal && !profileModal.hidden) {
+    closeModalById('profile-modal');
+  }
+});

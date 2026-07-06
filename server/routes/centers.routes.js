@@ -6,6 +6,7 @@ const {
   validateGroupCreate,
 } = require('../middlewares/validation.middleware');
 const {
+  listAcademicYearsController,
   listCentersController,
   createCenterController,
   getCenterController,
@@ -20,6 +21,7 @@ const centersRouter = express.Router();
 
 centersRouter.use(authMiddleware);
 
+centersRouter.get('/academic-years', listAcademicYearsController);
 centersRouter.get('/', listCentersController);
 centersRouter.post('/', validateCenterCreate, createCenterController);
 centersRouter.get('/:centerId', getCenterController);

@@ -4,6 +4,7 @@ const {
   isNonEmptyString,
   validatePassword,
   isOneOf,
+  isRole,
 } = require('../utils/validators');
 const {
   CENTER_TYPES,
@@ -52,7 +53,7 @@ function validateLogin(req, _res, next) {
 }
 
 function validateUserUpdate(req, _res, next) {
-  const { name, email } = req.body || {};
+  const { name, email, schoolId, linkedStudentId } = req.body || {};
   const errors = [];
 
   if (name !== undefined && !isNonEmptyString(name)) {
@@ -60,6 +61,12 @@ function validateUserUpdate(req, _res, next) {
   }
   if (email !== undefined && !isEmail(email)) {
     errors.push('El email no es valido.');
+  }
+  if (schoolId !== undefined && !isNonEmptyString(schoolId)) {
+    errors.push('El centro no puede estar vacio.');
+  }
+  if (linkedStudentId !== undefined && !isNonEmptyString(linkedStudentId)) {
+    errors.push('El estudiante vinculado no puede estar vacio.');
   }
 
   if (errors.length > 0) {
@@ -70,7 +77,7 @@ function validateUserUpdate(req, _res, next) {
 }
 
 function validateAdminCreateUser(req, _res, next) {
-  const { name, email, password } = req.body || {};
+  const { name, email, password, role, schoolId, linkedStudentId } = req.body || {};
   const errors = [];
 
   if (!isNonEmptyString(name)) {
@@ -81,6 +88,21 @@ function validateAdminCreateUser(req, _res, next) {
   }
   if (!validatePassword(password)) {
     errors.push('La contrasena debe tener al menos 8 caracteres.');
+  }
+  if (!isRole(role)) {
+    errors.push('El rol no es valido.');
+  }
+
+  const normalizedRole = String(role || '').toUpperCase();
+  const requiresCenter = ['SCHOOL', 'TEACHER', 'PROFESSIONAL', 'STUDENT'].includes(normalizedRole);
+  if (requiresCenter && !isNonEmptyString(schoolId)) {
+    errors.push('Selecciona un centro para este tipo de usuario.');
+  }
+  if (normalizedRole === 'FAMILY' && isNonEmptyString(schoolId)) {
+    errors.push('Las familias no se vinculan directamente a un centro.');
+  }
+  if (normalizedRole === 'FAMILY' && !isNonEmptyString(linkedStudentId)) {
+    errors.push('Selecciona un estudiante para la familia.');
   }
 
   if (errors.length > 0) {
