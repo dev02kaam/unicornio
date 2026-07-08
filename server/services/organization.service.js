@@ -8,7 +8,7 @@ const {
   createCenterAssignmentModel,
   createGroupAssignmentModel,
 } = require('../models/assignment.model');
-const { findUserById } = require('./users.service');
+const { findUserById, createUser } = require('./users.service');
 const {
   CENTER_TYPES,
   ACADEMIC_YEAR_STAGES,
@@ -35,6 +35,15 @@ const {
 
 function normalizeText(value) {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeEmailLocalPart(value) {
+  return normalizeText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '.')
+    .replace(/^\.+|\.+$/g, '')
+    .replace(/\.+/g, '.')
+    || 'centro';
 }
 
 function normalizeOptionalText(value) {
@@ -277,8 +286,9 @@ function createCenter(data, user) {
 
   const now = new Date().toISOString();
   const centers = database.getCollection('centers') || [];
+  const centerId = database.nextId('centers', 'center');
   const center = createCenterModel({
-    id: database.nextId('centers', 'center'),
+    id: centerId,
     name,
     code: code ? code.toUpperCase() : null,
     type,
@@ -292,7 +302,26 @@ function createCenter(data, user) {
   centers.push(center);
   database.setCollection('centers', centers);
 
-  return buildCenterSummary(center);
+  const linkedUserData = {
+    name: normalizeText(data.userName) || center.name,
+    email: normalizeText(data.userEmail) || `${normalizeEmailLocalPart(code || center.code || center.name)}@unicornio.local`,
+    password: normalizeText(data.userPassword) || 'Demo1234!',
+    role: 'SCHOOL',
+    schoolId: center.id,
+    allowSchoolCreation: true,
+  };
+
+  try {
+    const linkedUser = createUser(linkedUserData);
+    return {
+      center: buildCenterSummary(center),
+      linkedUser,
+    };
+  } catch (error) {
+    const nextCenters = (database.getCollection('centers') || []).filter((item) => item.id !== center.id);
+    database.setCollection('centers', nextCenters);
+    throw error;
+  }
 }
 
 function updateCenter(centerId, data, user) {

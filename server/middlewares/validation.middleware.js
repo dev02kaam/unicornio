@@ -53,7 +53,7 @@ function validateLogin(req, _res, next) {
 }
 
 function validateUserUpdate(req, _res, next) {
-  const { name, email, schoolId, linkedStudentId } = req.body || {};
+  const { name, email, password, role, schoolId, linkedStudentId } = req.body || {};
   const errors = [];
 
   if (name !== undefined && !isNonEmptyString(name)) {
@@ -61,6 +61,12 @@ function validateUserUpdate(req, _res, next) {
   }
   if (email !== undefined && !isEmail(email)) {
     errors.push('El email no es valido.');
+  }
+  if (password !== undefined && !validatePassword(password)) {
+    errors.push('La contrasena debe tener al menos 8 caracteres.');
+  }
+  if (role !== undefined && !isRole(role)) {
+    errors.push('El rol no es valido.');
   }
   if (schoolId !== undefined && !isNonEmptyString(schoolId)) {
     errors.push('El centro no puede estar vacio.');
@@ -94,9 +100,12 @@ function validateAdminCreateUser(req, _res, next) {
   }
 
   const normalizedRole = String(role || '').toUpperCase();
-  const requiresCenter = ['SCHOOL', 'TEACHER', 'PROFESSIONAL', 'STUDENT'].includes(normalizedRole);
+  const requiresCenter = ['TEACHER', 'PROFESSIONAL', 'STUDENT'].includes(normalizedRole);
   if (requiresCenter && !isNonEmptyString(schoolId)) {
     errors.push('Selecciona un centro para este tipo de usuario.');
+  }
+  if (normalizedRole === 'SCHOOL') {
+    errors.push('Las cuentas de centro se crean desde el alta de centro.');
   }
   if (normalizedRole === 'FAMILY' && isNonEmptyString(schoolId)) {
     errors.push('Las familias no se vinculan directamente a un centro.');
@@ -113,7 +122,7 @@ function validateAdminCreateUser(req, _res, next) {
 }
 
 function validateCenterCreate(req, _res, next) {
-  const { name, code, type, academicYearId, city } = req.body || {};
+  const { name, code, type, academicYearId, city, userName, userEmail, userPassword } = req.body || {};
   const errors = [];
 
   if (!isNonEmptyString(name)) {
@@ -130,6 +139,15 @@ function validateCenterCreate(req, _res, next) {
   }
   if (city !== undefined && !isNonEmptyString(city)) {
     errors.push('La ciudad no puede estar vacia.');
+  }
+  if (userName !== undefined && !isNonEmptyString(userName)) {
+    errors.push('El nombre de acceso no puede estar vacio.');
+  }
+  if (userEmail !== undefined && !isEmail(userEmail)) {
+    errors.push('El email de acceso no es valido.');
+  }
+  if (userPassword !== undefined && !validatePassword(userPassword)) {
+    errors.push('La contrasena de acceso debe tener al menos 8 caracteres.');
   }
 
   if (errors.length > 0) {
@@ -249,6 +267,75 @@ function validateAssignmentDelete(_req, _res, next) {
   return next();
 }
 
+function validateConsentRequest(req, _res, next) {
+  const { studentId, familyUserId, legalTextVersionId, centerId } = req.body || {};
+  const errors = [];
+
+  if (!isNonEmptyString(studentId)) {
+    errors.push('El estudiante es obligatorio.');
+  }
+  if (!isNonEmptyString(familyUserId)) {
+    errors.push('La familia es obligatoria.');
+  }
+  if (!isNonEmptyString(legalTextVersionId)) {
+    errors.push('La version legal es obligatoria.');
+  }
+  if (centerId !== undefined && !isNonEmptyString(centerId)) {
+    errors.push('El centro no es valido.');
+  }
+
+  if (errors.length > 0) {
+    return next(new AppError('Validacion fallida.', 400, errors));
+  }
+
+  return next();
+}
+
+function validateConsentRevoke(req, _res, next) {
+  const { reason } = req.body || {};
+  const errors = [];
+
+  if (!isNonEmptyString(reason)) {
+    errors.push('Debes indicar un motivo para revocar el consentimiento.');
+  }
+
+  if (errors.length > 0) {
+    return next(new AppError('Validacion fallida.', 400, errors));
+  }
+
+  return next();
+}
+
+function validateLegalTextVersionCreate(req, _res, next) {
+  const { version, title, content, isActive, effectiveFrom, effectiveTo } = req.body || {};
+  const errors = [];
+
+  if (!isNonEmptyString(version)) {
+    errors.push('La version es obligatoria.');
+  }
+  if (!isNonEmptyString(title)) {
+    errors.push('El titulo es obligatorio.');
+  }
+  if (!isNonEmptyString(content)) {
+    errors.push('El contenido es obligatorio.');
+  }
+  if (isActive !== undefined && typeof isActive !== 'boolean') {
+    errors.push('isActive debe ser un valor booleano.');
+  }
+  if (effectiveFrom !== undefined && !isNonEmptyString(effectiveFrom)) {
+    errors.push('La fecha de inicio no es valida.');
+  }
+  if (effectiveTo !== undefined && !isNonEmptyString(effectiveTo)) {
+    errors.push('La fecha de fin no es valida.');
+  }
+
+  if (errors.length > 0) {
+    return next(new AppError('Validacion fallida.', 400, errors));
+  }
+
+  return next();
+}
+
 module.exports = {
   validateRegister,
   validateLogin,
@@ -260,4 +347,7 @@ module.exports = {
   validateGroupUpdate,
   validateAssignmentCreate,
   validateAssignmentDelete,
+  validateConsentRequest,
+  validateConsentRevoke,
+  validateLegalTextVersionCreate,
 };

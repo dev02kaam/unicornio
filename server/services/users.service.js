@@ -141,6 +141,10 @@ function createUser(data) {
     throw new AppError('Las familias no se vinculan directamente a un centro.', 400);
   }
 
+  if (role === 'SCHOOL' && !data.allowSchoolCreation) {
+    throw new AppError('Las cuentas de centro se crean desde el alta de centro.', 400);
+  }
+
   assertUniqueEmail(email);
 
   const now = new Date().toISOString();
@@ -196,6 +200,10 @@ function createUserWithPasswordHash(data) {
     throw new AppError('Las familias no se vinculan directamente a un centro.', 400);
   }
 
+  if (role === 'SCHOOL' && !data.allowSchoolCreation) {
+    throw new AppError('Las cuentas de centro se crean desde el alta de centro.', 400);
+  }
+
   assertUniqueEmail(email);
 
   const now = new Date().toISOString();
@@ -231,10 +239,14 @@ function updateUser(id, updates, options = {}) {
     throw new AppError('Usuario no encontrado.', 404);
   }
 
-  const allowedKeys = ['name', 'email', 'schoolId', 'groupId', 'ageRange', 'role', 'linkedStudentId'];
+  const allowedKeys = ['name', 'email', 'password', 'schoolId', 'groupId', 'ageRange', 'role', 'linkedStudentId'];
   const patch = pickDefined(updates, allowedKeys);
-  const nextRole = patch.role !== undefined && options.canUpdateRole ? normalizeRole(patch.role) : user.role;
-  const nextLinkedStudentId = patch.linkedStudentId !== undefined ? (patch.linkedStudentId || null) : user.linkedStudentId;
+  const canUpdateRole = Boolean(options.canUpdateRole);
+  const roleChanged = patch.role !== undefined && canUpdateRole;
+  const nextRole = roleChanged ? normalizeRole(patch.role) : user.role;
+  const nextLinkedStudentId = nextRole === 'FAMILY'
+    ? (patch.linkedStudentId !== undefined ? (patch.linkedStudentId || null) : user.linkedStudentId)
+    : null;
 
   if (patch.name !== undefined) {
     if (!isNonEmptyString(patch.name)) {
@@ -249,6 +261,13 @@ function updateUser(id, updates, options = {}) {
     }
     assertUniqueEmail(String(patch.email).trim().toLowerCase(), user.id);
     user.email = String(patch.email).trim().toLowerCase();
+  }
+
+  if (patch.password !== undefined) {
+    if (!validatePassword(patch.password)) {
+      throw new AppError('La contrasena debe tener al menos 8 caracteres.', 400);
+    }
+    user.passwordHash = bcrypt.hashSync(String(patch.password), 10);
   }
 
   if (patch.schoolId !== undefined) {
@@ -270,18 +289,6 @@ function updateUser(id, updates, options = {}) {
     if (nextRole !== 'FAMILY') {
       throw new AppError('Solo las familias pueden vincular un estudiante.', 400);
     }
-
-    const nextLinkedStudentId = patch.linkedStudentId || null;
-    if (nextLinkedStudentId) {
-      const linkedStudent = findUserById(nextLinkedStudentId);
-      if (!linkedStudent || !linkedStudent.isActive) {
-        throw new AppError('El estudiante vinculado no es valido.', 404);
-      }
-      if (String(linkedStudent.role || '').toUpperCase() !== 'STUDENT') {
-        throw new AppError('El usuario vinculado debe ser un alumno.', 400);
-      }
-    }
-    user.linkedStudentId = nextLinkedStudentId;
   }
 
   if (patch.ageRange !== undefined) {
@@ -292,11 +299,24 @@ function updateUser(id, updates, options = {}) {
     if (!nextLinkedStudentId) {
       throw new AppError('Las familias necesitan un estudiante vinculado.', 400);
     }
+
+    const linkedStudent = findUserById(nextLinkedStudentId);
+    if (!linkedStudent || !linkedStudent.isActive) {
+      throw new AppError('El estudiante vinculado no es valido.', 404);
+    }
+    if (String(linkedStudent.role || '').toUpperCase() !== 'STUDENT') {
+      throw new AppError('El usuario vinculado debe ser un alumno.', 400);
+    }
+
     user.role = nextRole;
+    user.linkedStudentId = linkedStudent.id;
     user.schoolId = null;
     user.groupId = null;
-  } else if (patch.role !== undefined && options.canUpdateRole) {
-    user.role = nextRole;
+  } else {
+    if (roleChanged) {
+      user.role = nextRole;
+    }
+    user.linkedStudentId = null;
   }
 
   user.updatedAt = new Date().toISOString();

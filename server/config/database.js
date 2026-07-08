@@ -2,6 +2,8 @@ const { createDemoUsers } = require('../data/demoUsers');
 const { createDemoAcademicYears } = require('../data/demoAcademicYears');
 const { createDemoCenters } = require('../data/demoCenters');
 const { createDemoGroups } = require('../data/demoGroups');
+const { createDemoLegalTextVersions } = require('../data/demoLegalTextVersions');
+const { createDemoConsents, createDemoConsentAuditLogs } = require('../data/demoConsents');
 const {
   createDemoUserCenterAssignments,
   createDemoUserGroupAssignments,
@@ -12,17 +14,23 @@ const state = {
   academicYears: createDemoAcademicYears(),
   centers: createDemoCenters(),
   groups: createDemoGroups(),
+  legalTextVersions: createDemoLegalTextVersions(),
+  consents: createDemoConsents(),
+  consentAuditLogs: createDemoConsentAuditLogs(),
   userCenterAssignments: createDemoUserCenterAssignments(),
   userGroupAssignments: createDemoUserGroupAssignments(),
 };
 
 const sequences = {
-  users: 6,
+  users: 15,
   academicYears: 1,
   centers: 2,
   groups: 4,
-  userCenterAssignments: 5,
-  userGroupAssignments: 2,
+  legalTextVersions: 2,
+  consents: 5,
+  consentAuditLogs: 11,
+  userCenterAssignments: 10,
+  userGroupAssignments: 6,
 };
 
 const database = {

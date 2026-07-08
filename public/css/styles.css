@@ -239,7 +239,8 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -250,10 +251,16 @@ select {
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   outline: 2px solid rgba(124, 108, 245, 0.22);
   border-color: rgba(124, 108, 245, 0.55);
   box-shadow: 0 0 0 4px rgba(124, 108, 245, 0.08);
+}
+
+textarea {
+  min-height: 120px;
+  resize: vertical;
 }
 
 .error {
@@ -602,6 +609,10 @@ select:focus {
   gap: 14px;
 }
 
+.dialog-form-grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .dialog-form-grid .error,
 .dialog-form-grid .success {
   margin: 0;
@@ -811,6 +822,38 @@ select:focus {
 
 .org-panel {
   width: 100%;
+}
+
+.legal-user-card {
+  width: min(100%, 360px);
+  justify-self: end;
+}
+
+.legal-active-card {
+  padding: 22px;
+}
+
+.legal-version-card {
+  padding: 18px;
+}
+
+.legal-version-card p {
+  max-width: 70ch;
+}
+
+.legal-version-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.legal-shell .consent-notice-card {
+  background: linear-gradient(180deg, rgba(246, 248, 255, 0.98), rgba(255, 255, 255, 0.98));
+}
+
+.legal-shell .consent-list-card {
+  gap: 16px;
 }
 
 .org-hero .account-trigger {
@@ -1360,6 +1403,89 @@ select:focus {
   animation: fadeUp 0.55s ease both;
 }
 
+.consent-summary-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.consent-list {
+  display: grid;
+  gap: 14px;
+}
+
+.consent-card {
+  gap: 16px;
+}
+
+.consent-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.consent-card__footer {
+  justify-content: flex-start;
+}
+
+.consent-card--active {
+  border-color: rgba(19, 150, 81, 0.18);
+  box-shadow: 0 18px 38px rgba(19, 150, 81, 0.08);
+}
+
+.consent-meta-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.consent-badge--success {
+  background: var(--success-bg);
+  color: var(--success-text);
+}
+
+.consent-badge--danger {
+  background: #ffeceb;
+  color: #b42318;
+}
+
+.consent-badge--muted {
+  background: #eef2f8;
+  color: #475467;
+}
+
+.consent-notice-card {
+  display: grid;
+  gap: 12px;
+}
+
+.consent-version-card {
+  gap: 10px;
+}
+
+.consent-version-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.consent-version-card__title {
+  font-size: 1.05rem;
+  line-height: 1.4;
+}
+
+.consent-version-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.legal-shell .consent-list-card,
+.consents-shell .consent-list-card {
+  display: grid;
+  gap: 16px;
+}
+
 .org-card {
   display: grid;
   gap: 14px;
@@ -1459,6 +1585,14 @@ select:focus {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .consent-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .consent-meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .profile-panel {
     min-width: 300px;
   }
@@ -1476,6 +1610,10 @@ select:focus {
   }
 
   .filter-row {
+    grid-template-columns: 1fr;
+  }
+
+  .dialog-form-grid--two {
     grid-template-columns: 1fr;
   }
 }

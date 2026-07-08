@@ -10,6 +10,7 @@ const { usersRouter } = require('./routes/users.routes');
 const { centersRouter } = require('./routes/centers.routes');
 const { groupsRouter } = require('./routes/groups.routes');
 const { assignmentsRouter } = require('./routes/assignments.routes');
+const { consentsRouter } = require('./routes/consents.routes');
 const { notFoundMiddleware, errorMiddleware } = require('./middlewares/error.middleware');
 
 const app = express();
@@ -29,6 +30,7 @@ app.use('/api/users', usersRouter);
 app.use('/api/centers', centersRouter);
 app.use('/api/groups', groupsRouter);
 app.use('/api', assignmentsRouter);
+app.use('/api', consentsRouter);
 
 app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));

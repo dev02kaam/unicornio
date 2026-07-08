@@ -245,7 +245,7 @@ async function loadProfile() {
 
   if (role === 'ADMIN') {
     centerRoleNote.textContent = 'Puedes crear, editar y revisar todos los centros.';
-    centerHeroCopy.textContent = 'Consulta los centros disponibles, crea nuevos si eres administrador y entra a sus grupos con un clic.';
+    centerHeroCopy.textContent = 'Consulta los centros disponibles, crea el centro y su cuenta vinculada en un único paso y entra a sus grupos con un clic.';
     setPanelVisible(centersListPanel, true, 'grid');
     setPanelVisible(schoolCenterPanel, false);
     if (centersToolbar) {
@@ -349,15 +349,18 @@ centerForm?.addEventListener('submit', async (event) => {
     type: formData.get('type') || undefined,
     academicYearId: formData.get('academicYearId') || undefined,
     city: formData.get('city') || undefined,
+    userName: formData.get('userName') || undefined,
+    userEmail: formData.get('userEmail') || undefined,
+    userPassword: formData.get('userPassword') || undefined,
   };
 
   try {
-    await apiRequest('/centers', {
+    const response = await apiRequest('/centers', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
 
-    setMessage(centerFormSuccess, 'Centro creado correctamente.');
+    setMessage(centerFormSuccess, response.message || 'Centro y cuenta vinculada creados correctamente.');
     centerForm.reset();
     if (centerCityCombobox) {
       centerCityCombobox.setValue('');

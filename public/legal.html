@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Texto legal | Proyecto Unicornio</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <main class="shell dashboard-shell org-shell">
+      <section class="dashboard-hero card">
+        <div class="hero-copy">
+          <span class="badge">Texto legal provisional</span>
+          <h1>Texto legal</h1>
+          <p>Consulta la versión activa del consentimiento demo y revisa el historial solo si necesitas administrarlo.</p>
+          <div class="action-row dashboard-links">
+            <a class="button secondary" href="/dashboard.html">Volver al dashboard</a>
+            <a class="button secondary" href="/consents.html">Ir a consentimientos</a>
+          </div>
+        </div>
+
+        <button id="profile-button" class="account-trigger" type="button" aria-label="Abrir perfil">
+          <span class="avatar-badge avatar-large" aria-hidden="true">U</span>
+        </button>
+      </section>
+
+      <section class="card consent-notice-card consent-version-card">
+        <div class="consent-version-card__head">
+          <span class="badge">Texto legal vigente</span>
+          <span class="table-badge consent-badge--muted">Referencia demo</span>
+        </div>
+        <strong id="legal-active-title" class="consent-version-card__title">Cargando versión legal...</strong>
+        <p>Texto legal pendiente de validación por especialistas en protección de datos y derecho digital.</p>
+      </section>
+
+      <section class="card consent-list-card">
+        <div class="section-header">
+          <div>
+            <span class="badge">Activa</span>
+            <h2>Versión vigente</h2>
+          </div>
+          <div class="toolbar-group">
+            <button id="open-create-version-button" class="button secondary" type="button" hidden data-open-modal="create-legal-version-modal">Crear versión demo</button>
+            <button class="button secondary" type="button" id="reload-legal-button">Actualizar</button>
+          </div>
+        </div>
+
+        <div id="legal-status-banner" class="status-banner" hidden></div>
+        <div id="legal-active-card" class="legal-active-card"></div>
+      </section>
+
+      <section id="legal-history-section" class="card consent-list-card" hidden>
+        <div class="section-header">
+          <div>
+            <span class="badge">Historial</span>
+            <h2>Versiones visibles</h2>
+          </div>
+        </div>
+        <div id="legal-versions-list" class="consent-list"></div>
+      </section>
+    </main>
+
+    <section id="profile-modal" class="profile-modal" hidden aria-hidden="true">
+      <div class="profile-modal__backdrop" data-close-profile></div>
+      <div class="profile-modal__panel card" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title">
+        <div class="section-header">
+          <div>
+            <span class="badge">Perfil</span>
+            <h2 id="profile-modal-title">Datos y preferencias</h2>
+          </div>
+          <button id="profile-close-button" class="button secondary" type="button">Cerrar</button>
+        </div>
+
+        <div class="profile-grid">
+          <div class="profile-chip">
+            <span>Nombre</span>
+            <strong id="profile-name">-</strong>
+          </div>
+          <div class="profile-chip">
+            <span>Email</span>
+            <strong id="profile-email">-</strong>
+          </div>
+          <div class="preferences-card">
+            <span class="profile-caption">Preferencias rápidas</span>
+            <div class="preferences">
+              <label class="toggle-row">
+                <input type="checkbox" checked />
+                <span>Mostrar pantalla de bienvenida</span>
+              </label>
+              <label class="toggle-row">
+                <input type="checkbox" checked />
+                <span>Recordar sesión en este navegador</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="action-row modal-actions">
+          <button id="modal-logout-button" class="button secondary" type="button">Cerrar sesión</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="create-legal-version-modal" class="modal" hidden aria-hidden="true">
+      <div class="modal__backdrop" data-close-modal="create-legal-version-modal"></div>
+      <div class="modal__panel modal__panel--small" role="dialog" aria-modal="true" aria-labelledby="create-legal-version-title">
+        <div class="modal__header">
+          <div>
+            <span class="badge">Nueva versión</span>
+            <h2 id="create-legal-version-title">Crear versión legal demo</h2>
+          </div>
+          <button class="button secondary" type="button" data-close-modal="create-legal-version-modal">Cerrar</button>
+        </div>
+
+        <form id="create-legal-version-form" class="dialog-form-grid">
+          <label>
+            <span>Versión</span>
+            <input type="text" name="version" placeholder="1.1" required />
+          </label>
+          <label>
+            <span>Título</span>
+            <input type="text" name="title" placeholder="Consentimiento familiar demo" required />
+          </label>
+          <label>
+            <span>Contenido</span>
+            <textarea name="content" rows="6" required>Texto legal pendiente de validación por especialistas en protección de datos y derecho digital.</textarea>
+          </label>
+          <div class="dialog-form-grid dialog-form-grid--two">
+            <label>
+              <span>Vigencia desde</span>
+              <input type="date" name="effectiveFrom" />
+            </label>
+            <label>
+              <span>Vigencia hasta</span>
+              <input type="date" name="effectiveTo" />
+            </label>
+          </div>
+          <label class="toggle-row">
+            <input type="checkbox" name="isActive" checked />
+            <span>Marcar como activa al crearla</span>
+          </label>
+          <p class="field-note">Si activas una nueva versión, la anterior quedará desactivada y los consentimientos demo se revisarán con esa referencia.</p>
+          <div class="modal__footer">
+            <button class="button primary" type="submit">Crear versión</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section id="legal-activation-modal" class="modal" hidden aria-hidden="true">
+      <div class="modal__backdrop" data-close-modal="legal-activation-modal"></div>
+      <div class="modal__panel modal__panel--small" role="dialog" aria-modal="true" aria-labelledby="legal-activation-title">
+        <div class="modal__header">
+          <div>
+            <span class="badge">Confirmación</span>
+            <h2 id="legal-activation-title">Activar versión legal</h2>
+          </div>
+          <button class="button secondary" type="button" data-close-modal="legal-activation-modal">Cerrar</button>
+        </div>
+
+        <div class="modal__body">
+          <div class="consent-version-card consent-notice-card">
+            <strong class="consent-version-card__title">¿Estás seguro de activar esta versión?</strong>
+            <p id="legal-activation-text">Cambiarás la versión actualmente activa por esta nueva referencia.</p>
+          </div>
+          <p class="field-note">Si continúas, la versión activa anterior quedará desactivada y el sistema tomará esta como referencia vigente.</p>
+        </div>
+
+        <div class="modal__footer">
+          <button id="legal-activation-cancel-button" class="button secondary" type="button" data-close-modal="legal-activation-modal">Cancelar</button>
+          <button id="legal-activation-confirm-button" class="button primary" type="button">Sí, activar</button>
+        </div>
+      </div>
+    </section>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/ui.js"></script>
+    <script src="/js/legal.js"></script>
+  </body>
+</html>

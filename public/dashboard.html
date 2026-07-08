@@ -16,6 +16,8 @@
           <div class="action-row dashboard-links">
             <a class="button secondary" href="/centers.html">Centros</a>
             <a class="button secondary" href="/groups.html">Grupos</a>
+            <a class="button secondary" href="/consents.html">Consentimientos</a>
+            <a class="button secondary" href="/legal.html">Texto legal</a>
           </div>
         </div>
 
@@ -81,6 +83,53 @@
             <span class="quickcard-label">Grupos visibles</span>
             <strong id="school-groups-count">0</strong>
             <p class="quickcard-email">Tu centro puede tener varios grupos activos este curso.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="professional-panel" class="card org-panel" hidden>
+        <div class="section-header">
+          <div>
+            <span class="badge">Consulta profesional</span>
+            <h2>Espacio de revisión</h2>
+          </div>
+          <p id="professional-panel-note">Cargando información del centro...</p>
+        </div>
+
+        <div id="professional-center-card" class="org-card">
+          <div class="org-card__top">
+            <div>
+              <span id="professional-center-city" class="org-kicker">-</span>
+              <h3 id="professional-center-name">-</h3>
+              <p id="professional-center-line">-</p>
+            </div>
+            <span id="professional-consents-count" class="org-pill">0 consentimientos</span>
+          </div>
+          <div class="org-card__meta">
+            <span id="professional-center-status">Texto legal: -</span>
+            <span id="professional-center-summary">Estado consultivo</span>
+          </div>
+          <div class="action-row">
+            <a class="button secondary" href="/consents.html">Ver consentimientos</a>
+            <a id="professional-legal-link" class="button secondary" href="/legal.html">Ver texto legal</a>
+          </div>
+        </div>
+
+        <div class="school-grid">
+          <article class="dashboard-quickcard">
+            <span class="quickcard-label">Consentimientos válidos</span>
+            <strong id="professional-valid-count">0</strong>
+            <p class="quickcard-email">Solo lectura. Úsalo para revisar participación autorizada.</p>
+          </article>
+          <article class="dashboard-quickcard">
+            <span class="quickcard-label">Pendientes</span>
+            <strong id="professional-pending-count">0</strong>
+            <p class="quickcard-email">Solicitudes que todavía esperan respuesta familiar.</p>
+          </article>
+          <article class="dashboard-quickcard">
+            <span class="quickcard-label">Otros estados</span>
+            <strong id="professional-other-count">0</strong>
+            <p class="quickcard-email">Rechazados, revocados o caducados.</p>
           </article>
         </div>
       </section>
@@ -159,6 +208,39 @@
             <span>Estudiante vinculado</span>
             <strong id="user-detail-linked-student">-</strong>
           </div>
+        </div>
+
+        <form id="user-detail-edit-form" class="dialog-form-grid user-edit-form" hidden>
+          <div class="section-header section-header--compact">
+            <div>
+              <span class="badge">Editar</span>
+              <h3 id="user-edit-title">Editar usuario</h3>
+            </div>
+          </div>
+
+          <div class="dialog-form-grid dialog-form-grid--two">
+            <label>
+              <span>Nombre</span>
+              <input type="text" name="name" placeholder="Nombre del usuario" required />
+            </label>
+            <label>
+              <span>Email</span>
+              <input type="email" name="email" placeholder="usuario@unicornio.local" required />
+            </label>
+          </div>
+          <label>
+            <span>Nueva contraseña</span>
+            <input type="password" name="password" placeholder="Deja este campo vacío si no quieres cambiarla" />
+          </label>
+          <p id="user-edit-hint" class="field-note">Puedes corregir datos básicos y regenerar el acceso si es necesario.</p>
+          <p id="user-edit-error" class="error" hidden></p>
+          <p id="user-edit-success" class="success" hidden></p>
+          <div class="modal__footer">
+            <button class="button primary" type="submit">Guardar cambios</button>
+          </div>
+        </form>
+
+        <div class="profile-grid">
           <div class="preferences-card">
             <span class="profile-caption">Asignaciones</span>
             <div id="user-detail-assignments" class="preferences"></div>
@@ -195,18 +277,17 @@
             <select id="create-user-role" name="role">
               <option value="STUDENT">Alumno</option>
               <option value="FAMILY">Familia</option>
-              <option value="SCHOOL">Centro</option>
               <option value="TEACHER">Profesor</option>
               <option value="PROFESSIONAL">Profesional autorizado</option>
               <option value="ADMIN">Administrador</option>
             </select>
           </label>
-          <label id="create-user-center-field">
+          <label id="create-user-center-field" hidden>
             <span>Centro</span>
             <select name="schoolId" id="admin-school-select">
               <option value="">Sin vincular</option>
             </select>
-            <small class="field-note">Obligatorio para alumnos, profesores, profesionales autorizados y cuentas de centro.</small>
+            <small class="field-note">Obligatorio para alumnos, profesores y profesionales autorizados.</small>
           </label>
           <label id="create-user-student-field" hidden>
             <span>Estudiante vinculado</span>

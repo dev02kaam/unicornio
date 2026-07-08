@@ -10,6 +10,7 @@ Base tecnica inicial de Proyecto Unicornio: una aplicacion web cliente-servidor 
 - Autenticacion con JWT.
 - Modulo de usuarios.
 - Modulo organizativo de centros, grupos y asignaciones.
+- Modulo de consentimientos familiares demo.
 - Seguridad basica.
 - Area privada demo.
 - Alta de usuarios desde el panel de administracion.
@@ -21,7 +22,6 @@ Base tecnica inicial de Proyecto Unicornio: una aplicacion web cliente-servidor 
 - Scoring.
 - Alertas.
 - Estadisticas.
-- Consentimientos.
 - Informes.
 - Logica clinica o psicologica.
 
@@ -63,8 +63,10 @@ Copiar `.env.example` a `.env` y ajustar:
 - `admin@unicornio.local`
 - `profesional@unicornio.local`
 - `alumno@unicornio.local`
+- `alumno2@unicornio.local`
 - `school@unicornio.local`
 - `familia@unicornio.local`
+- `familia2@unicornio.local`
 
 Contrasenha demo:
 
@@ -116,6 +118,23 @@ Contrasenha demo:
 - `DELETE /api/groups/:groupId/users/:userId`
 - `GET /api/users/:userId/assignments`
 
+### Consentimientos familiares
+
+- `GET /api/consents`
+- `POST /api/consents`
+- `GET /api/consents/:id`
+- `POST /api/consents/:id/accept`
+- `POST /api/consents/:id/reject`
+- `POST /api/consents/:id/revoke`
+- `POST /api/consents/:id/expire`
+- `GET /api/consents/:id/audit`
+- `GET /api/students/:studentId/consent-status`
+- `GET /api/legal-text-versions`
+- `POST /api/legal-text-versions`
+- `GET /api/legal-text-versions/active`
+- `POST /api/legal-text-versions/:id/activate`
+- `POST /api/legal-text-versions/:id/deactivate`
+
 ## Notas de seguridad
 
 - Las contrasenas se guardan con hash.
@@ -123,6 +142,7 @@ Contrasenha demo:
 - El login usa limitacion de peticiones.
 - Si se supera el limite de login, la respuesta incluye el tiempo estimado para reintentar.
 - Este prototipo no usa datos reales de menores.
+- El modulo de consentimientos usa datos demo y texto legal provisional pendiente de validacion profesional.
 
 ## Estructura de carpetas
 
@@ -137,5 +157,6 @@ proyecto-unicornio/
 
 - Anadir persistencia real.
 - Crear cuestionarios.
-- Anadir consentimientos, resultados y alertas.
+- Ampliar el modulo de consentimientos con persistencia real y versionado legal completo.
+- Anadir resultados y alertas.
 - Endurecer privacidad y auditoria.

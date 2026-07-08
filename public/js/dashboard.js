@@ -5,12 +5,18 @@ const modalLogoutButton = document.getElementById('modal-logout-button');
 const profileNameElement = document.getElementById('profile-name');
 const profileEmailElement = document.getElementById('profile-email');
 const userDetailModal = document.getElementById('user-detail-modal');
+const userDetailModalTitle = document.getElementById('user-detail-modal-title');
 const userDetailNameElement = document.getElementById('user-detail-name');
 const userDetailEmailElement = document.getElementById('user-detail-email');
 const userDetailRoleElement = document.getElementById('user-detail-role');
 const userDetailSchoolElement = document.getElementById('user-detail-school');
 const userDetailLinkedStudentElement = document.getElementById('user-detail-linked-student');
 const userDetailAssignmentsElement = document.getElementById('user-detail-assignments');
+const userDetailEditForm = document.getElementById('user-detail-edit-form');
+const userEditTitleElement = document.getElementById('user-edit-title');
+const userEditHintElement = document.getElementById('user-edit-hint');
+const userEditErrorElement = document.getElementById('user-edit-error');
+const userEditSuccessElement = document.getElementById('user-edit-success');
 const introElement = document.getElementById('dashboard-intro');
 const adminPanel = document.getElementById('admin-panel');
 const createUserForm = document.getElementById('create-user-form');
@@ -35,8 +41,21 @@ const schoolCenterUsers = document.getElementById('school-center-users');
 const schoolCenterStatus = document.getElementById('school-center-status');
 const schoolGroupsLink = document.getElementById('school-groups-link');
 const schoolGroupsCount = document.getElementById('school-groups-count');
+const professionalPanel = document.getElementById('professional-panel');
+const professionalPanelNote = document.getElementById('professional-panel-note');
+const professionalCenterCity = document.getElementById('professional-center-city');
+const professionalCenterName = document.getElementById('professional-center-name');
+const professionalCenterLine = document.getElementById('professional-center-line');
+const professionalConsentsCount = document.getElementById('professional-consents-count');
+const professionalCenterStatus = document.getElementById('professional-center-status');
+const professionalCenterSummary = document.getElementById('professional-center-summary');
+const professionalValidCount = document.getElementById('professional-valid-count');
+const professionalPendingCount = document.getElementById('professional-pending-count');
+const professionalOtherCount = document.getElementById('professional-other-count');
+const professionalLegalLink = document.getElementById('professional-legal-link');
 
 let currentUser = null;
+let currentEditingUserId = null;
 let availableCenters = [];
 let availableCenterStudents = [];
 let adminUsers = [];
@@ -118,12 +137,30 @@ function getUserLabel(userId) {
   return user ? user.name : 'Sin vincular';
 }
 
+function getActiveStudents() {
+  return adminUsers.filter((user) => String(user.role || '').toUpperCase() === 'STUDENT' && user.isActive);
+}
+
 function isRoleRequiringCenter(role) {
-  return ['SCHOOL', 'TEACHER', 'PROFESSIONAL', 'STUDENT'].includes(String(role || '').toUpperCase());
+  return ['TEACHER', 'PROFESSIONAL', 'STUDENT'].includes(String(role || '').toUpperCase());
 }
 
 function isFamilyRole(role) {
   return String(role || '').toUpperCase() === 'FAMILY';
+}
+
+function getCreateUserFieldMode(role) {
+  const normalizedRole = String(role || '').toUpperCase();
+
+  if (normalizedRole === 'FAMILY') {
+    return 'student';
+  }
+
+  if (['STUDENT', 'TEACHER', 'PROFESSIONAL'].includes(normalizedRole)) {
+    return 'center';
+  }
+
+  return 'none';
 }
 
 function updateCreateUserHint() {
@@ -132,15 +169,22 @@ function updateCreateUserHint() {
   }
 
   const role = createUserRoleSelect.value;
-  if (isFamilyRole(role)) {
+  const fieldMode = getCreateUserFieldMode(role);
+
+  if (fieldMode === 'student') {
     createUserHint.textContent = 'Las familias solo necesitan un estudiante vinculado.';
     return;
   }
 
-  if (isRoleRequiringCenter(role)) {
+  if (fieldMode === 'center') {
     createUserHint.textContent = role === 'TEACHER'
       ? 'El profesor se asigna a un centro y a sus grupos.'
       : 'Este tipo de usuario necesita un centro asignado.';
+    return;
+  }
+
+  if (role === 'ADMIN') {
+    createUserHint.textContent = 'Las cuentas de administración no necesitan centro ni estudiante vinculado.';
     return;
   }
 
@@ -153,18 +197,19 @@ function updateCreateUserFieldVisibility() {
   }
 
   const role = createUserRoleSelect.value;
-  const requiresCenter = isRoleRequiringCenter(role);
-  const requiresStudent = isFamilyRole(role);
+  const fieldMode = getCreateUserFieldMode(role);
 
   if (createUserCenterField) {
-    createUserCenterField.hidden = !requiresCenter;
+    createUserCenterField.hidden = fieldMode !== 'center';
+    createUserCenterField.style.display = fieldMode === 'center' ? '' : 'none';
   }
 
   if (createUserStudentField) {
-    createUserStudentField.hidden = !requiresStudent;
+    createUserStudentField.hidden = fieldMode !== 'student';
+    createUserStudentField.style.display = fieldMode === 'student' ? '' : 'none';
   }
 
-  if (requiresStudent && isFamilyRole(role)) {
+  if (fieldMode === 'student') {
     renderFamilyStudentOptions(adminStudentSelect?.value || '');
   }
 
@@ -266,7 +311,7 @@ function renderAdminUsersTable() {
         if (column.id === 'actions') {
           return `
             <td class="table-cell-actions">
-              <button class="button ghost table-row-action" type="button" data-row-user="${user.id}">Ver</button>
+              <button class="button ghost table-row-action" type="button" data-row-user="${user.id}">Editar</button>
             </td>
           `;
         }
@@ -341,10 +386,41 @@ async function openUserDetail(userId) {
       userDetailLinkedStudentElement.textContent = user.linkedStudentId ? getUserLabel(user.linkedStudentId) : 'Sin vincular';
     }
 
+    currentEditingUserId = user.id;
+    if (userDetailModalTitle) {
+      userDetailModalTitle.textContent = String(currentUser?.role || '').toUpperCase() === 'ADMIN'
+        ? 'Editar usuario'
+        : 'Detalle de usuario';
+    }
+    if (userDetailEditForm) {
+      userDetailEditForm.hidden = String(currentUser?.role || '').toUpperCase() !== 'ADMIN';
+      if (userDetailEditForm.hidden) {
+        setMessage(userEditErrorElement, '', true);
+        setMessage(userEditSuccessElement, '', false);
+      } else {
+        const nameInput = userDetailEditForm.querySelector('[name="name"]');
+        const emailInput = userDetailEditForm.querySelector('[name="email"]');
+        const passwordInput = userDetailEditForm.querySelector('[name="password"]');
+        if (nameInput) nameInput.value = user.name || '';
+        if (emailInput) emailInput.value = user.email || '';
+        if (passwordInput) passwordInput.value = '';
+        if (userEditTitleElement) {
+          userEditTitleElement.textContent = `Editar ${user.name || 'usuario'}`;
+        }
+        if (userEditHintElement) {
+          userEditHintElement.textContent = 'Puedes corregir nombre, email y regenerar la contraseña si hace falta.';
+        }
+      }
+    }
+
     renderUserAssignments(assignments);
     openModalById('user-detail-modal');
   } catch (error) {
-    setMessage(createUserError, error.message, true);
+    if (userEditErrorElement) {
+      setMessage(userEditErrorElement, error.message, true);
+    } else {
+      setMessage(createUserError, error.message, true);
+    }
   }
 }
 
@@ -425,6 +501,71 @@ function renderSchoolPanel(assignments) {
   }
 }
 
+async function renderProfessionalPanel(assignments) {
+  if (!professionalPanel) {
+    return;
+  }
+
+  const centers = assignments?.centers || [];
+  const center = centers[0]?.center || null;
+
+  setPanelVisible(professionalPanel, true, 'grid');
+
+  if (!center) {
+    if (professionalPanelNote) {
+      professionalPanelNote.textContent = 'Todavía no hay un centro enlazado a esta cuenta.';
+    }
+    if (professionalCenterCity) professionalCenterCity.textContent = '-';
+    if (professionalCenterName) professionalCenterName.textContent = 'Sin centro';
+    if (professionalCenterLine) professionalCenterLine.textContent = 'Vincula la cuenta a un centro para revisar consentimientos.';
+    if (professionalConsentsCount) professionalConsentsCount.textContent = '0 consentimientos';
+    if (professionalCenterStatus) professionalCenterStatus.textContent = 'Texto legal: -';
+    if (professionalCenterSummary) professionalCenterSummary.textContent = 'Vista de consulta';
+    if (professionalValidCount) professionalValidCount.textContent = '0';
+    if (professionalPendingCount) professionalPendingCount.textContent = '0';
+    if (professionalOtherCount) professionalOtherCount.textContent = '0';
+    if (professionalLegalLink) {
+      professionalLegalLink.href = '/legal.html';
+    }
+    return;
+  }
+
+  const [consentsResponse, legalResponse] = await Promise.allSettled([
+    apiRequest(`/consents?centerId=${encodeURIComponent(center.id)}`),
+    apiRequest('/legal-text-versions/active'),
+  ]);
+
+  const consents = consentsResponse.status === 'fulfilled' ? (consentsResponse.value.data.consents || []) : [];
+  const legalVersion = legalResponse.status === 'fulfilled' ? legalResponse.value.data.version : null;
+  const pending = consents.filter((consent) => consent.status === 'PENDING').length;
+  const accepted = consents.filter((consent) => consent.status === 'ACCEPTED').length;
+  const other = consents.length - pending - accepted;
+
+  if (professionalPanelNote) {
+    professionalPanelNote.textContent = 'Esta vista es de consulta: estado de consentimientos y texto legal activo del centro.';
+  }
+  if (professionalCenterCity) professionalCenterCity.textContent = center.city || 'Sin ciudad';
+  if (professionalCenterName) professionalCenterName.textContent = center.name;
+  if (professionalCenterLine) professionalCenterLine.textContent = formatCenterLine(center);
+  if (professionalConsentsCount) professionalConsentsCount.textContent = `${consents.length} consentimientos`;
+  if (professionalCenterStatus) {
+    professionalCenterStatus.textContent = legalVersion
+      ? `Texto legal: ${legalVersion.version}`
+      : 'Texto legal: sin versión activa';
+  }
+  if (professionalCenterSummary) {
+    professionalCenterSummary.textContent = legalVersion
+      ? legalVersion.title
+      : 'Revisión consultiva';
+  }
+  if (professionalValidCount) professionalValidCount.textContent = String(accepted);
+  if (professionalPendingCount) professionalPendingCount.textContent = String(pending);
+  if (professionalOtherCount) professionalOtherCount.textContent = String(other);
+  if (professionalLegalLink) {
+    professionalLegalLink.href = '/legal.html';
+  }
+}
+
 async function doLogout() {
   try {
     await apiRequest('/auth/logout', { method: 'POST' });
@@ -466,8 +607,16 @@ async function loadProfile() {
       return;
     }
 
+    if (role === 'PROFESSIONAL') {
+      introElement.textContent = 'Tu espacio es de consulta. Aquí puedes revisar el estado de consentimientos y el texto legal activo de tu centro.';
+      setPanelVisible(schoolPanel, false);
+      await renderProfessionalPanel(assignments);
+      return;
+    }
+
     introElement.textContent = 'Acceso personal listo. Puedes revisar tu perfil cuando quieras.';
     setPanelVisible(schoolPanel, false);
+    setPanelVisible(professionalPanel, false);
   } catch (_error) {
     clearToken();
     window.location.href = '/login.html';
@@ -493,6 +642,50 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
+function resetUserEditMessages() {
+  setMessage(userEditErrorElement, '', true);
+  setMessage(userEditSuccessElement, '', false);
+}
+
+if (userDetailEditForm) {
+  userDetailEditForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    resetUserEditMessages();
+
+    if (!currentEditingUserId) {
+      setMessage(userEditErrorElement, 'No se ha podido identificar el usuario a editar.', true);
+      return;
+    }
+
+    const formData = new FormData(userDetailEditForm);
+    const payload = {
+      name: formData.get('name'),
+      email: formData.get('email'),
+    };
+
+    const password = String(formData.get('password') || '').trim();
+    if (password) {
+      payload.password = password;
+    }
+
+    try {
+      await apiRequest(`/users/${currentEditingUserId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+
+      await loadAdminUsers();
+      setMessage(userEditSuccessElement, 'Usuario actualizado correctamente.');
+      setMessage(createUserSuccess, '', false);
+      if (currentEditingUserId) {
+        await openUserDetail(currentEditingUserId);
+      }
+    } catch (error) {
+      setMessage(userEditErrorElement, error.message, true);
+    }
+  });
+}
+
 if (createUserForm) {
   createUserForm.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -501,26 +694,27 @@ if (createUserForm) {
 
     const formData = new FormData(createUserForm);
     const role = formData.get('role');
+    const fieldMode = getCreateUserFieldMode(role);
     const payload = {
       name: formData.get('name'),
       email: formData.get('email'),
       password: formData.get('password'),
       role,
-      schoolId: isRoleRequiringCenter(role) ? (formData.get('schoolId') || null) : null,
-      linkedStudentId: isFamilyRole(role) ? (formData.get('linkedStudentId') || null) : null,
+      schoolId: fieldMode === 'center' ? (formData.get('schoolId') || null) : null,
+      linkedStudentId: fieldMode === 'student' ? (formData.get('linkedStudentId') || null) : null,
     };
 
-    if (isRoleRequiringCenter(payload.role) && !payload.schoolId) {
+    if (fieldMode === 'center' && !payload.schoolId) {
       setMessage(createUserError, 'Selecciona un centro para este usuario.', true);
       return;
     }
 
-    if (isFamilyRole(payload.role) && !payload.linkedStudentId) {
+    if (fieldMode === 'student' && !payload.linkedStudentId) {
       setMessage(createUserError, 'Selecciona un estudiante vinculado para la familia.', true);
       return;
     }
 
-    if (isFamilyRole(payload.role) && payload.linkedStudentId && adminStudentSelect && !availableCenterStudents.some((student) => student.id === payload.linkedStudentId)) {
+    if (fieldMode === 'student' && payload.linkedStudentId && adminStudentSelect && !availableCenterStudents.some((student) => student.id === payload.linkedStudentId)) {
       setMessage(createUserError, 'El estudiante vinculado no existe o no está disponible.', true);
       return;
     }
@@ -556,8 +750,10 @@ if (refreshUsersButton) {
 
 createUserRoleSelect?.addEventListener('change', async () => {
   updateCreateUserFieldVisibility();
-  if (!isFamilyRole(createUserRoleSelect.value)) {
-    if (isRoleRequiringCenter(createUserRoleSelect.value) && adminSchoolSelect?.value) {
+  const fieldMode = getCreateUserFieldMode(createUserRoleSelect.value);
+
+  if (fieldMode !== 'student') {
+    if (fieldMode === 'center' && adminSchoolSelect?.value) {
       try {
         await loadStudentsForCenter(adminSchoolSelect.value);
       } catch (error) {
@@ -572,8 +768,9 @@ createUserRoleSelect?.addEventListener('change', async () => {
 
 adminSchoolSelect?.addEventListener('change', async () => {
   const role = createUserRoleSelect?.value || 'STUDENT';
+  const fieldMode = getCreateUserFieldMode(role);
 
-  if (!isRoleRequiringCenter(role)) {
+  if (fieldMode !== 'center') {
     return;
   }
 

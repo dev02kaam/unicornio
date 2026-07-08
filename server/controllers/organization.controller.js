@@ -38,8 +38,8 @@ function listCentersController(req, res, next) {
 
 function createCenterController(req, res, next) {
   try {
-    const center = createCenter(req.body, req.user);
-    return sendSuccess(res, { center }, 'Centro creado correctamente.', 201);
+    const result = createCenter(req.body, req.user);
+    return sendSuccess(res, result, 'Centro y cuenta vinculada creados correctamente.', 201);
   } catch (error) {
     return next(error);
   }
