@@ -12,6 +12,7 @@ const consentsCountAccepted = document.getElementById('consents-count-accepted')
 const consentsCountOther = document.getElementById('consents-count-other');
 const consentsStatusBanner = document.getElementById('consents-status-banner');
 const reloadConsentsButton = document.getElementById('reload-consents-button');
+const consentsLegalLink = document.getElementById('consents-legal-link');
 const revokeConsentForm = document.getElementById('revoke-consent-form');
 const revokeConsentModal = document.getElementById('revoke-consent-modal');
 const revokeConsentIdField = revokeConsentForm?.querySelector('[name="consentId"]');
@@ -35,6 +36,17 @@ const consentStatusClass = {
 
 let currentUser = null;
 let consentsBannerTimer = null;
+
+function setLegalLinkVisible(isVisible) {
+  if (!consentsLegalLink) {
+    return;
+  }
+
+  consentsLegalLink.hidden = !isVisible;
+  consentsLegalLink.style.display = isVisible ? '' : 'none';
+}
+
+setLegalLinkVisible(false);
 
 function ensureAuth() {
   if (!getToken()) {
@@ -345,6 +357,7 @@ modalLogoutButton?.addEventListener('click', async () => {
     if (profileEmailElement) {
       profileEmailElement.textContent = currentUser.email;
     }
+    setLegalLinkVisible(String(currentUser.role || '').toUpperCase() === 'ADMIN');
 
     await loadActiveVersion();
     await loadConsents();

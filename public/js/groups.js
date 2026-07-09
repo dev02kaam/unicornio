@@ -20,6 +20,7 @@ const groupGlobalSearch = document.getElementById('group-global-search');
 const groupFiltersList = document.getElementById('group-filters-list');
 const addGroupFilterButton = document.getElementById('add-group-filter');
 const clearGroupFiltersButton = document.getElementById('clear-group-filters');
+const createGroupTrigger = document.querySelector('[data-open-modal="create-group-modal"]');
 const groupForm = document.getElementById('group-form');
 const groupFormError = document.getElementById('group-form-error');
 const groupFormSuccess = document.getElementById('group-form-success');
@@ -668,6 +669,9 @@ async function loadProfile() {
   const response = await apiRequest('/auth/me');
   groupsCurrentUser = response.data.user;
   currentGroupsRole = String(groupsCurrentUser?.role || '').toUpperCase();
+  if (createGroupTrigger) {
+    createGroupTrigger.hidden = !canCreateGroups();
+  }
 
   if (groupRoleNote) {
     groupRoleNote.textContent = canCreateGroups()

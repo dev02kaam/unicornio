@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Usuarios | Proyecto Unicornio</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <main class="shell dashboard-shell org-shell">
+      <section class="card org-hero">
+        <div class="hero-copy">
+          <span class="badge">Administración</span>
+          <h1>Usuarios</h1>
+          <p>Gestiona cuentas demo, vínculos de centro y relación familiar con alumno.</p>
+          <div class="action-row dashboard-links">
+            <a class="button secondary" href="/dashboard.html">Volver al dashboard</a>
+            <a class="button secondary" href="/centers.html">Ir a centros</a>
+          </div>
+        </div>
+
+        <button id="profile-button" class="account-trigger" type="button" aria-label="Abrir perfil">
+          <span class="avatar-badge avatar-large" aria-hidden="true">U</span>
+        </button>
+      </section>
+
+      <section id="users-feedback" class="status-banner" hidden aria-live="polite"></section>
+
+      <section class="card org-panel">
+        <div class="section-header">
+          <div>
+            <span class="badge">Listado</span>
+            <h2>Usuarios disponibles</h2>
+          </div>
+          <div class="toolbar-group">
+            <button id="refresh-users" class="button secondary" type="button">Actualizar</button>
+            <button class="button secondary" type="button" data-open-modal="user-form-modal">Crear usuario</button>
+          </div>
+        </div>
+
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Email</th>
+                <th>Rol</th>
+                <th>Centro</th>
+                <th>Estudiante vinculado</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="users-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <section id="user-form-modal" class="modal" hidden aria-hidden="true">
+      <div class="modal__backdrop" data-close-modal="user-form-modal"></div>
+      <div class="modal__panel modal__panel--small" role="dialog" aria-modal="true" aria-labelledby="user-form-title">
+        <div class="modal__header">
+          <div>
+            <span class="badge">Usuario</span>
+            <h2 id="user-form-title">Crear usuario</h2>
+          </div>
+          <button class="button secondary" type="button" data-close-modal="user-form-modal">Cerrar</button>
+        </div>
+
+        <form id="user-form" class="dialog-form-grid">
+          <input type="hidden" name="id" />
+          <label>
+            <span>Nombre</span>
+            <input type="text" name="name" placeholder="Nombre completo" required />
+          </label>
+          <label>
+            <span>Email</span>
+            <input type="email" name="email" placeholder="usuario@unicornio.local" required />
+          </label>
+          <label>
+            <span>Contraseña</span>
+            <input type="password" name="password" placeholder="Demo1234!" />
+            <small class="field-note">Obligatoria al crear. En edición puedes dejarla vacía.</small>
+          </label>
+          <label>
+            <span>Rol</span>
+            <select id="user-role" name="role">
+              <option value="STUDENT">Alumno</option>
+              <option value="FAMILY">Familia</option>
+              <option value="TEACHER">Profesor</option>
+              <option value="PROFESSIONAL">Profesional autorizado</option>
+              <option value="ADMIN">Administrador</option>
+            </select>
+          </label>
+          <label id="user-center-field" hidden>
+            <span>Centro</span>
+            <select id="user-center" name="schoolId"></select>
+            <small class="field-note">Para alumnos, profesores y profesionales.</small>
+          </label>
+          <label id="user-student-field" hidden>
+            <span>Estudiante vinculado</span>
+            <select id="user-student" name="linkedStudentId"></select>
+            <small class="field-note">Solo para familias.</small>
+          </label>
+          <p id="user-form-error" class="error" hidden></p>
+          <p id="user-form-success" class="success" hidden></p>
+          <div class="modal__footer">
+            <button id="user-form-submit" class="button primary" type="submit">Guardar usuario</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section id="profile-modal" class="profile-modal" hidden aria-hidden="true">
+      <div class="profile-modal__backdrop" data-close-profile></div>
+      <div class="profile-modal__panel card" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title">
+        <div class="section-header">
+          <div>
+            <span class="badge">Perfil</span>
+            <h2 id="profile-modal-title">Datos y preferencias</h2>
+          </div>
+          <button id="profile-close-button" class="button secondary" type="button">Cerrar</button>
+        </div>
+        <div class="profile-grid">
+          <div class="profile-chip">
+            <span>Nombre</span>
+            <strong id="profile-name">-</strong>
+          </div>
+          <div class="profile-chip">
+            <span>Email</span>
+            <strong id="profile-email">-</strong>
+          </div>
+        </div>
+        <div class="action-row modal-actions">
+          <button id="modal-logout-button" class="button secondary" type="button">Cerrar sesión</button>
+        </div>
+      </div>
+    </section>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/ui.js"></script>
+    <script src="/js/users.js"></script>
+  </body>
+</html>

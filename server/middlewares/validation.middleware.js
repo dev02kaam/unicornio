@@ -68,10 +68,10 @@ function validateUserUpdate(req, _res, next) {
   if (role !== undefined && !isRole(role)) {
     errors.push('El rol no es valido.');
   }
-  if (schoolId !== undefined && !isNonEmptyString(schoolId)) {
+  if (schoolId !== undefined && schoolId !== null && !isNonEmptyString(schoolId)) {
     errors.push('El centro no puede estar vacio.');
   }
-  if (linkedStudentId !== undefined && !isNonEmptyString(linkedStudentId)) {
+  if (linkedStudentId !== undefined && linkedStudentId !== null && !isNonEmptyString(linkedStudentId)) {
     errors.push('El estudiante vinculado no puede estar vacio.');
   }
 

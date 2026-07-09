@@ -835,7 +835,12 @@ function listGroupUsersForRequest(groupId, user) {
 
 function getAssignmentsForUserRequest(targetUserId, actorUser) {
   const targetUser = assertUserExists(targetUserId);
-  if (!isAdmin(actorUser) && actorUser.id !== targetUser.id) {
+  const isLinkedFamily = (
+    String(actorUser?.role || '').toUpperCase() === 'FAMILY'
+    && String(actorUser.linkedStudentId || '') === String(targetUser.id)
+  );
+
+  if (!isAdmin(actorUser) && actorUser.id !== targetUser.id && !isLinkedFamily) {
     throw new AppError('No autorizado para ver estas asignaciones.', 403);
   }
 

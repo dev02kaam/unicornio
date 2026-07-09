@@ -136,9 +136,13 @@ function renderSchoolCenter(center) {
   }
 
   setPanelVisible(schoolCenterPanel, true, 'grid');
-  schoolCenterNote.textContent = currentCenterRole === 'FAMILY'
-    ? 'Solo ves el centro del estudiante vinculado a tu cuenta.'
-    : 'Solo ves el centro enlazado a tu cuenta.';
+  if (currentCenterRole === 'FAMILY') {
+    schoolCenterNote.textContent = 'Solo ves el centro del alumno asociado a tu cuenta.';
+  } else if (currentCenterRole === 'STUDENT') {
+    schoolCenterNote.textContent = 'Solo ves tu centro académico asociado a esta cuenta.';
+  } else {
+    schoolCenterNote.textContent = 'Solo ves el centro enlazado a tu cuenta.';
+  }
   schoolCenterCity.textContent = center.city || 'Sin ciudad';
   schoolCenterName.textContent = center.name;
   schoolCenterLine.textContent = formatCenterLine(center);
@@ -224,7 +228,7 @@ function renderCenters(centers) {
   centersData = centers;
   centerCount.textContent = `${centers.length} ${centers.length === 1 ? 'centro' : 'centros'}`;
 
-  if (getUserRole() === 'SCHOOL' || getUserRole() === 'TEACHER') {
+  if (getUserRole() !== 'ADMIN') {
     renderSchoolCenter(centers[0] || null);
     return;
   }
@@ -261,8 +265,11 @@ async function loadProfile() {
     centerRoleNote.textContent = 'Ves el centro al que perteneces y los accesos de tu grupo.';
     centerHeroCopy.textContent = 'El profesor consulta su centro, sus grupos y la actividad asociada.';
   } else if (role === 'FAMILY') {
-    centerRoleNote.textContent = 'Ves el centro del estudiante vinculado y la información relacionada.';
-    centerHeroCopy.textContent = 'La familia consulta el centro derivado del alumno vinculado y su contexto básico.';
+    centerRoleNote.textContent = 'Ves el centro del alumno asociado a tu cuenta.';
+    centerHeroCopy.textContent = 'La familia consulta un resumen del centro del alumno, con sus datos básicos y accesos disponibles.';
+  } else if (role === 'STUDENT') {
+    centerRoleNote.textContent = 'Ves tu centro académico asociado a tu cuenta.';
+    centerHeroCopy.textContent = 'El alumno consulta un resumen de su centro, con los datos básicos y los accesos que necesita.';
   } else {
     centerRoleNote.textContent = 'Solo verás el centro asignado a tu cuenta.';
     centerHeroCopy.textContent = 'Tu cuenta de centro solo muestra sus propios datos y accesos vinculados.';

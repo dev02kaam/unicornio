@@ -1,4 +1,4 @@
-const profileButton = document.getElementById('profile-button');
+﻿const profileButton = document.getElementById('profile-button');
 const profileModal = document.getElementById('profile-modal');
 const profileCloseButton = document.getElementById('profile-close-button');
 const modalLogoutButton = document.getElementById('modal-logout-button');
@@ -18,6 +18,7 @@ const userEditHintElement = document.getElementById('user-edit-hint');
 const userEditErrorElement = document.getElementById('user-edit-error');
 const userEditSuccessElement = document.getElementById('user-edit-success');
 const introElement = document.getElementById('dashboard-intro');
+const dashboardLinks = document.getElementById('dashboard-links');
 const adminPanel = document.getElementById('admin-panel');
 const createUserForm = document.getElementById('create-user-form');
 const createUserError = document.getElementById('create-user-error');
@@ -53,6 +54,11 @@ const professionalValidCount = document.getElementById('professional-valid-count
 const professionalPendingCount = document.getElementById('professional-pending-count');
 const professionalOtherCount = document.getElementById('professional-other-count');
 const professionalLegalLink = document.getElementById('professional-legal-link');
+const relationshipPanel = document.getElementById('relationship-panel');
+const relationshipPanelBadge = document.getElementById('relationship-panel-badge');
+const relationshipPanelTitle = document.getElementById('relationship-panel-title');
+const relationshipPanelNote = document.getElementById('relationship-panel-note');
+const relationshipPanelBody = document.getElementById('relationship-panel-body');
 
 let currentUser = null;
 let currentEditingUserId = null;
@@ -147,6 +153,51 @@ function isRoleRequiringCenter(role) {
 
 function isFamilyRole(role) {
   return String(role || '').toUpperCase() === 'FAMILY';
+}
+
+function isAdminRole(role) {
+  return String(role || '').toUpperCase() === 'ADMIN';
+}
+
+function renderDashboardQuickActions(role) {
+  const normalizedRole = String(role || '').toUpperCase();
+  if (!dashboardLinks) {
+    return;
+  }
+
+  const actions = [];
+
+  if (normalizedRole === 'ADMIN') {
+    actions.push(
+      { label: 'Usuarios', href: '/users.html' },
+      { label: 'Centros', href: '/centers.html' },
+      { label: 'Grupos', href: '/groups.html' },
+      { label: 'Consentimientos', href: '/consents.html' },
+      { label: 'Texto legal', href: '/legal.html' },
+    );
+  } else if (normalizedRole === 'SCHOOL' || normalizedRole === 'TEACHER') {
+    actions.push(
+      { label: 'Mi centro', href: '/centers.html' },
+      { label: 'Grupos', href: '/groups.html' },
+      { label: 'Consentimientos', href: '/consents.html' },
+    );
+  } else if (normalizedRole === 'PROFESSIONAL') {
+    actions.push({ label: 'Consentimientos', href: '/consents.html' });
+  } else if (normalizedRole === 'FAMILY') {
+    actions.push(
+      { label: 'Mi hijo/a', href: '/child.html' },
+      { label: 'Consentimientos', href: '/consents.html' },
+    );
+  } else if (normalizedRole === 'STUDENT') {
+    actions.push(
+      { label: 'Mi perfil', href: '/child.html' },
+      { label: 'Consentimientos', href: '/consents.html' },
+    );
+  }
+
+  dashboardLinks.innerHTML = actions
+    .map((action) => `<a class="button secondary" href="${action.href}">${action.label}</a>`)
+    .join('');
 }
 
 function getCreateUserFieldMode(role) {
@@ -360,6 +411,250 @@ function renderUserAssignments(assignments) {
   userDetailAssignmentsElement.innerHTML = items.join('');
 }
 
+function buildConsentSummary(consents, studentId) {
+  const studentConsents = (consents || []).filter((consent) => String(consent.studentId || '') === String(studentId || ''));
+
+  return summarizeConsentList(studentConsents);
+}
+
+function summarizeConsentList(consents) {
+  return {
+    total: consents.length,
+    pending: consents.filter((consent) => consent.status === 'PENDING').length,
+    accepted: consents.filter((consent) => consent.status === 'ACCEPTED').length,
+    rejected: consents.filter((consent) => consent.status === 'REJECTED').length,
+    revoked: consents.filter((consent) => consent.status === 'REVOKED').length,
+    expired: consents.filter((consent) => consent.status === 'EXPIRED').length,
+  };
+}
+
+function getDashboardRelationshipContext(role, context, consentSummary = null) {
+  const normalizedRole = String(role || '').toUpperCase();
+
+  if (normalizedRole === 'FAMILY') {
+    return {
+      badge: 'Familia',
+      title: 'Resumen familiar',
+      note: 'Accesos principales de tu cuenta familiar.',
+      subject: context?.linkedStudent || null,
+      summaryTag: 'Resumen breve',
+      highlights: [
+        { label: 'Hijo/a', value: context?.linkedStudent?.name || 'Sin alumno' },
+        { label: 'Pendientes', value: consentSummary ? String(consentSummary.pending) : '0' },
+      ],
+      primaryActionLabel: 'Abrir perfil',
+      primaryActionHref: '/child.html',
+      secondaryActionLabel: 'Ver consentimientos',
+      secondaryActionHref: '/consents.html',
+    };
+  }
+
+  if (normalizedRole === 'STUDENT') {
+    return {
+      badge: 'Alumno',
+      title: 'Mi familia',
+      note: 'Resumen breve de tu espacio. El detalle completo vive en la vista de alumno.',
+      subject: context?.linkedFamily || null,
+      summaryTag: 'Resumen breve',
+      highlights: [
+        { label: 'Familia', value: context?.linkedFamily?.name || 'Sin familia' },
+        { label: 'Centro', value: context?.center?.name || 'Sin centro' },
+        { label: 'Grupo', value: context?.group?.name || 'Sin grupo' },
+      ],
+      primaryActionLabel: 'Ver consentimientos',
+      primaryActionHref: '/consents.html',
+      secondaryActionLabel: 'Ir a grupos',
+      secondaryActionHref: '/groups.html',
+    };
+  }
+
+  return null;
+}
+
+function renderModuleSummary({ badge, title, note, cards }) {
+  if (!relationshipPanel || !relationshipPanelBody) {
+    return;
+  }
+
+  if (relationshipPanelBadge) relationshipPanelBadge.textContent = badge;
+  if (relationshipPanelTitle) relationshipPanelTitle.textContent = title;
+  if (relationshipPanelNote) relationshipPanelNote.textContent = note;
+
+  relationshipPanelBody.innerHTML = `
+    <div class="family-dashboard-grid">
+      ${cards.map((card) => `
+        <article class="dashboard-quickcard family-module-card ${card.highlight ? 'family-module-card--pending' : ''}">
+          <span class="quickcard-label">${card.label}</span>
+          <strong>${card.value}</strong>
+          <p class="quickcard-email">${card.description}</p>
+          <a class="button secondary" href="${card.href}">${card.action}</a>
+        </article>
+      `).join('')}
+    </div>
+  `;
+
+  setPanelVisible(relationshipPanel, true, 'block');
+}
+
+function renderDashboardRelationshipPanel(role, context, consentSummary = null) {
+  if (!relationshipPanel || !relationshipPanelBody) {
+    return;
+  }
+
+  const config = getDashboardRelationshipContext(role, context, consentSummary);
+  if (!config) {
+    setPanelVisible(relationshipPanel, false);
+    return;
+  }
+
+  if (relationshipPanelBadge) {
+    relationshipPanelBadge.textContent = config.badge;
+  }
+  if (relationshipPanelTitle) {
+    relationshipPanelTitle.textContent = config.title;
+  }
+  if (relationshipPanelNote) {
+    relationshipPanelNote.textContent = config.note;
+  }
+
+  if (String(role || '').toUpperCase() === 'FAMILY') {
+    const pending = consentSummary?.pending || 0;
+    const pendingText = pending === 1 ? '1 pendiente' : `${pending} pendientes`;
+    relationshipPanelBody.innerHTML = `
+      <div class="family-dashboard-grid">
+        <article class="dashboard-quickcard family-module-card">
+          <span class="quickcard-label">Mi hijo/a</span>
+          <strong>${context?.linkedStudent?.name || 'Sin alumno vinculado'}</strong>
+          <p class="quickcard-email">Ficha del alumno, centro, grupo y profesor asociado.</p>
+          <a class="button secondary" href="/child.html">Ver detalle</a>
+        </article>
+
+        <article class="dashboard-quickcard family-module-card ${pending > 0 ? 'family-module-card--pending' : ''}">
+          <span class="quickcard-label">Consentimientos</span>
+          <strong>${pendingText}</strong>
+          <p class="quickcard-email">Solicitudes familiares que necesitan revisión.</p>
+          <a class="button secondary" href="/consents.html">Revisar</a>
+        </article>
+      </div>
+    `;
+    setPanelVisible(relationshipPanel, true, 'block');
+    return;
+  }
+
+  relationshipPanelBody.innerHTML = `
+    <div class="consent-version-card consent-notice-card dashboard-summary-card">
+      <div class="consent-version-card__head">
+        <span class="badge">${config.badge}</span>
+        <span class="table-badge consent-badge--muted">${config.summaryTag}</span>
+      </div>
+      <strong class="consent-version-card__title">${config.title}</strong>
+      <p>${config.note}</p>
+
+      <div class="consent-meta-grid">
+        ${config.highlights.map((item) => `
+          <div class="profile-chip">
+            <span>${item.label}</span>
+            <strong>${item.value}</strong>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="action-row">
+        <a class="button secondary" href="${config.primaryActionHref}">${config.primaryActionLabel}</a>
+        <a class="button secondary" href="${config.secondaryActionHref}">${config.secondaryActionLabel}</a>
+      </div>
+    </div>
+  `;
+
+  setPanelVisible(relationshipPanel, true, 'block');
+}
+
+function renderRoleDashboardSummary(role, context, assignments, options = {}) {
+  const normalizedRole = String(role || '').toUpperCase();
+  const centers = assignments?.centers || [];
+  const groups = assignments?.groups || [];
+  const center = options.center || centers[0]?.center || context?.center || null;
+  const group = groups[0]?.group || context?.group || null;
+  const consentSummary = options.consentSummary || null;
+  const usersCount = options.usersCount ?? '-';
+  const centersCount = options.centersCount ?? (centers.length || '-');
+  const groupsCount = options.groupsCount ?? (groups.length || '-');
+
+  if (normalizedRole === 'ADMIN') {
+    renderModuleSummary({
+      badge: 'Administración',
+      title: 'Resumen general',
+      note: 'Vista rápida de los módulos principales.',
+      cards: [
+        { label: 'Usuarios', value: `${usersCount}`, description: 'Altas, edición y recuperación de acceso.', href: '/users.html', action: 'Gestionar' },
+        { label: 'Centros', value: `${centersCount}`, description: 'Centros creados y cuentas de centro asociadas.', href: '/centers.html', action: 'Abrir' },
+        { label: 'Grupos', value: `${groupsCount}`, description: 'Estructura organizativa disponible.', href: '/groups.html', action: 'Abrir' },
+        { label: 'Consentimientos', value: `${consentSummary?.pending ?? 0} pendientes`, description: 'Solicitudes familiares por revisar.', href: '/consents.html', action: 'Revisar', highlight: (consentSummary?.pending || 0) > 0 },
+        { label: 'Texto legal', value: 'Admin', description: 'Versiones legales provisionales.', href: '/legal.html', action: 'Gestionar' },
+      ],
+    });
+    return;
+  }
+
+  if (normalizedRole === 'SCHOOL') {
+    renderModuleSummary({
+      badge: 'Centro',
+      title: 'Resumen del centro',
+      note: 'Accesos de gestión para la cuenta de centro.',
+      cards: [
+        { label: 'Mi centro', value: center?.name || 'Sin centro', description: 'Datos del centro y acceso a grupos.', href: '/centers.html', action: 'Ver detalle' },
+        { label: 'Grupos', value: `${groupsCount}`, description: 'Grupos del centro y gestión de usuarios.', href: '/groups.html', action: 'Gestionar' },
+        { label: 'Consentimientos', value: `${consentSummary?.pending ?? 0} pendientes`, description: 'Solicitudes de alumnos del centro.', href: '/consents.html', action: 'Revisar', highlight: (consentSummary?.pending || 0) > 0 },
+      ],
+    });
+    return;
+  }
+
+  if (normalizedRole === 'TEACHER') {
+    renderModuleSummary({
+      badge: 'Profesor',
+      title: 'Resumen docente',
+      note: 'Vista rápida de tu centro, grupos y consentimientos visibles.',
+      cards: [
+        { label: 'Centro', value: center?.name || 'Sin centro', description: 'Centro al que está vinculada tu cuenta.', href: '/centers.html', action: 'Ver centro' },
+        { label: 'Grupo principal', value: group?.name || 'Sin grupo', description: 'Grupo asociado para consulta docente.', href: '/groups.html', action: 'Ver grupos' },
+        { label: 'Consentimientos', value: `${consentSummary?.pending ?? 0} pendientes`, description: 'Estado de autorización del alumnado visible.', href: '/consents.html', action: 'Consultar', highlight: (consentSummary?.pending || 0) > 0 },
+      ],
+    });
+    return;
+  }
+
+  if (normalizedRole === 'PROFESSIONAL') {
+    renderModuleSummary({
+      badge: 'Profesional',
+      title: 'Resumen profesional',
+      note: 'Consulta de consentimientos del centro asignado.',
+      cards: [
+        { label: 'Centro', value: center?.name || 'Sin centro', description: 'Centro vinculado a tu cuenta.', href: '/centers.html', action: 'Ver centro' },
+        { label: 'Consentimientos válidos', value: `${consentSummary?.accepted ?? 0}`, description: 'Consentimientos aceptados visibles.', href: '/consents.html', action: 'Consultar' },
+        { label: 'Pendientes', value: `${consentSummary?.pending ?? 0}`, description: 'Solicitudes pendientes de respuesta familiar.', href: '/consents.html', action: 'Revisar', highlight: (consentSummary?.pending || 0) > 0 },
+      ],
+    });
+    return;
+  }
+
+  if (normalizedRole === 'STUDENT') {
+    renderModuleSummary({
+      badge: 'Alumno',
+      title: 'Resumen del alumno',
+      note: 'Vista rápida de tu perfil académico y consentimientos.',
+      cards: [
+        { label: 'Mi perfil', value: currentUser?.name || 'Alumno', description: 'Datos personales, centro, grupo, familia y profesor.', href: '/child.html', action: 'Ver detalle' },
+        { label: 'Familia vinculada', value: context?.linkedFamily?.name || 'Sin familia', description: 'Cuenta familiar asociada a tu perfil.', href: '/child.html', action: 'Consultar' },
+        { label: 'Consentimientos', value: `${consentSummary?.accepted ?? 0} activos`, description: 'Estado de autorización visible para tu cuenta.', href: '/consents.html', action: 'Ver estado' },
+      ],
+    });
+    return;
+  }
+
+  renderDashboardRelationshipPanel(role, context, consentSummary);
+}
+
 async function openUserDetail(userId) {
   try {
     const [userResponse, assignmentsResponse] = await Promise.all([
@@ -519,51 +814,41 @@ async function renderProfessionalPanel(assignments) {
     if (professionalCenterName) professionalCenterName.textContent = 'Sin centro';
     if (professionalCenterLine) professionalCenterLine.textContent = 'Vincula la cuenta a un centro para revisar consentimientos.';
     if (professionalConsentsCount) professionalConsentsCount.textContent = '0 consentimientos';
-    if (professionalCenterStatus) professionalCenterStatus.textContent = 'Texto legal: -';
+    if (professionalCenterStatus) professionalCenterStatus.textContent = 'Consentimientos: -';
     if (professionalCenterSummary) professionalCenterSummary.textContent = 'Vista de consulta';
     if (professionalValidCount) professionalValidCount.textContent = '0';
     if (professionalPendingCount) professionalPendingCount.textContent = '0';
     if (professionalOtherCount) professionalOtherCount.textContent = '0';
-    if (professionalLegalLink) {
-      professionalLegalLink.href = '/legal.html';
-    }
+    if (professionalLegalLink) professionalLegalLink.hidden = true;
     return;
   }
 
-  const [consentsResponse, legalResponse] = await Promise.allSettled([
+  const [consentsResponse] = await Promise.allSettled([
     apiRequest(`/consents?centerId=${encodeURIComponent(center.id)}`),
-    apiRequest('/legal-text-versions/active'),
   ]);
 
   const consents = consentsResponse.status === 'fulfilled' ? (consentsResponse.value.data.consents || []) : [];
-  const legalVersion = legalResponse.status === 'fulfilled' ? legalResponse.value.data.version : null;
   const pending = consents.filter((consent) => consent.status === 'PENDING').length;
   const accepted = consents.filter((consent) => consent.status === 'ACCEPTED').length;
   const other = consents.length - pending - accepted;
 
   if (professionalPanelNote) {
-    professionalPanelNote.textContent = 'Esta vista es de consulta: estado de consentimientos y texto legal activo del centro.';
+    professionalPanelNote.textContent = 'Esta vista es de consulta: estado de consentimientos del centro.';
   }
   if (professionalCenterCity) professionalCenterCity.textContent = center.city || 'Sin ciudad';
   if (professionalCenterName) professionalCenterName.textContent = center.name;
   if (professionalCenterLine) professionalCenterLine.textContent = formatCenterLine(center);
   if (professionalConsentsCount) professionalConsentsCount.textContent = `${consents.length} consentimientos`;
   if (professionalCenterStatus) {
-    professionalCenterStatus.textContent = legalVersion
-      ? `Texto legal: ${legalVersion.version}`
-      : 'Texto legal: sin versión activa';
+    professionalCenterStatus.textContent = 'Consentimientos revisables';
   }
   if (professionalCenterSummary) {
-    professionalCenterSummary.textContent = legalVersion
-      ? legalVersion.title
-      : 'Revisión consultiva';
+    professionalCenterSummary.textContent = 'Vista en modo lectura';
   }
   if (professionalValidCount) professionalValidCount.textContent = String(accepted);
   if (professionalPendingCount) professionalPendingCount.textContent = String(pending);
   if (professionalOtherCount) professionalOtherCount.textContent = String(other);
-  if (professionalLegalLink) {
-    professionalLegalLink.href = '/legal.html';
-  }
+  if (professionalLegalLink) professionalLegalLink.hidden = true;
 }
 
 async function doLogout() {
@@ -583,17 +868,50 @@ async function loadProfile() {
     currentUser = response.data.user;
     profileNameElement.textContent = currentUser.name;
     profileEmailElement.textContent = currentUser.email;
+    const context = currentUser.context || null;
+    const role = String(currentUser.role || '').toUpperCase();
+    const assignmentsResponse = await apiRequest(`/users/${currentUser.id}/assignments`);
+    const assignments = assignmentsResponse.data;
+    let consentSummary = null;
+    let summaryOptions = {};
 
-  const role = String(currentUser.role || '').toUpperCase();
-  const assignmentsResponse = await apiRequest(`/users/${currentUser.id}/assignments`);
-  const assignments = assignmentsResponse.data;
+    if ((role === 'FAMILY' && context?.linkedStudent?.id) || role === 'STUDENT') {
+      const consentsResponse = await apiRequest('/consents');
+      const relevantStudentId = role === 'FAMILY' ? context.linkedStudent.id : currentUser.id;
+      consentSummary = buildConsentSummary(consentsResponse.data.consents || [], relevantStudentId);
+    } else if (['ADMIN', 'SCHOOL', 'TEACHER', 'PROFESSIONAL'].includes(role)) {
+      const consentsResponse = await apiRequest('/consents');
+      consentSummary = summarizeConsentList(consentsResponse.data.consents || []);
+    }
+
+    summaryOptions.consentSummary = consentSummary;
+    if (['SCHOOL', 'TEACHER', 'PROFESSIONAL'].includes(role)) {
+      const centersResponse = await apiRequest('/centers');
+      const visibleCenters = centersResponse.data.centers || [];
+      summaryOptions = {
+        ...summaryOptions,
+        center: visibleCenters[0] || null,
+        centersCount: visibleCenters.length,
+        groupsCount: visibleCenters.reduce((count, center) => count + Number(center.groupsCount || 0), 0),
+      };
+    }
+
+    renderDashboardQuickActions(role);
 
     if (role === 'ADMIN') {
-      introElement.textContent = 'Tienes acceso de administración para crear usuarios y revisar el listado básico.';
-      setPanelVisible(adminPanel, true, 'grid');
+      introElement.textContent = 'Vista rápida de administración: usuarios, centros, grupos, consentimientos y texto legal.';
+      setPanelVisible(adminPanel, false);
       setPanelVisible(schoolPanel, false);
+      setPanelVisible(professionalPanel, false);
       await loadCentersForAdmin();
       await loadAdminUsers();
+      summaryOptions = {
+        ...summaryOptions,
+        usersCount: adminUsers.length,
+        centersCount: availableCenters.length,
+        groupsCount: availableCenters.reduce((count, center) => count + Number(center.groupsCount || 0), 0),
+      };
+      renderRoleDashboardSummary(role, context, assignments, summaryOptions);
       return;
     }
 
@@ -601,22 +919,43 @@ async function loadProfile() {
 
     if (role === 'SCHOOL' || role === 'TEACHER') {
       introElement.textContent = role === 'TEACHER'
-        ? 'Tu grupo y tu centro están listos. Desde aquí puedes revisar cuestionarios y actividad del alumnado.'
-        : 'Tu centro está listo. Desde aquí puedes revisar grupos y gestionar la base organizativa.';
-      renderSchoolPanel(assignments);
+        ? 'Resumen docente con tu centro, grupo principal y consentimientos visibles.'
+        : 'Resumen del centro con accesos a grupos, datos del centro y consentimientos.';
+      setPanelVisible(schoolPanel, false);
+      setPanelVisible(professionalPanel, false);
+      renderRoleDashboardSummary(role, context, assignments, summaryOptions);
       return;
     }
 
     if (role === 'PROFESSIONAL') {
-      introElement.textContent = 'Tu espacio es de consulta. Aquí puedes revisar el estado de consentimientos y el texto legal activo de tu centro.';
+      introElement.textContent = 'Resumen profesional de consulta para el centro asignado.';
       setPanelVisible(schoolPanel, false);
-      await renderProfessionalPanel(assignments);
+      setPanelVisible(professionalPanel, false);
+      renderRoleDashboardSummary(role, context, assignments, summaryOptions);
       return;
     }
 
-    introElement.textContent = 'Acceso personal listo. Puedes revisar tu perfil cuando quieras.';
+    if (role === 'FAMILY') {
+      introElement.textContent = context?.linkedStudent?.name
+        ? `Tu cuenta familiar está vinculada a ${context.linkedStudent.name}.`
+        : 'Tu cuenta familiar muestra un resumen breve de tu hijo/a y sus consentimientos pendientes.';
+      if (consentSummary) {
+        const pendingLabel = consentSummary.pending === 1 ? '1 consentimiento pendiente' : `${consentSummary.pending} consentimientos pendientes`;
+        introElement.textContent = context?.linkedStudent?.name
+          ? `Tu cuenta familiar está vinculada a ${context.linkedStudent.name}. ${pendingLabel}.`
+          : `Tu cuenta familiar muestra un resumen breve de tu hijo/a. ${pendingLabel}.`;
+      }
+    } else if (role === 'STUDENT') {
+      introElement.textContent = context?.linkedFamily?.name
+        ? `Tu cuenta de alumno muestra un resumen de ${context.linkedFamily.name}.`
+        : 'Tu cuenta de alumno muestra un resumen breve de tu familia y tu contexto académico.';
+    } else {
+      introElement.textContent = 'Acceso personal listo. Puedes revisar tu perfil cuando quieras.';
+    }
+
     setPanelVisible(schoolPanel, false);
     setPanelVisible(professionalPanel, false);
+    renderRoleDashboardSummary(role, context, assignments, summaryOptions);
   } catch (_error) {
     clearToken();
     window.location.href = '/login.html';

@@ -50,6 +50,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   font-family: Inter, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
@@ -1480,6 +1484,63 @@ textarea {
   line-height: 1.55;
 }
 
+.dashboard-summary-card {
+  width: min(100%, 760px);
+  padding: 20px;
+}
+
+.dashboard-summary-card .consent-meta-grid {
+  margin-top: 4px;
+}
+
+.dashboard-summary-card .profile-chip {
+  min-height: 88px;
+}
+
+.family-dashboard-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.family-module-card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 190px;
+}
+
+.family-module-card .button {
+  width: fit-content;
+  margin-top: 4px;
+}
+
+.family-module-card--pending {
+  border-color: rgba(19, 150, 81, 0.24);
+  box-shadow: 0 18px 34px rgba(19, 150, 81, 0.08);
+}
+
+.child-highlight {
+  width: min(100%, 320px);
+  align-self: center;
+}
+
+.child-profile-grid {
+  grid-template-columns: 1fr;
+}
+
+.child-context-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.child-context-card {
+  min-height: 100%;
+}
+
+.child-consent-summary {
+  margin-bottom: 16px;
+}
+
 .legal-shell .consent-list-card,
 .consents-shell .consent-list-card {
   display: grid;
@@ -1581,6 +1642,10 @@ textarea {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .family-dashboard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .group-management-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1590,6 +1655,14 @@ textarea {
   }
 
   .consent-meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .child-context-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .child-profile-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

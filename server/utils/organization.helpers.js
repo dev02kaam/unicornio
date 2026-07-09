@@ -33,6 +33,37 @@ function findGroupById(id) {
   return getCollection('groups').find((item) => item.id === String(id)) || null;
 }
 
+function findUserById(id) {
+  return getCollection('users').find((item) => item.id === String(id)) || null;
+}
+
+function findFamilyForStudent(studentId) {
+  return getCollection('users').find((item) => (
+    item.isActive
+    && String(item.role || '').toUpperCase() === 'FAMILY'
+    && String(item.linkedStudentId || '') === String(studentId)
+  )) || null;
+}
+
+function buildUserSummary(user) {
+  return user ? sanitizeUser(user) : null;
+}
+
+function findPrimaryTeacherForGroup(groupId) {
+  if (!groupId) {
+    return null;
+  }
+
+  const users = getCollection('users');
+  const teacherAssignment = getGroupAssignments(groupId)
+    .find((assignment) => {
+      const user = users.find((item) => item.id === assignment.userId);
+      return user?.isActive && String(user.role || '').toUpperCase() === 'TEACHER';
+    });
+
+  return teacherAssignment ? users.find((item) => item.id === teacherAssignment.userId) || null : null;
+}
+
 function getUserCenterAssignments(userId, { activeOnly = true } = {}) {
   return getCollection('userCenterAssignments').filter((assignment) => (
     assignment.userId === String(userId) && (!activeOnly || assignment.isActive)
@@ -216,6 +247,46 @@ function getUserAssignments(userId) {
   };
 }
 
+function getDashboardContextForUser(user) {
+  if (!user) {
+    return null;
+  }
+
+  const role = String(user.role || '').toUpperCase();
+
+  if (role === 'FAMILY') {
+    const linkedStudent = user.linkedStudentId ? findUserById(user.linkedStudentId) : null;
+    const centerId = linkedStudent ? findPrimaryCenterIdForUser(linkedStudent.id) || linkedStudent.schoolId : null;
+    const groupId = linkedStudent ? findPrimaryGroupIdForUser(linkedStudent.id) || linkedStudent.groupId : null;
+    const teacher = groupId ? findPrimaryTeacherForGroup(groupId) : null;
+
+    return {
+      type: 'FAMILY',
+      linkedStudent: buildUserSummary(linkedStudent),
+      center: centerId ? findCenterById(centerId) : null,
+      group: groupId ? findGroupById(groupId) : null,
+      teacher: buildUserSummary(teacher),
+    };
+  }
+
+  if (role === 'STUDENT') {
+    const linkedFamily = findFamilyForStudent(user.id);
+    const centerId = findPrimaryCenterIdForUser(user.id) || user.schoolId;
+    const groupId = findPrimaryGroupIdForUser(user.id) || user.groupId;
+    const teacher = groupId ? findPrimaryTeacherForGroup(groupId) : null;
+
+    return {
+      type: 'STUDENT',
+      linkedFamily: buildUserSummary(linkedFamily),
+      center: centerId ? findCenterById(centerId) : null,
+      group: groupId ? findGroupById(groupId) : null,
+      teacher: buildUserSummary(teacher),
+    };
+  }
+
+  return null;
+}
+
 module.exports = {
   isAdmin,
   isSchool,
@@ -224,6 +295,7 @@ module.exports = {
   findAcademicYearById,
   findCenterById,
   findGroupById,
+  findPrimaryTeacherForGroup,
   getUserCenterAssignments,
   getUserGroupAssignments,
   getCenterAssignments,
@@ -237,4 +309,5 @@ module.exports = {
   canManageGroup,
   syncUserPlacementFromAssignments,
   getUserAssignments,
+  getDashboardContextForUser,
 };

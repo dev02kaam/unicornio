@@ -13,12 +13,7 @@
           <span class="badge">Area privada</span>
           <h1>Bienvenido</h1>
           <p id="dashboard-intro">Estructura inicial. Los módulos funcionales se añadirán en fases posteriores.</p>
-          <div class="action-row dashboard-links">
-            <a class="button secondary" href="/centers.html">Centros</a>
-            <a class="button secondary" href="/groups.html">Grupos</a>
-            <a class="button secondary" href="/consents.html">Consentimientos</a>
-            <a class="button secondary" href="/legal.html">Texto legal</a>
-          </div>
+          <div id="dashboard-links" class="action-row dashboard-links"></div>
         </div>
 
         <button id="profile-button" class="account-trigger" type="button" aria-label="Abrir perfil">
@@ -106,12 +101,12 @@
             <span id="professional-consents-count" class="org-pill">0 consentimientos</span>
           </div>
           <div class="org-card__meta">
-            <span id="professional-center-status">Texto legal: -</span>
-            <span id="professional-center-summary">Estado consultivo</span>
+            <span id="professional-center-status">Consentimientos: -</span>
+            <span id="professional-center-summary">Vista consultiva</span>
           </div>
           <div class="action-row">
             <a class="button secondary" href="/consents.html">Ver consentimientos</a>
-            <a id="professional-legal-link" class="button secondary" href="/legal.html">Ver texto legal</a>
+            <a id="professional-legal-link" class="button secondary" href="/legal.html" hidden>Ver texto legal</a>
           </div>
         </div>
 
@@ -132,6 +127,18 @@
             <p class="quickcard-email">Rechazados, revocados o caducados.</p>
           </article>
         </div>
+      </section>
+
+      <section id="relationship-panel" class="card org-panel" hidden>
+        <div class="section-header">
+          <div>
+            <span id="relationship-panel-badge" class="badge">Vínculo</span>
+            <h2 id="relationship-panel-title">Tu espacio</h2>
+          </div>
+          <p id="relationship-panel-note">Cargando datos vinculados...</p>
+        </div>
+
+        <div id="relationship-panel-body"></div>
       </section>
     </main>
 

@@ -327,7 +327,12 @@ legalActivationModal?.addEventListener('click', (event) => {
       profileEmailElement.textContent = currentUser.email;
     }
 
-    if (String(currentUser.role || '').toUpperCase() === 'ADMIN' && openCreateVersionButton) {
+    if (String(currentUser.role || '').toUpperCase() !== 'ADMIN') {
+      window.location.replace('/dashboard.html');
+      return;
+    }
+
+    if (openCreateVersionButton) {
       openCreateVersionButton.hidden = false;
     }
 

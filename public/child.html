@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mi hijo/a | Proyecto Unicornio</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <main class="shell dashboard-shell org-shell">
+      <section class="card org-hero">
+        <div class="hero-copy">
+          <span id="child-role-badge" class="badge">Familia</span>
+          <h1 id="child-title">Mi hijo/a</h1>
+          <p id="child-hero-copy">Consulta el perfil completo del alumno vinculado y accede a sus consentimientos cuando lo necesites.</p>
+          <div class="action-row dashboard-links">
+            <a class="button secondary" href="/dashboard.html">Volver al dashboard</a>
+            <a class="button secondary" href="/consents.html">Ir a consentimientos</a>
+          </div>
+        </div>
+
+        <button id="profile-button" class="account-trigger" type="button" aria-label="Abrir perfil">
+          <span class="avatar-badge avatar-large" aria-hidden="true">U</span>
+        </button>
+
+        <div class="org-highlight child-highlight">
+          <span>Resumen rápido</span>
+          <strong id="child-summary-name">Cargando...</strong>
+          <small id="child-summary-note">Cargando información del alumno...</small>
+        </div>
+      </section>
+
+      <section id="child-status-banner" class="status-banner" hidden aria-live="polite"></section>
+
+      <section class="card org-panel">
+        <div class="section-header">
+          <div>
+            <span class="badge">Perfil</span>
+            <h2>Datos del alumno</h2>
+          </div>
+          <p id="child-profile-note">Vista detallada del alumno vinculado a tu cuenta.</p>
+        </div>
+
+        <div class="profile-grid child-profile-grid">
+          <div class="profile-chip">
+            <span>Nombre</span>
+            <strong id="child-name">-</strong>
+          </div>
+          <div class="profile-chip">
+            <span>Email</span>
+            <strong id="child-email">-</strong>
+          </div>
+          <div class="profile-chip">
+            <span>Estado</span>
+            <strong id="child-status">-</strong>
+          </div>
+          <div class="profile-chip">
+            <span>Rol</span>
+            <strong id="child-role">-</strong>
+          </div>
+          <div class="profile-chip">
+            <span>Rango de edad</span>
+            <strong id="child-age-range">-</strong>
+          </div>
+          <div class="profile-chip">
+            <span id="child-family-label">Cuenta familiar</span>
+            <strong id="child-family-name">-</strong>
+          </div>
+          <div class="profile-chip">
+            <span>Identificador</span>
+            <strong id="child-id">-</strong>
+          </div>
+          <div class="profile-chip">
+            <span>Alta</span>
+            <strong id="child-created-at">-</strong>
+          </div>
+          <div class="profile-chip">
+            <span>Actualizado</span>
+            <strong id="child-updated-at">-</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="card org-panel">
+        <div class="section-header">
+          <div>
+            <span class="badge">Contexto</span>
+            <h2>Centro y grupo</h2>
+          </div>
+          <p id="child-context-note">Aquí ves el contexto académico principal del alumno.</p>
+        </div>
+
+        <div class="child-context-grid">
+          <article class="org-card child-context-card">
+            <div class="org-card__top">
+              <div>
+                <span class="org-kicker">Centro</span>
+                <h3 id="child-center-name">-</h3>
+                <p id="child-center-line">-</p>
+              </div>
+              <span id="child-center-pill" class="org-pill">-</span>
+            </div>
+            <div class="org-card__meta">
+              <span id="child-center-city">-</span>
+              <span id="child-center-code">-</span>
+              <span id="child-center-year">-</span>
+            </div>
+          </article>
+
+          <article class="org-card child-context-card">
+            <div class="org-card__top">
+              <div>
+                <span class="org-kicker">Grupo</span>
+                <h3 id="child-group-name">-</h3>
+                <p id="child-group-line">-</p>
+              </div>
+              <span id="child-group-pill" class="org-pill">-</span>
+            </div>
+            <div class="org-card__meta">
+              <span id="child-group-users">-</span>
+              <span id="child-group-stage">-</span>
+              <span id="child-group-shift">-</span>
+            </div>
+          </article>
+
+          <article class="org-card child-context-card">
+            <div class="org-card__top">
+              <div>
+                <span class="org-kicker">Profesor/a</span>
+                <h3 id="child-teacher-name">-</h3>
+                <p id="child-teacher-line">-</p>
+              </div>
+              <span id="child-teacher-pill" class="org-pill">Grupo</span>
+            </div>
+            <div class="org-card__meta">
+              <span id="child-teacher-email">-</span>
+              <span id="child-teacher-status">-</span>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="card org-panel">
+        <div class="section-header">
+          <div>
+            <span class="badge">Vínculos</span>
+            <h2>Centros y grupos asociados</h2>
+          </div>
+          <p>Lista completa del contexto académico disponible para este alumno.</p>
+        </div>
+
+        <div class="group-management-grid">
+          <div class="group-management-card">
+            <div class="group-management-card__header">
+              <strong>Centros vinculados</strong>
+              <span id="child-centers-count" class="org-counter">0</span>
+            </div>
+            <div id="child-centers-list" class="org-list compact-list"></div>
+          </div>
+
+          <div class="group-management-card">
+            <div class="group-management-card__header">
+              <strong>Grupos vinculados</strong>
+              <span id="child-groups-count" class="org-counter">0</span>
+            </div>
+            <div id="child-groups-list" class="org-list compact-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card org-panel">
+        <div class="section-header">
+          <div>
+            <span class="badge">Consentimientos</span>
+            <h2>Estado de consentimientos</h2>
+          </div>
+          <span id="child-consents-count" class="org-counter">0 consentimientos</span>
+        </div>
+
+        <div class="consent-summary-grid child-consent-summary">
+          <article class="dashboard-quickcard">
+            <span class="quickcard-label">Pendientes</span>
+            <strong id="child-consents-pending">0</strong>
+            <p class="quickcard-email">Solicitudes que todavía esperan respuesta familiar.</p>
+          </article>
+          <article class="dashboard-quickcard">
+            <span class="quickcard-label">Aceptados</span>
+            <strong id="child-consents-accepted">0</strong>
+            <p class="quickcard-email">Consentimientos válidos para futuras fases.</p>
+          </article>
+          <article class="dashboard-quickcard">
+            <span class="quickcard-label">Otros estados</span>
+            <strong id="child-consents-other">0</strong>
+            <p class="quickcard-email">Rechazados, revocados o caducados.</p>
+          </article>
+        </div>
+        <div class="action-row">
+          <a class="button secondary" href="/consents.html">Gestionar consentimientos</a>
+        </div>
+      </section>
+    </main>
+
+    <section id="profile-modal" class="profile-modal" hidden aria-hidden="true">
+      <div class="profile-modal__backdrop" data-close-profile></div>
+      <div class="profile-modal__panel card" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title">
+        <div class="section-header">
+          <div>
+            <span class="badge">Perfil</span>
+            <h2 id="profile-modal-title">Datos y preferencias</h2>
+          </div>
+          <button id="profile-close-button" class="button secondary" type="button">Cerrar</button>
+        </div>
+
+        <div class="profile-grid">
+          <div class="profile-chip">
+            <span>Nombre</span>
+            <strong id="profile-name">-</strong>
+          </div>
+          <div class="profile-chip">
+            <span>Email</span>
+            <strong id="profile-email">-</strong>
+          </div>
+          <div class="preferences-card">
+            <span class="profile-caption">Preferencias rápidas</span>
+            <div class="preferences">
+              <label class="toggle-row">
+                <input type="checkbox" checked />
+                <span>Mostrar pantalla de bienvenida</span>
+              </label>
+              <label class="toggle-row">
+                <input type="checkbox" checked />
+                <span>Recordar sesión en este navegador</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="action-row modal-actions">
+          <button id="modal-logout-button" class="button secondary" type="button">Cerrar sesión</button>
+        </div>
+      </div>
+    </section>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/ui.js"></script>
+    <script src="/js/child.js"></script>
+  </body>
+</html>

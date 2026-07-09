@@ -1,5 +1,6 @@
 const { register, login, logout } = require('../services/auth.service');
 const { sendSuccess } = require('../utils/response');
+const { getDashboardContextForUser } = require('../utils/organization.helpers');
 
 function registerController(req, res, next) {
   try {
@@ -20,7 +21,16 @@ function loginController(req, res, next) {
 }
 
 function meController(req, res) {
-  return sendSuccess(res, { user: req.user }, 'Usuario autenticado.');
+  return sendSuccess(
+    res,
+    {
+      user: {
+        ...req.user,
+        context: getDashboardContextForUser(req.user),
+      },
+    },
+    'Usuario autenticado.',
+  );
 }
 
 function logoutController(req, res) {
@@ -33,4 +43,3 @@ module.exports = {
   meController,
   logoutController,
 };
-
