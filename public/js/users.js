@@ -13,6 +13,8 @@ const userFormSubmit = document.getElementById('user-form-submit');
 const userRole = document.getElementById('user-role');
 const userCenterField = document.getElementById('user-center-field');
 const userStudentField = document.getElementById('user-student-field');
+const userBirthDateField = document.getElementById('user-birth-date-field');
+const userBirthDate = document.getElementById('user-birth-date');
 const userCenter = document.getElementById('user-center');
 const userStudent = document.getElementById('user-student');
 const userFormError = document.getElementById('user-form-error');
@@ -62,6 +64,17 @@ function getStudentLabel(studentId) {
   return student?.name || 'Sin vincular';
 }
 
+function isStudentRole(role) {
+  return String(role || '').toUpperCase() === 'STUDENT';
+}
+
+function formatDateOnly(value) {
+  if (!value) return 'Sin fecha';
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(date);
+}
+
 function fieldModeForRole(role) {
   const normalizedRole = String(role || '').toUpperCase();
   if (normalizedRole === 'FAMILY') return 'student';
@@ -71,6 +84,7 @@ function fieldModeForRole(role) {
 
 function updateFieldVisibility() {
   const mode = fieldModeForRole(userRole?.value);
+  const needsBirthDate = isStudentRole(userRole?.value);
   if (userCenterField) {
     userCenterField.hidden = mode !== 'center';
     userCenterField.style.display = mode === 'center' ? '' : 'none';
@@ -78,6 +92,14 @@ function updateFieldVisibility() {
   if (userStudentField) {
     userStudentField.hidden = mode !== 'student';
     userStudentField.style.display = mode === 'student' ? '' : 'none';
+  }
+  if (userBirthDateField) {
+    userBirthDateField.hidden = !needsBirthDate;
+    userBirthDateField.style.display = needsBirthDate ? '' : 'none';
+  }
+  if (userBirthDate) {
+    userBirthDate.required = needsBirthDate;
+    if (!needsBirthDate) userBirthDate.value = '';
   }
 }
 
@@ -111,6 +133,7 @@ function renderUsers() {
       </td>
       <td>${user.email}</td>
       <td><span class="table-badge">${roleLabels[user.role] || user.role}</span></td>
+      <td>${isStudentRole(user.role) ? formatDateOnly(user.birthDate) : '-'}</td>
       <td>${getCenterLabel(user.schoolId)}</td>
       <td>${user.linkedStudentId ? getStudentLabel(user.linkedStudentId) : 'Sin vincular'}</td>
       <td>${user.isActive ? 'Activo' : 'Inactivo'}</td>
@@ -150,6 +173,7 @@ function openEditForm(userId) {
   updateFieldVisibility();
   if (userCenter) userCenter.value = user.schoolId || '';
   if (userStudent) userStudent.value = user.linkedStudentId || '';
+  if (userBirthDate) userBirthDate.value = user.birthDate || '';
   if (userFormTitle) userFormTitle.textContent = `Editar ${user.name}`;
   if (userFormSubmit) userFormSubmit.textContent = 'Guardar cambios';
   openModalById('user-form-modal');
@@ -186,6 +210,7 @@ async function submitUserForm(event) {
   const userId = formData.get('id');
   const role = formData.get('role');
   const mode = fieldModeForRole(role);
+  const isStudent = isStudentRole(role);
   const payload = {
     name: formData.get('name'),
     email: formData.get('email'),
@@ -202,6 +227,12 @@ async function submitUserForm(event) {
     payload.linkedStudentId = formData.get('linkedStudentId') || null;
   }
 
+  if (isStudent) {
+    payload.birthDate = formData.get('birthDate') || null;
+  } else if (userId) {
+    payload.birthDate = null;
+  }
+
   const password = String(formData.get('password') || '').trim();
   if (!userId || password) payload.password = password;
 
@@ -211,6 +242,10 @@ async function submitUserForm(event) {
   }
   if (mode === 'center' && !payload.schoolId) {
     setMessage(userFormError, 'Selecciona un centro para este usuario.', true);
+    return;
+  }
+  if (isStudent && !payload.birthDate) {
+    setMessage(userFormError, 'Indica la fecha de nacimiento del alumno.', true);
     return;
   }
   if (mode === 'student' && !payload.linkedStudentId) {

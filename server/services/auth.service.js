@@ -11,6 +11,7 @@ function register(payload) {
     role: 'STUDENT',
     schoolId: payload.schoolId,
     groupId: payload.groupId,
+    birthDate: payload.birthDate,
     ageRange: payload.ageRange,
   });
 

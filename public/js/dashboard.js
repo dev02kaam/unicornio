@@ -27,6 +27,8 @@ const refreshUsersButton = document.getElementById('refresh-users-button');
 const createUserRoleSelect = document.getElementById('create-user-role');
 const createUserCenterField = document.getElementById('create-user-center-field');
 const createUserStudentField = document.getElementById('create-user-student-field');
+const createUserBirthDateField = document.getElementById('create-user-birth-date-field');
+const adminBirthDate = document.getElementById('admin-birth-date');
 const adminSchoolSelect = document.getElementById('admin-school-select');
 const adminStudentSelect = document.getElementById('admin-student-select');
 const createUserHint = document.getElementById('create-user-hint');
@@ -119,6 +121,14 @@ function setMessage(element, message, isError = false) {
   element.classList.toggle('success', !isError);
 }
 
+function resetTransientUiState() {
+  closeModalById('profile-modal');
+  closeModalById('user-detail-modal');
+  closeModalById('create-user-modal');
+  closeModalById('admin-users-columns-modal');
+  document.body.classList.remove('modal-open');
+}
+
 function formatCenterLine(center) {
   const parts = [];
   if (center.code) {
@@ -149,6 +159,10 @@ function getActiveStudents() {
 
 function isRoleRequiringCenter(role) {
   return ['TEACHER', 'PROFESSIONAL', 'STUDENT'].includes(String(role || '').toUpperCase());
+}
+
+function isStudentRole(role) {
+  return String(role || '').toUpperCase() === 'STUDENT';
 }
 
 function isFamilyRole(role) {
@@ -249,6 +263,7 @@ function updateCreateUserFieldVisibility() {
 
   const role = createUserRoleSelect.value;
   const fieldMode = getCreateUserFieldMode(role);
+  const needsBirthDate = isStudentRole(role);
 
   if (createUserCenterField) {
     createUserCenterField.hidden = fieldMode !== 'center';
@@ -258,6 +273,16 @@ function updateCreateUserFieldVisibility() {
   if (createUserStudentField) {
     createUserStudentField.hidden = fieldMode !== 'student';
     createUserStudentField.style.display = fieldMode === 'student' ? '' : 'none';
+  }
+
+  if (createUserBirthDateField) {
+    createUserBirthDateField.hidden = !needsBirthDate;
+    createUserBirthDateField.style.display = needsBirthDate ? '' : 'none';
+  }
+
+  if (adminBirthDate) {
+    adminBirthDate.required = needsBirthDate;
+    if (!needsBirthDate) adminBirthDate.value = '';
   }
 
   if (fieldMode === 'student') {
@@ -863,7 +888,13 @@ async function doLogout() {
 }
 
 async function loadProfile() {
+  if (!getToken()) {
+    window.location.replace('/login.html');
+    return;
+  }
+
   try {
+    resetTransientUiState();
     const response = await apiRequest('/auth/me');
     currentUser = response.data.user;
     profileNameElement.textContent = currentUser.name;
@@ -1034,6 +1065,7 @@ if (createUserForm) {
     const formData = new FormData(createUserForm);
     const role = formData.get('role');
     const fieldMode = getCreateUserFieldMode(role);
+    const studentRole = isStudentRole(role);
     const payload = {
       name: formData.get('name'),
       email: formData.get('email'),
@@ -1043,8 +1075,17 @@ if (createUserForm) {
       linkedStudentId: fieldMode === 'student' ? (formData.get('linkedStudentId') || null) : null,
     };
 
+    if (studentRole) {
+      payload.birthDate = formData.get('birthDate') || null;
+    }
+
     if (fieldMode === 'center' && !payload.schoolId) {
       setMessage(createUserError, 'Selecciona un centro para este usuario.', true);
+      return;
+    }
+
+    if (studentRole && !payload.birthDate) {
+      setMessage(createUserError, 'Indica la fecha de nacimiento del alumno.', true);
       return;
     }
 
@@ -1120,6 +1161,16 @@ adminSchoolSelect?.addEventListener('change', async () => {
   }
 });
 
+window.addEventListener('pageshow', () => {
+  if (!getToken()) {
+    window.location.replace('/login.html');
+    return;
+  }
+
+  resetTransientUiState();
+});
+
+resetTransientUiState();
 updateCreateUserFieldVisibility();
 
 loadProfile();

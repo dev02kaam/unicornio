@@ -3,7 +3,7 @@ const { database } = require('../config/database');
 const { createUserModel, sanitizeUser } = require('../models/user.model');
 const { createCenterAssignmentModel } = require('../models/assignment.model');
 const { AppError } = require('../utils/errors');
-const { isEmail, isNonEmptyString, validatePassword, normalizeRole, pickDefined } = require('../utils/validators');
+const { isEmail, isNonEmptyString, validatePassword, normalizeRole, pickDefined, isPastOrTodayDate } = require('../utils/validators');
 const { CENTER_ASSIGNMENT_ROLES } = require('../utils/constants');
 
 function getAllUsers() {
@@ -115,6 +115,28 @@ function resolveLinkedStudent(data, role) {
   };
 }
 
+function normalizeBirthDate(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  return String(value).trim();
+}
+
+function assertValidStudentBirthDate(role, birthDate) {
+  if (String(role || '').toUpperCase() !== 'STUDENT') {
+    return;
+  }
+
+  if (!birthDate) {
+    throw new AppError('La fecha de nacimiento es obligatoria para alumnos.', 400);
+  }
+
+  if (!isPastOrTodayDate(birthDate)) {
+    throw new AppError('La fecha de nacimiento no es valida.', 400);
+  }
+}
+
 function createUser(data) {
   const name = String(data.name || '').trim();
   const email = String(data.email || '').trim().toLowerCase();
@@ -122,6 +144,7 @@ function createUser(data) {
   const role = normalizeRole(data.role);
   const schoolId = data.schoolId ? String(data.schoolId).trim() : null;
   const linkedStudent = resolveLinkedStudent(data, role);
+  const birthDate = normalizeBirthDate(data.birthDate);
   const nextSchoolId = role === 'FAMILY' ? null : schoolId;
   const nextGroupId = role === 'FAMILY' ? null : (data.groupId || null);
 
@@ -145,6 +168,7 @@ function createUser(data) {
     throw new AppError('Las cuentas de centro se crean desde el alta de centro.', 400);
   }
 
+  assertValidStudentBirthDate(role, birthDate);
   assertUniqueEmail(email);
 
   const now = new Date().toISOString();
@@ -158,6 +182,7 @@ function createUser(data) {
     schoolId: nextSchoolId,
     groupId: nextGroupId,
     linkedStudentId: linkedStudent?.linkedStudentId || null,
+    birthDate: role === 'STUDENT' ? birthDate : null,
     ageRange: data.ageRange || null,
     createdAt: now,
     updatedAt: now,
@@ -181,6 +206,7 @@ function createUserWithPasswordHash(data) {
   const role = normalizeRole(data.role);
   const schoolId = data.schoolId ? String(data.schoolId).trim() : null;
   const linkedStudent = resolveLinkedStudent(data, role);
+  const birthDate = normalizeBirthDate(data.birthDate);
   const nextSchoolId = role === 'FAMILY' ? null : schoolId;
   const nextGroupId = role === 'FAMILY' ? null : (data.groupId || null);
 
@@ -204,6 +230,7 @@ function createUserWithPasswordHash(data) {
     throw new AppError('Las cuentas de centro se crean desde el alta de centro.', 400);
   }
 
+  assertValidStudentBirthDate(role, birthDate);
   assertUniqueEmail(email);
 
   const now = new Date().toISOString();
@@ -217,6 +244,7 @@ function createUserWithPasswordHash(data) {
     schoolId: nextSchoolId,
     groupId: nextGroupId,
     linkedStudentId: linkedStudent?.linkedStudentId || null,
+    birthDate: role === 'STUDENT' ? birthDate : null,
     ageRange: data.ageRange || null,
     createdAt: now,
     updatedAt: now,
@@ -239,11 +267,14 @@ function updateUser(id, updates, options = {}) {
     throw new AppError('Usuario no encontrado.', 404);
   }
 
-  const allowedKeys = ['name', 'email', 'password', 'schoolId', 'groupId', 'ageRange', 'role', 'linkedStudentId'];
+  const allowedKeys = ['name', 'email', 'password', 'schoolId', 'groupId', 'ageRange', 'birthDate', 'role', 'linkedStudentId'];
   const patch = pickDefined(updates, allowedKeys);
   const canUpdateRole = Boolean(options.canUpdateRole);
   const roleChanged = patch.role !== undefined && canUpdateRole;
   const nextRole = roleChanged ? normalizeRole(patch.role) : user.role;
+  const nextBirthDate = nextRole === 'STUDENT'
+    ? (patch.birthDate !== undefined ? normalizeBirthDate(patch.birthDate) : normalizeBirthDate(user.birthDate))
+    : null;
   const nextLinkedStudentId = nextRole === 'FAMILY'
     ? (patch.linkedStudentId !== undefined ? (patch.linkedStudentId || null) : user.linkedStudentId)
     : null;
@@ -295,6 +326,8 @@ function updateUser(id, updates, options = {}) {
     user.ageRange = patch.ageRange || null;
   }
 
+  assertValidStudentBirthDate(nextRole, nextBirthDate);
+
   if (nextRole === 'FAMILY') {
     if (!nextLinkedStudentId) {
       throw new AppError('Las familias necesitan un estudiante vinculado.', 400);
@@ -312,11 +345,13 @@ function updateUser(id, updates, options = {}) {
     user.linkedStudentId = linkedStudent.id;
     user.schoolId = null;
     user.groupId = null;
+    user.birthDate = null;
   } else {
     if (roleChanged) {
       user.role = nextRole;
     }
     user.linkedStudentId = null;
+    user.birthDate = nextRole === 'STUDENT' ? nextBirthDate : null;
   }
 
   user.updatedAt = new Date().toISOString();

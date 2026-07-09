@@ -45,6 +45,7 @@
                 <th>Nombre</th>
                 <th>Email</th>
                 <th>Rol</th>
+                <th>Nacimiento</th>
                 <th>Centro</th>
                 <th>Estudiante vinculado</th>
                 <th>Estado</th>
@@ -97,6 +98,11 @@
             <span>Centro</span>
             <select id="user-center" name="schoolId"></select>
             <small class="field-note">Para alumnos, profesores y profesionales.</small>
+          </label>
+          <label id="user-birth-date-field" hidden>
+            <span>Fecha de nacimiento</span>
+            <input id="user-birth-date" type="date" name="birthDate" />
+            <small class="field-note">Obligatoria para alumnos. Se usa para calcular edad por fases.</small>
           </label>
           <label id="user-student-field" hidden>
             <span>Estudiante vinculado</span>

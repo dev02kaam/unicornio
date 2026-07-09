@@ -18,6 +18,7 @@ function createUserModel(input) {
     schoolId: input.schoolId ?? null,
     groupId: input.groupId ?? null,
     linkedStudentId: input.linkedStudentId ?? null,
+    birthDate: input.birthDate ?? null,
     ageRange: input.ageRange ?? null,
     createdAt: input.createdAt,
     updatedAt: input.updatedAt,

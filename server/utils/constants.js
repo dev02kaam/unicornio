@@ -67,6 +67,7 @@ const PUBLIC_USER_FIELDS = [
   'schoolId',
   'groupId',
   'linkedStudentId',
+  'birthDate',
   'ageRange',
   'createdAt',
   'updatedAt',

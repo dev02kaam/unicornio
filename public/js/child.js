@@ -15,6 +15,8 @@ const childName = document.getElementById('child-name');
 const childEmail = document.getElementById('child-email');
 const childStatus = document.getElementById('child-status');
 const childRole = document.getElementById('child-role');
+const childBirthDate = document.getElementById('child-birth-date');
+const childAge = document.getElementById('child-age');
 const childAgeRange = document.getElementById('child-age-range');
 const childFamilyLabel = document.getElementById('child-family-label');
 const childFamilyName = document.getElementById('child-family-name');
@@ -39,6 +41,7 @@ const childTeacherLine = document.getElementById('child-teacher-line');
 const childTeacherPill = document.getElementById('child-teacher-pill');
 const childTeacherEmail = document.getElementById('child-teacher-email');
 const childTeacherStatus = document.getElementById('child-teacher-status');
+const childLinksPanel = document.getElementById('child-links-panel');
 const childCentersCount = document.getElementById('child-centers-count');
 const childGroupsCount = document.getElementById('child-groups-count');
 const childCentersList = document.getElementById('child-centers-list');
@@ -100,6 +103,40 @@ function formatDate(value) {
   }).format(date);
 }
 
+function formatDateOnly(value) {
+  if (!value) {
+    return 'Sin fecha';
+  }
+
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' }).format(date);
+}
+
+function calculateAge(value) {
+  if (!value) {
+    return null;
+  }
+
+  const birthDate = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(birthDate.getTime())) {
+    return null;
+  }
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  const hasBirthdayPassed = monthDiff > 0 || (monthDiff === 0 && today.getDate() >= birthDate.getDate());
+  if (!hasBirthdayPassed) {
+    age -= 1;
+  }
+
+  return age;
+}
+
 function getRoleLabel(role) {
   const labels = {
     FAMILY: 'Familia',
@@ -140,11 +177,14 @@ function renderTeacher(teacher, group) {
   if (childTeacherStatus) childTeacherStatus.textContent = teacher?.isActive ? 'Activo' : 'Sin asignación';
 }
 
-function renderAssignments(assignments, context) {
+function renderAssignments(assignments, context, role) {
   const centerAssignments = (assignments?.centers || []).filter((item) => item.center);
   const groupAssignments = (assignments?.groups || []).filter((item) => item.group);
   const primaryCenter = centerAssignments.find((item) => item.isPrimary) || centerAssignments[0] || null;
   const primaryGroup = groupAssignments.find((item) => item.isPrimary) || groupAssignments[0] || null;
+  const shouldShowLinksPanel = String(role || '').toUpperCase() !== 'FAMILY' && (centerAssignments.length > 1 || groupAssignments.length > 1);
+
+  setPanelVisible(childLinksPanel, shouldShowLinksPanel);
 
   if (childCenterName) childCenterName.textContent = primaryCenter?.center?.name || 'Sin centro';
   if (childCenterLine) childCenterLine.textContent = primaryCenter ? `${primaryCenter.center?.code || '-'} · ${primaryCenter.center?.city || 'Sin ciudad'}` : 'Sin centro vinculado';
@@ -272,6 +312,11 @@ async function loadProfile() {
   if (childEmail) childEmail.textContent = targetStudent?.email || '-';
   if (childStatus) childStatus.textContent = targetStudent?.isActive ? 'Activo' : 'Inactivo';
   if (childRole) childRole.textContent = getRoleLabel(targetStudent?.role);
+  if (childBirthDate) childBirthDate.textContent = formatDateOnly(targetStudent?.birthDate);
+  if (childAge) {
+    const calculatedAge = calculateAge(targetStudent?.birthDate);
+    childAge.textContent = calculatedAge === null ? 'Sin fecha' : `${calculatedAge} años`;
+  }
   if (childAgeRange) childAgeRange.textContent = targetStudent?.ageRange || 'Sin rango';
   if (childFamilyLabel) childFamilyLabel.textContent = role === 'FAMILY' ? 'Cuenta familiar' : 'Familia vinculada';
   if (childFamilyName) childFamilyName.textContent = role === 'FAMILY'
@@ -287,7 +332,7 @@ async function loadProfile() {
   ]);
 
   const consentSummary = buildConsentSummary(consentsResponse.data.consents || [], targetStudent.id);
-  renderAssignments(assignmentsResponse.data, context);
+  renderAssignments(assignmentsResponse.data, context, role);
   renderConsents(consentSummary);
 
   if (childSummaryNote) {
