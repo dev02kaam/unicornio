@@ -11,11 +11,7 @@
       <section class="card form-card">
         <a class="back-link" href="/">Volver</a>
         <h1>Acceso</h1>
-        <p>Usa una cuenta demo para entrar al area privada inicial.</p>
-        <div class="feature-row">
-          <span class="feature-pill">admin@unicornio.local</span>
-          <span class="feature-pill">Demo1234!</span>
-        </div>
+        <p>Introduce tus credenciales para acceder.</p>
         <form id="login-form" class="stack">
           <label>
             <span>Email</span>
@@ -23,7 +19,7 @@
           </label>
           <label>
             <span>Contraseña</span>
-            <input type="password" name="password" placeholder="Demo1234!" required />
+            <input type="password" name="password" placeholder="Introduce tu contraseña" required />
           </label>
           <p id="login-error" class="error" hidden></p>
           <button class="button primary" type="submit">Entrar</button>
@@ -31,6 +27,7 @@
       </section>
     </main>
     <script src="/js/api.js"></script>
+    <script src="/js/ui.js"></script>
     <script src="/js/login.js"></script>
   </body>
 </html>

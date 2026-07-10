@@ -10,9 +10,9 @@
     <main class="shell dashboard-shell org-shell">
       <section class="dashboard-hero card">
         <div class="hero-copy">
-          <span class="badge">Texto legal provisional</span>
+          <span class="badge">Administración</span>
           <h1>Texto legal</h1>
-          <p>Consulta la versión activa del consentimiento demo y revisa el historial solo si necesitas administrarlo.</p>
+          <p>Consulta la versión activa y gestiona el historial de cambios.</p>
           <div class="action-row dashboard-links">
             <a class="button secondary" href="/dashboard.html">Volver al dashboard</a>
             <a class="button secondary" href="/consents.html">Ir a consentimientos</a>
@@ -27,10 +27,9 @@
       <section class="card consent-notice-card consent-version-card">
         <div class="consent-version-card__head">
           <span class="badge">Texto legal vigente</span>
-          <span class="table-badge consent-badge--muted">Referencia demo</span>
         </div>
         <strong id="legal-active-title" class="consent-version-card__title">Cargando versión legal...</strong>
-        <p>Texto legal pendiente de validación por especialistas en protección de datos y derecho digital.</p>
+        <p>Consulta el contenido y la vigencia de la versión activa.</p>
       </section>
 
       <section class="card consent-list-card">
@@ -40,7 +39,7 @@
             <h2>Versión vigente</h2>
           </div>
           <div class="toolbar-group">
-            <button id="open-create-version-button" class="button secondary" type="button" hidden data-open-modal="create-legal-version-modal">Crear versión demo</button>
+            <button id="open-create-version-button" class="button secondary" type="button" hidden data-open-modal="create-legal-version-modal">Crear versión</button>
             <button class="button secondary" type="button" id="reload-legal-button">Actualizar</button>
           </div>
         </div>
@@ -107,7 +106,7 @@
         <div class="modal__header">
           <div>
             <span class="badge">Nueva versión</span>
-            <h2 id="create-legal-version-title">Crear versión legal demo</h2>
+            <h2 id="create-legal-version-title">Crear versión legal</h2>
           </div>
           <button class="button secondary" type="button" data-close-modal="create-legal-version-modal">Cerrar</button>
         </div>
@@ -119,11 +118,11 @@
           </label>
           <label>
             <span>Título</span>
-            <input type="text" name="title" placeholder="Consentimiento familiar demo" required />
+            <input type="text" name="title" placeholder="Título de la versión" required />
           </label>
           <label>
             <span>Contenido</span>
-            <textarea name="content" rows="6" required>Texto legal pendiente de validación por especialistas en protección de datos y derecho digital.</textarea>
+            <textarea name="content" rows="6" placeholder="Escribe el contenido del texto legal" required></textarea>
           </label>
           <div class="dialog-form-grid dialog-form-grid--two">
             <label>
@@ -139,7 +138,7 @@
             <input type="checkbox" name="isActive" checked />
             <span>Marcar como activa al crearla</span>
           </label>
-          <p class="field-note">Si activas una nueva versión, la anterior quedará desactivada y los consentimientos demo se revisarán con esa referencia.</p>
+          <p class="field-note">Si activas una nueva versión, la anterior quedará desactivada y los consentimientos se revisarán con esa referencia.</p>
           <div class="modal__footer">
             <button class="button primary" type="submit">Crear versión</button>
           </div>

@@ -156,7 +156,7 @@ function renderConsent(consent) {
         <div>
           <span class="org-kicker">${consent.familyUser?.name || 'Familia vinculada'}</span>
           <h3>${consent.student?.name || 'Estudiante'}</h3>
-          <p>${consent.legalTextVersion?.title || 'Texto legal provisional'}</p>
+          <p>${consent.legalTextVersion?.title || 'Texto legal'}</p>
         </div>
         <span class="${consentStatusClass[consent.status] || 'table-badge'}">${consentStatusLabels[consent.status] || consent.status}</span>
       </div>
@@ -208,7 +208,7 @@ function renderConsents(consentList) {
         <strong>${isProfessionalRole() ? 'Sin consentimientos visibles todavía' : 'Sin consentimientos disponibles'}</strong>
         <span>${isProfessionalRole()
           ? 'Cuando tu centro tenga solicitudes o estados disponibles, podrás consultarlos aquí en modo lectura.'
-          : 'No hay solicitudes visibles para tu cuenta demo.'}</span>
+          : 'No hay solicitudes visibles para tu cuenta.'}</span>
       </article>
     `;
     return;

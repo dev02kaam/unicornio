@@ -5,8 +5,8 @@ function createDemoLegalTextVersions() {
     {
       id: 'legal-text-1',
       version: '1.0',
-      title: 'Consentimiento familiar provisional',
-      content: 'Texto legal pendiente de validación por especialistas en protección de datos y derecho digital. Este contenido es demostrativo y no constituye texto legal definitivo.',
+      title: 'Consentimiento familiar',
+      content: 'La persona responsable puede consultar y gestionar aquí las autorizaciones de participación del alumnado.',
       isActive: true,
       effectiveFrom: '2026-01-01',
       effectiveTo: null,
@@ -16,8 +16,8 @@ function createDemoLegalTextVersions() {
     {
       id: 'legal-text-2',
       version: '0.9',
-      title: 'Borrador previo de consentimiento',
-      content: 'Texto legal pendiente de validación por especialistas en protección de datos y derecho digital. Borrador histórico de demostración.',
+      title: 'Consentimiento familiar (versión anterior)',
+      content: 'Versión anterior del texto de autorización familiar.',
       isActive: false,
       effectiveFrom: '2025-09-01',
       effectiveTo: '2025-12-31',
