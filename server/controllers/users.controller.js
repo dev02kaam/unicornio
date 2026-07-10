@@ -1,4 +1,5 @@
 const { getAllUsers, findUserById, updateUser, deactivateUser, createUser } = require('../services/users.service');
+const { database } = require('../config/database');
 const { sendSuccess } = require('../utils/response');
 const { AppError } = require('../utils/errors');
 
@@ -10,9 +11,10 @@ function listUsersController(_req, res, next) {
   }
 }
 
-function createUserController(req, res, next) {
+async function createUserController(req, res, next) {
   try {
     const user = createUser(req.body);
+    await database.flush();
     return sendSuccess(res, { user }, 'Usuario creado correctamente.', 201);
   } catch (error) {
     return next(error);
@@ -36,7 +38,7 @@ function getUserByIdController(req, res, next) {
   }
 }
 
-function updateUserController(req, res, next) {
+async function updateUserController(req, res, next) {
   try {
     const canUpdateRole = req.user.role === 'ADMIN';
 
@@ -45,19 +47,21 @@ function updateUserController(req, res, next) {
     }
 
     const user = updateUser(req.params.id, req.body, { canUpdateRole });
+    await database.flush();
     return sendSuccess(res, { user }, 'Usuario actualizado correctamente.');
   } catch (error) {
     return next(error);
   }
 }
 
-function deactivateUserController(req, res, next) {
+async function deactivateUserController(req, res, next) {
   try {
     if (req.user.role !== 'ADMIN') {
       throw new AppError('No autorizado.', 403);
     }
 
     const user = deactivateUser(req.params.id);
+    await database.flush();
     return sendSuccess(res, { user }, 'Usuario desactivado correctamente.');
   } catch (error) {
     return next(error);

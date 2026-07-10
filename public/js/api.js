@@ -12,6 +12,15 @@ function clearToken() {
   localStorage.removeItem('unicornio_token');
 }
 
+function getApiErrorMessage(error) {
+  const details = error?.payload?.details;
+  if (Array.isArray(details) && details.length > 0) {
+    return details.join(' ');
+  }
+
+  return error?.message || 'Error en la peticion.';
+}
+
 async function apiRequest(path, options = {}) {
   const headers = {
     'Content-Type': 'application/json',

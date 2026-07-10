@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const cors = require('cors');
 
 const { env } = require('./config/env');
+const { database } = require('./config/database');
 const { healthRouter } = require('./routes/health.routes');
 const { authRouter } = require('./routes/auth.routes');
 const { usersRouter } = require('./routes/users.routes');
@@ -39,6 +40,16 @@ app.get('/', (_req, res) => {
 app.use(notFoundMiddleware);
 app.use(errorMiddleware);
 
-app.listen(env.port, () => {
-  console.log(`Proyecto Unicornio escuchando en http://localhost:${env.port}`);
-});
+async function startServer() {
+  try {
+    await database.initialize();
+    app.listen(env.port, () => {
+      console.log(`Proyecto Unicornio escuchando en http://localhost:${env.port}`);
+    });
+  } catch (error) {
+    console.error('No se pudo iniciar Proyecto Unicornio:', error.message);
+    process.exit(1);
+  }
+}
+
+startServer();

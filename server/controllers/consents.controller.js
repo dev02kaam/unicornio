@@ -14,6 +14,7 @@ const {
   getLegalTextVersions,
   getConsentAudit,
 } = require('../services/consents.service');
+const { database } = require('../config/database');
 const { sendSuccess } = require('../utils/response');
 const { AppError } = require('../utils/errors');
 
@@ -26,9 +27,10 @@ function listConsentsController(req, res, next) {
   }
 }
 
-function createConsentController(req, res, next) {
+async function createConsentController(req, res, next) {
   try {
     const consent = createConsentRequest(req.body || {}, req.user);
+    await database.flush();
     return sendSuccess(res, { consent }, 'Solicitud de consentimiento creada correctamente.', 201);
   } catch (error) {
     return next(error);
@@ -44,36 +46,40 @@ function getConsentByIdController(req, res, next) {
   }
 }
 
-function acceptConsentController(req, res, next) {
+async function acceptConsentController(req, res, next) {
   try {
     const consent = acceptConsent(req.params.id, req.user);
+    await database.flush();
     return sendSuccess(res, { consent }, 'Consentimiento aceptado correctamente.');
   } catch (error) {
     return next(error);
   }
 }
 
-function rejectConsentController(req, res, next) {
+async function rejectConsentController(req, res, next) {
   try {
     const consent = rejectConsent(req.params.id, req.user);
+    await database.flush();
     return sendSuccess(res, { consent }, 'Consentimiento rechazado correctamente.');
   } catch (error) {
     return next(error);
   }
 }
 
-function revokeConsentController(req, res, next) {
+async function revokeConsentController(req, res, next) {
   try {
     const consent = revokeConsent(req.params.id, req.body?.reason, req.user);
+    await database.flush();
     return sendSuccess(res, { consent }, 'Consentimiento revocado correctamente.');
   } catch (error) {
     return next(error);
   }
 }
 
-function expireConsentController(req, res, next) {
+async function expireConsentController(req, res, next) {
   try {
     const consent = expireConsent(req.params.id, req.user);
+    await database.flush();
     return sendSuccess(res, { consent }, 'Consentimiento marcado como caducado.');
   } catch (error) {
     return next(error);
@@ -111,9 +117,10 @@ function getActiveLegalTextVersionController(req, res, next) {
   }
 }
 
-function createLegalTextVersionController(req, res, next) {
+async function createLegalTextVersionController(req, res, next) {
   try {
     const version = createLegalTextVersion(req.body || {}, req.user);
+    await database.flush();
     const message = version.isActive
       ? 'Version legal creada y activada correctamente.'
       : 'Version legal creada correctamente.';
@@ -123,9 +130,10 @@ function createLegalTextVersionController(req, res, next) {
   }
 }
 
-function activateLegalTextVersionController(req, res, next) {
+async function activateLegalTextVersionController(req, res, next) {
   try {
     const result = activateLegalTextVersion(req.params.id, req.user);
+    await database.flush();
     const message = result.changed
       ? 'Version legal activada correctamente.'
       : 'La version legal ya estaba activa.';
@@ -135,9 +143,10 @@ function activateLegalTextVersionController(req, res, next) {
   }
 }
 
-function deactivateLegalTextVersionController(req, res, next) {
+async function deactivateLegalTextVersionController(req, res, next) {
   try {
     const result = deactivateLegalTextVersion(req.params.id, req.user);
+    await database.flush();
     const message = result.changed
       ? 'Version legal desactivada correctamente.'
       : 'La version legal ya estaba inactiva.';

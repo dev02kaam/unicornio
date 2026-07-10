@@ -29,29 +29,37 @@
       <section class="card org-panel">
         <div class="section-header">
           <div>
+            <span class="badge">Filtros</span>
+            <h2>Buscar usuarios</h2>
+          </div>
+          <p>Combina varios filtros y se aplican al instante.</p>
+        </div>
+        <label class="search-field">
+          <span>Búsqueda global</span>
+          <input id="user-global-search" type="search" placeholder="Nombre, email, rol, centro..." autocomplete="off" />
+        </label>
+        <div class="toolbar-group">
+          <button id="add-user-filter" class="button secondary" type="button">Añadir filtro</button>
+          <button id="clear-user-filters" class="button secondary" type="button">Limpiar</button>
+          <button id="refresh-users" class="button secondary" type="button">Actualizar</button>
+          <button class="button secondary" type="button" data-open-modal="user-form-modal">Crear usuario</button>
+          <button class="button secondary" type="button" data-open-modal="user-columns-modal">Columnas</button>
+        </div>
+        <div id="user-filters-list" class="filter-builder"></div>
+      </section>
+
+      <section class="card org-panel">
+        <div class="section-header">
+          <div>
             <span class="badge">Listado</span>
             <h2>Usuarios disponibles</h2>
           </div>
-          <div class="toolbar-group">
-            <button id="refresh-users" class="button secondary" type="button">Actualizar</button>
-            <button class="button secondary" type="button" data-open-modal="user-form-modal">Crear usuario</button>
-          </div>
+          <span id="users-count" class="org-counter">0 usuarios</span>
         </div>
 
         <div class="data-table-wrap">
           <table class="data-table">
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Email</th>
-                <th>Rol</th>
-                <th>Nacimiento</th>
-                <th>Centro</th>
-                <th>Estudiante vinculado</th>
-                <th>Estado</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
+            <thead id="users-head"></thead>
             <tbody id="users-body"></tbody>
           </table>
         </div>
@@ -115,6 +123,21 @@
             <button id="user-form-submit" class="button primary" type="submit">Guardar usuario</button>
           </div>
         </form>
+      </div>
+    </section>
+
+    <section id="user-columns-modal" class="modal" hidden aria-hidden="true">
+      <div class="modal__backdrop" data-close-modal="user-columns-modal"></div>
+      <div class="modal__panel modal__panel--small" role="dialog" aria-modal="true" aria-labelledby="user-columns-title">
+        <div class="modal__header">
+          <div>
+            <span class="badge">Columnas</span>
+            <h2 id="user-columns-title">Configurar tabla</h2>
+          </div>
+          <button class="button secondary" type="button" data-close-modal="user-columns-modal">Cerrar</button>
+        </div>
+        <div id="user-columns-list" class="column-manager-list"></div>
+        <p class="field-note">Arrastra para cambiar el orden y oculta o recupera columnas cuando quieras.</p>
       </div>
     </section>
 

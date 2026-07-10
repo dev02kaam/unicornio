@@ -18,6 +18,7 @@ const {
   listGroupUsersForRequest,
   getAssignmentsForUserRequest,
 } = require('../services/organization.service');
+const { database } = require('../config/database');
 const { sendSuccess } = require('../utils/response');
 
 function listAcademicYearsController(_req, res, next) {
@@ -36,9 +37,10 @@ function listCentersController(req, res, next) {
   }
 }
 
-function createCenterController(req, res, next) {
+async function createCenterController(req, res, next) {
   try {
     const result = createCenter(req.body, req.user);
+    await database.flush();
     return sendSuccess(res, result, 'Centro y cuenta vinculada creados correctamente.', 201);
   } catch (error) {
     return next(error);
@@ -54,18 +56,20 @@ function getCenterController(req, res, next) {
   }
 }
 
-function updateCenterController(req, res, next) {
+async function updateCenterController(req, res, next) {
   try {
     const center = updateCenter(req.params.centerId, req.body, req.user);
+    await database.flush();
     return sendSuccess(res, { center }, 'Centro actualizado correctamente.');
   } catch (error) {
     return next(error);
   }
 }
 
-function deactivateCenterController(req, res, next) {
+async function deactivateCenterController(req, res, next) {
   try {
     const center = deactivateCenter(req.params.centerId, req.user);
+    await database.flush();
     return sendSuccess(res, { center }, 'Centro desactivado correctamente.');
   } catch (error) {
     return next(error);
@@ -90,9 +94,10 @@ function listCenterUsersController(req, res, next) {
   }
 }
 
-function createGroupController(req, res, next) {
+async function createGroupController(req, res, next) {
   try {
     const group = createGroup(req.params.centerId, req.body, req.user);
+    await database.flush();
     return sendSuccess(res, { group }, 'Grupo creado correctamente.', 201);
   } catch (error) {
     return next(error);
@@ -108,18 +113,20 @@ function getGroupController(req, res, next) {
   }
 }
 
-function updateGroupController(req, res, next) {
+async function updateGroupController(req, res, next) {
   try {
     const group = updateGroup(req.params.groupId, req.body, req.user);
+    await database.flush();
     return sendSuccess(res, { group }, 'Grupo actualizado correctamente.');
   } catch (error) {
     return next(error);
   }
 }
 
-function deactivateGroupController(req, res, next) {
+async function deactivateGroupController(req, res, next) {
   try {
     const group = deactivateGroup(req.params.groupId, req.user);
+    await database.flush();
     return sendSuccess(res, { group }, 'Grupo desactivado correctamente.');
   } catch (error) {
     return next(error);
@@ -135,36 +142,40 @@ function listGroupUsersController(req, res, next) {
   }
 }
 
-function assignUserToCenterController(req, res, next) {
+async function assignUserToCenterController(req, res, next) {
   try {
     const result = assignUserToCenter(req.params.centerId, req.params.userId, req.body, req.user);
+    await database.flush();
     return sendSuccess(res, result, 'Usuario asignado al centro correctamente.', 201);
   } catch (error) {
     return next(error);
   }
 }
 
-function removeUserFromCenterController(req, res, next) {
+async function removeUserFromCenterController(req, res, next) {
   try {
     const result = removeUserFromCenter(req.params.centerId, req.params.userId, req.user);
+    await database.flush();
     return sendSuccess(res, result, 'Usuario quitado del centro correctamente.');
   } catch (error) {
     return next(error);
   }
 }
 
-function assignUserToGroupController(req, res, next) {
+async function assignUserToGroupController(req, res, next) {
   try {
     const result = assignUserToGroup(req.params.groupId, req.params.userId, req.body, req.user);
+    await database.flush();
     return sendSuccess(res, result, 'Usuario asignado al grupo correctamente.', 201);
   } catch (error) {
     return next(error);
   }
 }
 
-function removeUserFromGroupController(req, res, next) {
+async function removeUserFromGroupController(req, res, next) {
   try {
     const result = removeUserFromGroup(req.params.groupId, req.params.userId, req.user);
+    await database.flush();
     return sendSuccess(res, result, 'Usuario quitado del grupo correctamente.');
   } catch (error) {
     return next(error);

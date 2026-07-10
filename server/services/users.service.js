@@ -3,7 +3,7 @@ const { database } = require('../config/database');
 const { createUserModel, sanitizeUser } = require('../models/user.model');
 const { createCenterAssignmentModel } = require('../models/assignment.model');
 const { AppError } = require('../utils/errors');
-const { isEmail, isNonEmptyString, validatePassword, normalizeRole, pickDefined, isPastOrTodayDate } = require('../utils/validators');
+const { isEmail, isNonEmptyString, validatePassword, normalizeRole, pickDefined, isPastOrTodayDate, normalizeDateOnly } = require('../utils/validators');
 const { CENTER_ASSIGNMENT_ROLES } = require('../utils/constants');
 
 function getAllUsers() {
@@ -63,8 +63,10 @@ function ensureCenterAssignment(user, centerId, now) {
     if (!existing.isActive) {
       existing.isActive = true;
       existing.updatedAt = now;
+      database.setCollection('userCenterAssignments', assignments);
     }
     user.schoolId = String(centerId);
+    database.persistUsers();
     return existing;
   }
 
@@ -120,7 +122,7 @@ function normalizeBirthDate(value) {
     return null;
   }
 
-  return String(value).trim();
+  return normalizeDateOnly(String(value).trim());
 }
 
 function assertValidStudentBirthDate(role, birthDate) {
@@ -195,6 +197,7 @@ function createUser(data) {
   if (user.schoolId && user.role !== 'ADMIN') {
     ensureCenterAssignment(user, user.schoolId, now);
   }
+  database.persistUsers();
 
   return sanitizeUser(user);
 }
@@ -257,6 +260,7 @@ function createUserWithPasswordHash(data) {
   if (user.schoolId && user.role !== 'ADMIN') {
     ensureCenterAssignment(user, user.schoolId, now);
   }
+  database.persistUsers();
 
   return sanitizeUser(user);
 }
@@ -355,6 +359,7 @@ function updateUser(id, updates, options = {}) {
   }
 
   user.updatedAt = new Date().toISOString();
+  database.persistUsers();
   return sanitizeUser(user);
 }
 
@@ -366,6 +371,7 @@ function deactivateUser(id) {
 
   user.isActive = false;
   user.updatedAt = new Date().toISOString();
+  database.persistUsers();
   return sanitizeUser(user);
 }
 

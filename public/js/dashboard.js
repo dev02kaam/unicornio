@@ -1051,7 +1051,7 @@ if (userDetailEditForm) {
         await openUserDetail(currentEditingUserId);
       }
     } catch (error) {
-      setMessage(userEditErrorElement, error.message, true);
+      setMessage(userEditErrorElement, getApiErrorMessage(error), true);
     }
   });
 }
@@ -1113,7 +1113,7 @@ if (createUserForm) {
     } catch (error) {
       const wait = error.payload?.data?.retryAfterMinutes;
       const extra = wait ? ` Prueba de nuevo en ${wait} min.` : '';
-      setMessage(createUserError, `${error.message}${extra}`, true);
+      setMessage(createUserError, `${getApiErrorMessage(error)}${extra}`, true);
     }
   });
 }

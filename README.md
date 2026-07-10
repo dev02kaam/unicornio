@@ -29,6 +29,7 @@ Base tecnica inicial de Proyecto Unicornio: una aplicacion web cliente-servidor 
 
 - Node.js 18 o superior.
 - npm.
+- PostgreSQL opcional para persistencia real.
 
 ## Instalacion
 
@@ -57,6 +58,10 @@ Copiar `.env.example` a `.env` y ajustar:
 - `JWT_SECRET`
 - `JWT_EXPIRES_IN`
 - `CORS_ORIGIN`
+- `DATABASE_URL`
+- `DATABASE_SSL`
+
+Si `DATABASE_URL` esta vacia, la app usa datos demo en memoria. Si `DATABASE_URL` esta definida, la app crea las tablas tecnicas necesarias en PostgreSQL y persiste las colecciones actuales como `jsonb`.
 
 ## Usuarios demo
 
@@ -155,7 +160,7 @@ proyecto-unicornio/
 
 ## Proximos pasos
 
-- Anadir persistencia real.
+- Migrar progresivamente la persistencia `jsonb` inicial a tablas relacionales por modulo.
 - Crear cuestionarios.
 - Ampliar el modulo de consentimientos con persistencia real y versionado legal completo.
 - Anadir resultados y alertas.

@@ -33,14 +33,35 @@ function isISODateOnly(value) {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
+function normalizeDateOnly(value) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmedValue = value.trim();
+  if (isISODateOnly(trimmedValue)) {
+    return trimmedValue;
+  }
+
+  const spanishDateMatch = trimmedValue.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!spanishDateMatch) {
+    return null;
+  }
+
+  const [, day, month, year] = spanishDateMatch;
+  const isoDate = `${year}-${month}-${day}`;
+  return isISODateOnly(isoDate) ? isoDate : null;
+}
+
 function isPastOrTodayDate(value) {
-  if (!isISODateOnly(value)) {
+  const normalizedDate = normalizeDateOnly(value);
+  if (!normalizedDate) {
     return false;
   }
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const date = new Date(`${value}T00:00:00.000Z`);
+  const date = new Date(`${normalizedDate}T00:00:00.000Z`);
   return date.getTime() <= today.getTime();
 }
 
@@ -61,6 +82,7 @@ module.exports = {
   isRole,
   isOneOf,
   isISODateOnly,
+  normalizeDateOnly,
   isPastOrTodayDate,
   pickDefined,
 };
