@@ -33,6 +33,10 @@ let centers = [];
 let userFilters = [];
 let filterSeed = 0;
 
+function escapeUserMarkup(value) {
+  return window.escapeHtml(value);
+}
+
 const roleLabels = {
   ADMIN: 'Administrador',
   SCHOOL: 'Centro',
@@ -44,8 +48,10 @@ const roleLabels = {
 
 const operatorLabels = {
   contains: 'Contiene',
-  equals: 'Igual a',
+  equals: 'Es exactamente',
   startsWith: 'Empieza por',
+  before: 'Es anterior a',
+  after: 'Es posterior a',
 };
 
 const userColumns = setupColumnManager({
@@ -139,9 +145,11 @@ function getUserFilterFields() {
       ],
     },
     birthDate: {
-      label: 'Nacimiento',
-      type: 'text',
-      operators: ['contains', 'equals', 'startsWith'],
+      label: 'Fecha de nacimiento',
+      type: 'date',
+      operators: ['equals', 'before', 'after'],
+      valueLabel: 'Fecha',
+      hint: 'Elige el día directamente en el calendario.',
     },
   };
 }
@@ -209,6 +217,20 @@ function matchesUserFilter(user, filter) {
     return userValue === filterValue;
   }
 
+  if (config.type === 'date') {
+    const dateValue = String(user.birthDate || '').slice(0, 10);
+    if (!dateValue) {
+      return false;
+    }
+    if (filter.operator === 'before') {
+      return dateValue < filterValue;
+    }
+    if (filter.operator === 'after') {
+      return dateValue > filterValue;
+    }
+    return dateValue === filterValue;
+  }
+
   const normalizedValue = filterValue.toLowerCase();
   if (filter.operator === 'startsWith') {
     return userValue.startsWith(normalizedValue);
@@ -248,19 +270,19 @@ function renderFilterBuilder() {
   userFiltersList.innerHTML = userFilters.map((filter) => {
     const config = fields[filter.field] || fields.name;
     const fieldOptions = Object.entries(fields)
-      .map(([key, fieldConfig]) => `<option value="${key}" ${filter.field === key ? 'selected' : ''}>${fieldConfig.label}</option>`)
+      .map(([key, fieldConfig]) => `<option value="${escapeUserMarkup(key)}" ${filter.field === key ? 'selected' : ''}>${escapeUserMarkup(fieldConfig.label)}</option>`)
       .join('');
     const operatorOptions = config.operators
-      .map((operator) => `<option value="${operator}" ${filter.operator === operator ? 'selected' : ''}>${operatorLabels[operator]}</option>`)
+      .map((operator) => `<option value="${escapeUserMarkup(operator)}" ${filter.operator === operator ? 'selected' : ''}>${escapeUserMarkup(operatorLabels[operator])}</option>`)
       .join('');
 
     let valueControl = `
-      <input type="text" data-filter-value value="${filter.value || ''}" placeholder="Escribe un valor" />
+      <input type="text" data-filter-value value="${escapeUserMarkup(filter.value || '')}" placeholder="Escribe un valor" />
     `;
 
     if (config.type === 'select') {
       const options = config.options
-        .map((option) => `<option value="${option.value}" ${String(filter.value || '') === option.value ? 'selected' : ''}>${option.label}</option>`)
+        .map((option) => `<option value="${escapeUserMarkup(option.value)}" ${String(filter.value || '') === String(option.value) ? 'selected' : ''}>${escapeUserMarkup(option.label)}</option>`)
         .join('');
       valueControl = `
         <select data-filter-value>
@@ -270,8 +292,22 @@ function renderFilterBuilder() {
       `;
     }
 
+    if (config.type === 'date') {
+      valueControl = `
+        <input
+          type="date"
+          data-filter-value
+          value="${escapeUserMarkup(filter.value || '')}"
+          max="${new Date().toISOString().slice(0, 10)}"
+        />
+      `;
+    }
+
+    const valueLabel = config.valueLabel || 'Valor';
+    const valueHint = config.hint ? `<small class="filter-row__hint">${escapeUserMarkup(config.hint)}</small>` : '';
+
     return `
-      <article class="filter-row" data-filter-id="${filter.id}">
+      <article class="filter-row" data-filter-id="${escapeUserMarkup(filter.id)}" data-filter-type="${escapeUserMarkup(config.type)}">
         <label class="filter-row__field">
           <span>Campo</span>
           <select data-filter-field>${fieldOptions}</select>
@@ -280,12 +316,13 @@ function renderFilterBuilder() {
           <span>Operador</span>
           <select data-filter-operator>${operatorOptions}</select>
         </label>
-        <label class="filter-row__field">
-          <span>Valor</span>
+        <label class="filter-row__field filter-row__field--value">
+          <span>${escapeUserMarkup(valueLabel)}</span>
           ${valueControl}
+          ${valueHint}
         </label>
         <div class="filter-row__actions">
-          <button class="button ghost button-small" type="button" data-filter-remove="${filter.id}">Quitar</button>
+          <button class="button ghost button-small" type="button" data-filter-remove="${escapeUserMarkup(filter.id)}">Quitar</button>
         </div>
       </article>
     `;
@@ -308,7 +345,7 @@ function createFilter(partial = {}) {
   applyUserFilters();
 }
 
-function updateFilter(id, patch) {
+function updateFilter(id, patch, { render = true } = {}) {
   const fields = getUserFilterFields();
   userFilters = userFilters.map((filter) => {
     if (filter.id !== id) {
@@ -324,7 +361,9 @@ function updateFilter(id, patch) {
     return next;
   });
 
-  renderFilterBuilder();
+  if (render) {
+    renderFilterBuilder();
+  }
   applyUserFilters();
 }
 
@@ -375,7 +414,7 @@ function renderSelects() {
   if (userCenter) {
     userCenter.innerHTML = `
       <option value="">Selecciona un centro</option>
-      ${centers.map((center) => `<option value="${center.id}">${center.name}</option>`).join('')}
+      ${centers.map((center) => `<option value="${escapeUserMarkup(center.id)}">${escapeUserMarkup(center.name)}</option>`).join('')}
     `;
   }
 
@@ -383,7 +422,7 @@ function renderSelects() {
     const students = users.filter((user) => user.role === 'STUDENT' && user.isActive);
     userStudent.innerHTML = `
       <option value="">Selecciona un estudiante</option>
-      ${students.map((student) => `<option value="${student.id}">${student.name} (${student.email})</option>`).join('')}
+      ${students.map((student) => `<option value="${escapeUserMarkup(student.id)}">${escapeUserMarkup(student.name)} (${escapeUserMarkup(student.email)})</option>`).join('')}
     `;
   }
 }
@@ -392,7 +431,7 @@ function renderUsers() {
   if (!usersHead || !usersBody) return;
 
   const columns = userColumns.getColumns().filter((column) => column.visible !== false).sort((a, b) => a.order - b.order);
-  usersHead.innerHTML = `<tr>${columns.map((column) => `<th>${column.label}</th>`).join('')}</tr>`;
+  usersHead.innerHTML = `<tr>${columns.map((column) => `<th scope="col">${escapeUserMarkup(column.label)}</th>`).join('')}</tr>`;
 
   if (!visibleUsers.length) {
     usersBody.innerHTML = `
@@ -414,26 +453,26 @@ function renderUsers() {
         return `
           <td>
             <div class="table-cell-title">
-              <strong>${user.name}</strong>
-              <span>${user.id}</span>
+              <strong>${escapeUserMarkup(user.name)}</strong>
+              <span>${escapeUserMarkup(user.id)}</span>
             </div>
           </td>
         `;
       }
       if (column.id === 'email') {
-        return `<td>${user.email}</td>`;
+        return `<td>${escapeUserMarkup(user.email)}</td>`;
       }
       if (column.id === 'role') {
-        return `<td><span class="table-badge">${roleLabels[user.role] || user.role}</span></td>`;
+        return `<td><span class="table-badge">${escapeUserMarkup(roleLabels[user.role] || user.role)}</span></td>`;
       }
       if (column.id === 'birthDate') {
-        return `<td>${isStudentRole(user.role) ? formatDateOnly(user.birthDate) : '-'}</td>`;
+        return `<td>${escapeUserMarkup(isStudentRole(user.role) ? formatDateOnly(user.birthDate) : '-')}</td>`;
       }
       if (column.id === 'school') {
-        return `<td>${getCenterLabel(user.schoolId)}</td>`;
+        return `<td>${escapeUserMarkup(getCenterLabel(user.schoolId))}</td>`;
       }
       if (column.id === 'linkedStudent') {
-        return `<td>${user.linkedStudentId ? getStudentLabel(user.linkedStudentId) : 'Sin vincular'}</td>`;
+        return `<td>${escapeUserMarkup(user.linkedStudentId ? getStudentLabel(user.linkedStudentId) : 'Sin vincular')}</td>`;
       }
       if (column.id === 'status') {
         return `<td>${user.isActive ? 'Activo' : 'Inactivo'}</td>`;
@@ -441,7 +480,7 @@ function renderUsers() {
       if (column.id === 'actions') {
         return `
           <td class="table-cell-actions">
-            <button class="button ghost table-row-action" type="button" data-edit-user="${user.id}">Editar</button>
+            <button class="button ghost table-row-action" type="button" data-edit-user="${escapeUserMarkup(user.id)}">Editar</button>
           </td>
         `;
       }
@@ -650,7 +689,8 @@ userFiltersList?.addEventListener('change', (event) => {
   const filterId = row.getAttribute('data-filter-id');
   const field = row.querySelector('[data-filter-field]')?.value || 'name';
   const operator = row.querySelector('[data-filter-operator]')?.value || fields[field].operators[0];
-  const value = row.querySelector('[data-filter-value]')?.value || '';
+  const isFieldChange = event.target.matches('[data-filter-field]');
+  const value = isFieldChange ? '' : (row.querySelector('[data-filter-value]')?.value || '');
 
   updateFilter(filterId, { field, operator, value });
 });
@@ -667,7 +707,7 @@ userFiltersList?.addEventListener('input', (event) => {
   const operator = row.querySelector('[data-filter-operator]')?.value || fields[field].operators[0];
   const value = row.querySelector('[data-filter-value]')?.value || '';
 
-  updateFilter(filterId, { field, operator, value });
+  updateFilter(filterId, { field, operator, value }, { render: false });
 });
 
 profileButton?.addEventListener('click', () => openModalById('profile-modal'));

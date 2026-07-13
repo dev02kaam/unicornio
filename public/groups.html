@@ -7,7 +7,8 @@
     <link rel="stylesheet" href="/css/styles.css" />
   </head>
   <body>
-    <main class="shell dashboard-shell org-shell">
+    <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
+    <main id="main-content" class="shell dashboard-shell org-shell">
       <section class="card org-hero">
         <div class="hero-copy">
           <span class="badge">Organización</span>
@@ -64,6 +65,7 @@
         </div>
         <div class="data-table-wrap">
           <table class="data-table">
+            <caption class="sr-only">Grupos del centro</caption>
             <thead id="groups-head"></thead>
             <tbody id="groups-body"></tbody>
           </table>
@@ -157,13 +159,13 @@
       <div class="modal__panel modal__panel--small" role="dialog" aria-modal="true" aria-labelledby="group-columns-title">
         <div class="modal__header">
           <div>
-            <span class="badge">Columnas</span>
-            <h2 id="group-columns-title">Configurar tabla</h2>
+            <span class="badge">A tu medida</span>
+            <h2 id="group-columns-title">Organiza tus columnas</h2>
           </div>
           <button class="button secondary" type="button" data-close-modal="group-columns-modal">Cerrar</button>
         </div>
         <div id="group-columns-list" class="column-manager-list"></div>
-        <p class="field-note">Arrastra para cambiar el orden y oculta o recupera las columnas cuando quieras.</p>
+        <p class="field-note">El orden y las columnas visibles se guardan autom&#225;ticamente para esta tabla.</p>
       </div>
     </section>
 
@@ -232,7 +234,7 @@
         <div class="section-header">
           <div>
             <span class="badge">Perfil</span>
-            <h2 id="profile-modal-title">Datos y preferencias</h2>
+            <h2 id="profile-modal-title">Datos de perfil</h2>
           </div>
           <button id="profile-close-button" class="button secondary" type="button">Cerrar</button>
         </div>
@@ -245,19 +247,6 @@
           <div class="profile-chip">
             <span>Email</span>
             <strong id="profile-email">-</strong>
-          </div>
-          <div class="preferences-card">
-            <span class="profile-caption">Preferencias rápidas</span>
-            <div class="preferences">
-              <label class="toggle-row">
-                <input type="checkbox" checked />
-                <span>Mostrar pantalla de bienvenida</span>
-              </label>
-              <label class="toggle-row">
-                <input type="checkbox" checked />
-                <span>Recordar sesión en este navegador</span>
-              </label>
-            </div>
           </div>
         </div>
 

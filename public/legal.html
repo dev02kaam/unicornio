@@ -7,7 +7,8 @@
     <link rel="stylesheet" href="/css/styles.css" />
   </head>
   <body>
-    <main class="shell dashboard-shell org-shell">
+    <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
+    <main id="main-content" class="shell dashboard-shell org-shell">
       <section class="dashboard-hero card">
         <div class="hero-copy">
           <span class="badge">Administración</span>
@@ -44,7 +45,7 @@
           </div>
         </div>
 
-        <div id="legal-status-banner" class="status-banner" hidden></div>
+        <div id="legal-status-banner" class="status-banner" role="status" aria-live="polite" hidden></div>
         <div id="legal-active-card" class="legal-active-card"></div>
       </section>
 
@@ -65,7 +66,7 @@
         <div class="section-header">
           <div>
             <span class="badge">Perfil</span>
-            <h2 id="profile-modal-title">Datos y preferencias</h2>
+            <h2 id="profile-modal-title">Datos de perfil</h2>
           </div>
           <button id="profile-close-button" class="button secondary" type="button">Cerrar</button>
         </div>
@@ -78,19 +79,6 @@
           <div class="profile-chip">
             <span>Email</span>
             <strong id="profile-email">-</strong>
-          </div>
-          <div class="preferences-card">
-            <span class="profile-caption">Preferencias rápidas</span>
-            <div class="preferences">
-              <label class="toggle-row">
-                <input type="checkbox" checked />
-                <span>Mostrar pantalla de bienvenida</span>
-              </label>
-              <label class="toggle-row">
-                <input type="checkbox" checked />
-                <span>Recordar sesión en este navegador</span>
-              </label>
-            </div>
           </div>
         </div>
 

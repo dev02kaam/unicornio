@@ -1,12 +1,79 @@
+const modalState = new WeakMap();
+const modalBackgroundState = new WeakMap();
+const modalSelector = '.modal:not([hidden]), .profile-modal:not([hidden])';
+const focusableSelector = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+function getOpenModals() {
+  return Array.from(document.querySelectorAll(modalSelector));
+}
+
+function isModalBusy(modal) {
+  return Boolean(
+    modal?.matches?.('[aria-busy="true"]')
+      || modal?.querySelector?.('[aria-busy="true"]'),
+  );
+}
+
+function syncModalPageState() {
+  const openModals = getOpenModals();
+  const activeModal = openModals.at(-1) || null;
+  const hasOpenModal = Boolean(activeModal);
+  document.body.classList.toggle('modal-open', hasOpenModal);
+
+  Array.from(document.body.children).forEach((element) => {
+    if (!(element instanceof HTMLElement) || element.matches('script, style')) {
+      return;
+    }
+
+    const belongsToActiveModal = activeModal
+      && (element === activeModal || element.contains(activeModal));
+    const shouldBeInert = hasOpenModal && !belongsToActiveModal;
+
+    if (shouldBeInert) {
+      if (!modalBackgroundState.has(element)) {
+        modalBackgroundState.set(element, element.inert);
+      }
+      element.inert = true;
+      return;
+    }
+
+    if (modalBackgroundState.has(element)) {
+      element.inert = modalBackgroundState.get(element);
+      modalBackgroundState.delete(element);
+    }
+  });
+}
+
 function openModalById(modalId) {
   const modal = document.getElementById(modalId);
   if (!modal) {
     return;
   }
 
+  modalState.set(modal, { opener: document.activeElement });
   modal.hidden = false;
   modal.setAttribute('aria-hidden', 'false');
-  document.body.classList.add('modal-open');
+  syncModalPageState();
+
+  queueMicrotask(() => {
+    const firstFocusable = modal.querySelector(focusableSelector);
+    const panel = modal.querySelector('[role="dialog"]');
+    if (firstFocusable) {
+      firstFocusable.focus();
+      return;
+    }
+    if (panel) {
+      panel.setAttribute('tabindex', '-1');
+      panel.focus();
+    }
+  });
 }
 
 function closeModalById(modalId) {
@@ -17,8 +84,70 @@ function closeModalById(modalId) {
 
   modal.hidden = true;
   modal.setAttribute('aria-hidden', 'true');
-  document.body.classList.remove('modal-open');
+  syncModalPageState();
+
+  const opener = modalState.get(modal)?.opener;
+  modalState.delete(modal);
+  modal.dispatchEvent(new CustomEvent('unicornio:modal-closed'));
+  if (opener instanceof HTMLElement && opener.isConnected) {
+    opener.focus();
+  }
 }
+
+document.addEventListener('keydown', (event) => {
+  const openModals = getOpenModals();
+  const activeModal = openModals.at(-1);
+  if (!activeModal) {
+    return;
+  }
+
+  if (event.key === 'Escape') {
+    if (activeModal.querySelector('.select-control.is-open')) {
+      return;
+    }
+    if (isModalBusy(activeModal)) {
+      event.preventDefault();
+      return;
+    }
+    event.preventDefault();
+    closeModalById(activeModal.id);
+    return;
+  }
+
+  if (event.key !== 'Tab') {
+    return;
+  }
+
+  const focusable = Array.from(activeModal.querySelectorAll(focusableSelector))
+    .filter((element) => element.getClientRects().length > 0);
+  if (focusable.length === 0) {
+    event.preventDefault();
+    activeModal.querySelector('[role="dialog"]')?.focus();
+    return;
+  }
+
+  const first = focusable[0];
+  const last = focusable.at(-1);
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+});
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;',
+  })[character]);
+}
+
+window.escapeHtml = escapeHtml;
 
 // Iconos compartidos: mantienen la interfaz reconocible sin depender de una librería externa.
 const appIconPaths = {
@@ -71,7 +200,7 @@ function getAppIconName(value = '') {
   if (label.includes('sesión')) return 'logout';
   if (label.includes('buscar')) return 'search';
   if (label.includes('guardar') || label.includes('aceptar')) return 'check';
-  return 'sparkle';
+  return null;
 }
 
 function applyAppIcon(target) {
@@ -80,6 +209,9 @@ function applyAppIcon(target) {
   }
 
   const name = target.dataset.appIcon || getAppIconName(target.getAttribute('aria-label') || target.textContent);
+  if (!name) {
+    return;
+  }
   const wrapper = document.createElement('span');
   wrapper.innerHTML = getAppIcon(name, target.matches('h1, h2, h3') ? 'app-icon--heading' : '');
   target.prepend(wrapper.firstElementChild);
@@ -98,7 +230,7 @@ function refreshAppIcons(root = document) {
   }
 
   const targets = [];
-  const iconTargets = '.button, .back-link, h1, h2, h3, .quickcard-label, [data-app-icon]';
+  const iconTargets = '.button, .back-link, [data-app-icon]';
   if (root.matches?.(iconTargets)) {
     targets.push(root);
   }
@@ -350,6 +482,210 @@ window.refreshCustomSelects = refreshCustomSelects;
 
 refreshCustomSelects();
 
+function setupColumnManager({ modalId, listId, triggerSelector, storageKey, defaultColumns, onChange }) {
+  const modal = document.getElementById(modalId);
+  const list = document.getElementById(listId);
+  const triggers = document.querySelectorAll(triggerSelector);
+  let columns = readColumnPrefs(storageKey, defaultColumns);
+  let pointerDrag = null;
+
+  function emitChange() {
+    persistColumnPrefs(storageKey, columns);
+    if (typeof onChange === 'function') {
+      onChange(columns);
+    }
+  }
+
+  function normalizeColumns() {
+    columns = columns.map((column, index) => ({ ...column, order: index }));
+  }
+
+  function getItem(columnId) {
+    return Array.from(list?.querySelectorAll('.column-manager-item') || [])
+      .find((item) => item.dataset.columnId === columnId) || null;
+  }
+
+  function updateSummary(message) {
+    const summary = list?.querySelector('.column-manager-summary');
+    if (!summary) return;
+    const visibleCount = columns.filter((column) => column.visible !== false).length;
+    summary.textContent = message || `${visibleCount} de ${columns.length} columnas visibles`;
+  }
+
+  function announce(message) {
+    const announcement = list?.querySelector('.column-manager-announcement');
+    if (announcement) announcement.textContent = message;
+  }
+
+  function commit(message) {
+    normalizeColumns();
+    emitChange();
+    updateSummary(message);
+  }
+
+  function render() {
+    if (!list) return;
+    const visibleCount = columns.filter((column) => column.visible !== false).length;
+    list.innerHTML = `
+      <div class="column-manager-guide" id="${listId}-guide">
+        <span class="column-manager-guide__icon" aria-hidden="true">&harr;</span>
+        <p><strong>Hazla tuya.</strong> Arrastra el asa para ordenar y activa solo lo que quieras ver. La tabla cambia al momento.</p>
+      </div>
+      <div class="column-manager-items" role="list" aria-describedby="${listId}-guide">
+        ${columns.map((column, index) => `
+          <article class="column-manager-item ${column.visible !== false ? '' : 'is-hidden'}" role="listitem" data-column-id="${column.id}">
+            <div class="column-manager-item__main">
+              <button class="column-manager-handle" type="button" data-column-move-handle aria-label="Mover ${column.label}. Posicion ${index + 1} de ${columns.length}" aria-describedby="${listId}-guide" title="Arrastra para mover ${column.label}"><span aria-hidden="true">&#x2807;</span></button>
+              <span class="column-manager-item__label">${column.label}</span>
+            </div>
+            <label class="column-manager-visibility">
+              <input type="checkbox" ${column.visible !== false ? 'checked' : ''} aria-label="Mostrar ${column.label}" />
+              <span>${column.visible !== false ? 'Visible' : 'Oculta'}</span>
+            </label>
+          </article>
+        `).join('')}
+      </div>
+      <p class="column-manager-summary">${visibleCount} de ${columns.length} columnas visibles</p>
+      <p class="sr-only column-manager-announcement" aria-live="polite" aria-atomic="true"></p>
+    `;
+  }
+
+  function sync() {
+    normalizeColumns();
+    render();
+    emitChange();
+  }
+
+  function animateReorder(beforeRects) {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    list?.querySelectorAll('.column-manager-item').forEach((item) => {
+      if (item.classList.contains('dragging')) return;
+      const before = beforeRects.get(item);
+      const offsetY = before ? before.top - item.getBoundingClientRect().top : 0;
+      if (Math.abs(offsetY) < 1) return;
+      item.animate(
+        [{ transform: `translateY(${offsetY}px)` }, { transform: 'translateY(0)' }],
+        { duration: 190, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+      );
+    });
+  }
+
+  function moveColumn(sourceId, targetId, placeAfter = false) {
+    const sourceIndex = columns.findIndex((column) => column.id === sourceId);
+    const targetIndex = columns.findIndex((column) => column.id === targetId);
+    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return false;
+
+    const beforeRects = new Map(
+      Array.from(list?.querySelectorAll('.column-manager-item') || []).map((item) => [item, item.getBoundingClientRect()]),
+    );
+    const [moved] = columns.splice(sourceIndex, 1);
+    const nextTargetIndex = columns.findIndex((column) => column.id === targetId);
+    columns.splice(nextTargetIndex + (placeAfter ? 1 : 0), 0, moved);
+
+    const sourceItem = getItem(sourceId);
+    const targetItem = getItem(targetId);
+    if (sourceItem && targetItem) {
+      targetItem[placeAfter ? 'after' : 'before'](sourceItem);
+      animateReorder(beforeRects);
+    }
+    commit();
+    return true;
+  }
+
+  render();
+
+  triggers.forEach((trigger) => {
+    trigger.addEventListener('click', () => openModalById(modalId));
+  });
+
+  modal?.addEventListener('click', (event) => {
+    if (event.target?.matches?.('[data-close-modal]')) closeModalById(modalId);
+  });
+
+  list?.addEventListener('change', (event) => {
+    const input = event.target.closest('.column-manager-visibility input');
+    const item = input?.closest('.column-manager-item');
+    const column = columns.find((entry) => entry.id === item?.dataset.columnId);
+    if (!input || !item || !column) return;
+
+    column.visible = input.checked;
+    item.classList.toggle('is-hidden', !column.visible);
+    item.querySelector('.column-manager-visibility span').textContent = column.visible ? 'Visible' : 'Oculta';
+    commit();
+    announce(`${column.label} ${column.visible ? 'se muestra' : 'se ha ocultado'} en la tabla.`);
+  });
+
+  list?.addEventListener('pointerdown', (event) => {
+    const handle = event.target.closest('[data-column-move-handle]');
+    if (!handle || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    const item = handle.closest('.column-manager-item');
+    const columnId = item?.dataset.columnId;
+    if (!item || !columnId) return;
+
+    event.preventDefault();
+    handle.focus();
+    handle.setPointerCapture?.(event.pointerId);
+    pointerDrag = { pointerId: event.pointerId, columnId, item };
+    item.classList.add('dragging');
+    list.classList.add('is-reordering');
+    announce(`Moviendo ${columns.find((column) => column.id === columnId)?.label}.`);
+  });
+
+  list?.addEventListener('pointermove', (event) => {
+    if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('.column-manager-item');
+    if (!target || target === pointerDrag.item) return;
+
+    const rect = target.getBoundingClientRect();
+    const moved = moveColumn(pointerDrag.columnId, target.dataset.columnId, event.clientY > rect.top + rect.height / 2);
+    if (moved) pointerDrag.item = getItem(pointerDrag.columnId) || pointerDrag.item;
+  });
+
+  function endPointerDrag(event) {
+    if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) return;
+    pointerDrag.item.classList.remove('dragging');
+    list?.classList.remove('is-reordering');
+    const column = columns.find((entry) => entry.id === pointerDrag.columnId);
+    announce(`${column?.label || 'Columna'} colocada. La tabla ya esta actualizada.`);
+    pointerDrag = null;
+  }
+
+  list?.addEventListener('pointerup', endPointerDrag);
+  list?.addEventListener('pointercancel', endPointerDrag);
+
+  list?.addEventListener('keydown', (event) => {
+    const handle = event.target.closest('[data-column-move-handle]');
+    if (!handle || !['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+    const sourceId = handle.closest('.column-manager-item')?.dataset.columnId;
+    const sourceIndex = columns.findIndex((column) => column.id === sourceId);
+    if (!sourceId || sourceIndex < 0) return;
+
+    let targetIndex = sourceIndex;
+    if (event.key === 'ArrowUp') targetIndex = Math.max(0, sourceIndex - 1);
+    if (event.key === 'ArrowDown') targetIndex = Math.min(columns.length - 1, sourceIndex + 1);
+    if (event.key === 'Home') targetIndex = 0;
+    if (event.key === 'End') targetIndex = columns.length - 1;
+    if (targetIndex === sourceIndex) return;
+
+    event.preventDefault();
+    if (moveColumn(sourceId, columns[targetIndex].id)) {
+      getItem(sourceId)?.querySelector('[data-column-move-handle]')?.focus();
+      const position = columns.findIndex((entry) => entry.id === sourceId) + 1;
+      announce(`${columns.find((entry) => entry.id === sourceId)?.label || 'Columna'} en la posicion ${position}.`);
+    }
+  });
+
+  return {
+    getColumns: () => columns.slice(),
+    setColumns(nextColumns) {
+      columns = nextColumns.map((column, index) => ({ ...column, order: index, visible: column.visible !== false }));
+      sync();
+    },
+    sync,
+    render,
+  };
+}
+
 document.addEventListener('click', (event) => {
   if (!event.target.closest('.select-control')) {
     closeAllCustomSelects();
@@ -439,7 +775,7 @@ function persistColumnPrefs(storageKey, columns) {
   );
 }
 
-function setupColumnManager({ modalId, listId, triggerSelector, storageKey, defaultColumns, onChange }) {
+function setupLegacyColumnManager({ modalId, listId, triggerSelector, storageKey, defaultColumns, onChange }) {
   const modal = document.getElementById(modalId);
   const list = document.getElementById(listId);
   const triggers = document.querySelectorAll(triggerSelector);
@@ -573,6 +909,10 @@ document.addEventListener('click', (event) => {
 
   const closeButton = event.target.closest('[data-close-modal]');
   if (closeButton) {
-    closeModalById(closeButton.getAttribute('data-close-modal'));
+    const modalId = closeButton.getAttribute('data-close-modal');
+    const modal = document.getElementById(modalId);
+    if (!isModalBusy(modal)) {
+      closeModalById(modalId);
+    }
   }
 });

@@ -7,7 +7,8 @@
     <link rel="stylesheet" href="/css/styles.css" />
   </head>
   <body>
-    <main class="shell dashboard-shell org-shell">
+    <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
+    <main id="main-content" class="shell dashboard-shell org-shell">
       <section class="dashboard-hero card">
         <div class="hero-copy">
           <span class="badge">Consentimientos familiares</span>
@@ -61,7 +62,7 @@
           </div>
         </div>
 
-        <div id="consents-status-banner" class="status-banner" hidden></div>
+        <div id="consents-status-banner" class="status-banner" role="status" aria-live="polite" hidden></div>
         <div id="consents-list" class="consent-list"></div>
       </section>
     </main>
@@ -72,7 +73,7 @@
         <div class="section-header">
           <div>
             <span class="badge">Perfil</span>
-            <h2 id="profile-modal-title">Datos y preferencias</h2>
+            <h2 id="profile-modal-title">Datos de perfil</h2>
           </div>
           <button id="profile-close-button" class="button secondary" type="button">Cerrar</button>
         </div>
@@ -86,23 +87,34 @@
             <span>Email</span>
             <strong id="profile-email">-</strong>
           </div>
-          <div class="preferences-card">
-            <span class="profile-caption">Preferencias rápidas</span>
-            <div class="preferences">
-              <label class="toggle-row">
-                <input type="checkbox" checked />
-                <span>Mostrar pantalla de bienvenida</span>
-              </label>
-              <label class="toggle-row">
-                <input type="checkbox" checked />
-                <span>Recordar sesión en este navegador</span>
-              </label>
-            </div>
-          </div>
         </div>
 
         <div class="action-row modal-actions">
           <button id="modal-logout-button" class="button secondary" type="button">Cerrar sesión</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="consent-decision-modal" class="modal" hidden aria-hidden="true">
+      <div class="modal__backdrop" data-close-modal="consent-decision-modal"></div>
+      <div
+        class="modal__panel modal__panel--small"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="consent-decision-title"
+        aria-describedby="consent-decision-text"
+      >
+        <div class="modal__header">
+          <div>
+            <span class="badge">Confirmar decisión</span>
+            <h2 id="consent-decision-title">Revisar consentimiento</h2>
+          </div>
+          <button id="consent-decision-cancel" class="button secondary" type="button">Cancelar</button>
+        </div>
+
+        <p id="consent-decision-text" class="field-note"></p>
+        <div class="modal__footer">
+          <button id="consent-decision-confirm" class="button primary" type="button">Confirmar</button>
         </div>
       </div>
     </section>

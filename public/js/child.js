@@ -50,6 +50,7 @@ const childConsentsCount = document.getElementById('child-consents-count');
 const childConsentsPending = document.getElementById('child-consents-pending');
 const childConsentsAccepted = document.getElementById('child-consents-accepted');
 const childConsentsOther = document.getElementById('child-consents-other');
+const escapeDynamicHtml = window.escapeHtml;
 
 const consentStatusLabels = {
   PENDING: 'Pendiente',
@@ -218,8 +219,8 @@ function renderAssignments(assignments, context, role) {
       childCentersList.innerHTML = centerAssignments.map((assignment) => `
         <article class="toggle-row">
           <span>
-            <strong>${assignment.center?.name || 'Centro sin nombre'}</strong>
-            <small>${assignment.center?.code || '-'} · ${assignment.center?.city || '-'}</small>
+            <strong>${escapeDynamicHtml(assignment.center?.name || 'Centro sin nombre')}</strong>
+            <small>${escapeDynamicHtml(assignment.center?.code || '-')} · ${escapeDynamicHtml(assignment.center?.city || '-')}</small>
           </span>
           <span class="table-badge">${assignment.isPrimary ? 'Principal' : 'Vinculado'}</span>
         </article>
@@ -239,8 +240,8 @@ function renderAssignments(assignments, context, role) {
       childGroupsList.innerHTML = groupAssignments.map((assignment) => `
         <article class="toggle-row">
           <span>
-            <strong>${assignment.group?.name || 'Grupo sin nombre'}</strong>
-            <small>${assignment.group?.code || '-'} · ${assignment.group?.stage || '-'} · ${assignment.group?.shift || '-'}</small>
+            <strong>${escapeDynamicHtml(assignment.group?.name || 'Grupo sin nombre')}</strong>
+            <small>${escapeDynamicHtml(assignment.group?.code || '-')} · ${escapeDynamicHtml(assignment.group?.stage || '-')} · ${escapeDynamicHtml(assignment.group?.shift || '-')}</small>
           </span>
           <span class="table-badge">${assignment.isPrimary ? 'Principal' : 'Vinculado'}</span>
         </article>
@@ -285,6 +286,7 @@ async function loadProfile() {
   if (childTitle) {
     childTitle.textContent = role === 'FAMILY' ? 'Mi hijo/a' : 'Mi perfil';
   }
+  document.title = `${role === 'FAMILY' ? 'Mi hijo/a' : 'Mi perfil'} | Proyecto Unicornio`;
   if (childHeroCopy) {
     childHeroCopy.textContent = role === 'FAMILY'
       ? 'Consulta el perfil completo de tu hijo/a, su centro, su grupo y los consentimientos relacionados.'

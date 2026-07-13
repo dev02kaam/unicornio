@@ -66,6 +66,10 @@ let availableCenters = [];
 let availableCenterStudents = [];
 let adminUsers = [];
 
+function escapeDashboardMarkup(value) {
+  return window.escapeHtml(value);
+}
+
 const centerTypeLabels = {
   PRIMARIA: 'Primaria',
   SECUNDARIA: 'Secundaria',
@@ -208,7 +212,7 @@ function renderDashboardQuickActions(role) {
   }
 
   dashboardLinks.innerHTML = actions
-    .map((action) => `<a class="button secondary" href="${action.href}" aria-label="${action.label}" data-tooltip="${action.label}">${getAppIcon(action.icon)}<span class="button-label">${action.label}</span></a>`)
+    .map((action) => `<a class="button secondary" href="${escapeDashboardMarkup(action.href)}" aria-label="${escapeDashboardMarkup(action.label)}" data-tooltip="${escapeDashboardMarkup(action.label)}">${getAppIcon(action.icon)}<span class="button-label">${escapeDashboardMarkup(action.label)}</span></a>`)
     .join('');
 }
 
@@ -306,7 +310,7 @@ function renderStudentOptions(students, selectedId = '') {
   adminStudentSelect.disabled = false;
   adminStudentSelect.innerHTML = `
     <option value="">Selecciona un estudiante</option>
-    ${students.map((student) => `<option value="${student.id}" ${student.id === selectedId ? 'selected' : ''}>${student.name} (${student.email})</option>`).join('')}
+    ${students.map((student) => `<option value="${escapeDashboardMarkup(student.id)}" ${String(student.id) === String(selectedId) ? 'selected' : ''}>${escapeDashboardMarkup(student.name)} (${escapeDashboardMarkup(student.email)})</option>`).join('')}
   `;
 }
 
@@ -344,7 +348,7 @@ function renderAdminUsersTable() {
 
   adminUsersHead.innerHTML = `
     <tr>
-      ${columns.map((column) => `<th>${column.label}</th>`).join('')}
+      ${columns.map((column) => `<th scope="col">${escapeDashboardMarkup(column.label)}</th>`).join('')}
     </tr>
   `;
 
@@ -355,27 +359,27 @@ function renderAdminUsersTable() {
           return `
             <td>
               <div class="table-cell-title">
-                <strong>${user.name}</strong>
-                <span>${user.id}</span>
+                <strong>${escapeDashboardMarkup(user.name)}</strong>
+                <span>${escapeDashboardMarkup(user.id)}</span>
               </div>
             </td>
           `;
         }
 
         if (column.id === 'email') {
-          return `<td>${user.email}</td>`;
+          return `<td>${escapeDashboardMarkup(user.email)}</td>`;
         }
 
         if (column.id === 'role') {
-          return `<td><span class="table-badge">${roleLabels[user.role] || user.role}</span></td>`;
+          return `<td><span class="table-badge">${escapeDashboardMarkup(roleLabels[user.role] || user.role)}</span></td>`;
         }
 
         if (column.id === 'school') {
-          return `<td>${getCenterLabel(user.schoolId)}</td>`;
+          return `<td>${escapeDashboardMarkup(getCenterLabel(user.schoolId))}</td>`;
         }
 
         if (column.id === 'linkedStudent') {
-          return `<td>${user.linkedStudentId ? getUserLabel(user.linkedStudentId) : 'Sin vincular'}</td>`;
+          return `<td>${escapeDashboardMarkup(user.linkedStudentId ? getUserLabel(user.linkedStudentId) : 'Sin vincular')}</td>`;
         }
 
         if (column.id === 'status') {
@@ -385,7 +389,7 @@ function renderAdminUsersTable() {
         if (column.id === 'actions') {
           return `
             <td class="table-cell-actions">
-              <button class="button ghost table-row-action" type="button" data-row-user="${user.id}">Editar</button>
+              <button class="button ghost table-row-action" type="button" data-row-user="${escapeDashboardMarkup(user.id)}">Editar</button>
             </td>
           `;
         }
@@ -423,12 +427,12 @@ function renderUserAssignments(assignments) {
 
   items.push(`<div class="toggle-row"><span>Centros: ${centerAssignments.length}</span></div>`);
   centerAssignments.forEach((assignment) => {
-    items.push(`<div class="toggle-row"><span>${assignment.center?.name || 'Centro sin nombre'}</span></div>`);
+    items.push(`<div class="toggle-row"><span>${escapeDashboardMarkup(assignment.center?.name || 'Centro sin nombre')}</span></div>`);
   });
 
   items.push(`<div class="toggle-row"><span>Grupos: ${groupAssignments.length}</span></div>`);
   groupAssignments.forEach((assignment) => {
-    items.push(`<div class="toggle-row"><span>${assignment.group?.name || 'Grupo sin nombre'}</span></div>`);
+    items.push(`<div class="toggle-row"><span>${escapeDashboardMarkup(assignment.group?.name || 'Grupo sin nombre')}</span></div>`);
   });
 
   userDetailAssignmentsElement.innerHTML = items.join('');
@@ -460,6 +464,7 @@ function getDashboardRelationshipContext(role, context, consentSummary = null) {
       title: 'Resumen familiar',
       subject: context?.linkedStudent || null,
       summaryTag: 'Resumen breve',
+      note: 'Consulta el perfil vinculado y el estado de sus autorizaciones.',
       highlights: [
         { label: 'Hijo/a', value: context?.linkedStudent?.name || 'Sin alumno' },
         { label: 'Pendientes', value: consentSummary ? String(consentSummary.pending) : '0' },
@@ -477,6 +482,7 @@ function getDashboardRelationshipContext(role, context, consentSummary = null) {
       title: 'Mi familia',
       subject: context?.linkedFamily || null,
       summaryTag: 'Resumen breve',
+      note: 'Consulta la información familiar vinculada a tu cuenta.',
       highlights: [
         { label: 'Familia', value: context?.linkedFamily?.name || 'Sin familia' },
         { label: 'Centro', value: context?.center?.name || 'Sin centro' },
@@ -506,11 +512,11 @@ function renderModuleSummary({ badge, title, cards }) {
         <article class="dashboard-quickcard family-module-card ${card.highlight ? 'family-module-card--pending' : ''}">
           <div class="module-card__header">
             ${getAppIcon(card.icon || getAppIconName(card.label), 'module-card-icon')}
-            <span class="quickcard-label">${card.label}</span>
+            <span class="quickcard-label">${escapeDashboardMarkup(card.label)}</span>
           </div>
-          <strong>${card.value}</strong>
-          <p class="quickcard-email">${card.description}</p>
-          <a class="button secondary" href="${card.href}">${card.action}</a>
+          <strong>${escapeDashboardMarkup(card.value)}</strong>
+          <p class="quickcard-email">${escapeDashboardMarkup(card.description)}</p>
+          <a class="button secondary" href="${escapeDashboardMarkup(card.href)}">${escapeDashboardMarkup(card.action)}</a>
         </article>
       `).join('')}
     </div>
@@ -547,7 +553,7 @@ function renderDashboardRelationshipPanel(role, context, consentSummary = null) 
             ${getAppIcon('child', 'module-card-icon')}
             <span class="quickcard-label">Mi hijo/a</span>
           </div>
-          <strong>${context?.linkedStudent?.name || 'Sin alumno vinculado'}</strong>
+          <strong>${escapeDashboardMarkup(context?.linkedStudent?.name || 'Sin alumno vinculado')}</strong>
           <p class="quickcard-email">Ficha del alumno, centro, grupo y profesor asociado.</p>
           <a class="button secondary" href="/child.html">Ver detalle</a>
         </article>
@@ -557,7 +563,7 @@ function renderDashboardRelationshipPanel(role, context, consentSummary = null) 
             ${getAppIcon('consent', 'module-card-icon')}
             <span class="quickcard-label">Consentimientos</span>
           </div>
-          <strong>${pendingText}</strong>
+          <strong>${escapeDashboardMarkup(pendingText)}</strong>
           <p class="quickcard-email">Solicitudes familiares que necesitan revisión.</p>
           <a class="button secondary" href="/consents.html">Revisar</a>
         </article>
@@ -571,24 +577,24 @@ function renderDashboardRelationshipPanel(role, context, consentSummary = null) 
   relationshipPanelBody.innerHTML = `
     <div class="consent-version-card consent-notice-card dashboard-summary-card">
       <div class="consent-version-card__head">
-        <span class="badge">${config.badge}</span>
-        <span class="table-badge consent-badge--muted">${config.summaryTag}</span>
+        <span class="badge">${escapeDashboardMarkup(config.badge)}</span>
+        <span class="table-badge consent-badge--muted">${escapeDashboardMarkup(config.summaryTag)}</span>
       </div>
-      <strong class="consent-version-card__title">${config.title}</strong>
-      <p>${config.note}</p>
+      <strong class="consent-version-card__title">${escapeDashboardMarkup(config.title)}</strong>
+      <p>${escapeDashboardMarkup(config.note || '')}</p>
 
       <div class="consent-meta-grid">
         ${config.highlights.map((item) => `
           <div class="profile-chip">
-            <span>${item.label}</span>
-            <strong>${item.value}</strong>
+            <span>${escapeDashboardMarkup(item.label)}</span>
+            <strong>${escapeDashboardMarkup(item.value)}</strong>
           </div>
         `).join('')}
       </div>
 
       <div class="action-row">
-        <a class="button secondary" href="${config.primaryActionHref}">${config.primaryActionLabel}</a>
-        <a class="button secondary" href="${config.secondaryActionHref}">${config.secondaryActionLabel}</a>
+        <a class="button secondary" href="${escapeDashboardMarkup(config.primaryActionHref)}">${escapeDashboardMarkup(config.primaryActionLabel)}</a>
+        <a class="button secondary" href="${escapeDashboardMarkup(config.secondaryActionHref)}">${escapeDashboardMarkup(config.secondaryActionLabel)}</a>
       </div>
     </div>
   `;
@@ -761,7 +767,7 @@ async function loadCentersForAdmin() {
   adminSchoolSelect.innerHTML = `
     <option value="">Sin vincular</option>
     ${availableCenters
-      .map((center) => `<option value="${center.id}">${center.name}</option>`)
+      .map((center) => `<option value="${escapeDashboardMarkup(center.id)}">${escapeDashboardMarkup(center.name)}</option>`)
       .join('')}
   `;
 

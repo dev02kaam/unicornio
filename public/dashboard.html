@@ -7,7 +7,8 @@
     <link rel="stylesheet" href="/css/styles.css" />
   </head>
   <body>
-    <main class="shell dashboard-shell">
+    <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
+    <main id="main-content" class="shell dashboard-shell">
       <section class="dashboard-hero card">
         <div class="hero-copy">
           <h1>Bienvenido</h1>
@@ -32,6 +33,7 @@
         </div>
         <div class="data-table-wrap">
           <table class="data-table">
+            <caption class="sr-only">Usuarios disponibles para administración</caption>
             <thead id="admin-users-head"></thead>
             <tbody id="admin-users-body"></tbody>
           </table>
@@ -145,7 +147,7 @@
         <div class="section-header">
           <div>
             <span class="badge">Perfil</span>
-            <h2 id="profile-modal-title">Datos y preferencias</h2>
+            <h2 id="profile-modal-title">Datos de perfil</h2>
           </div>
           <button id="profile-close-button" class="button secondary" type="button">Cerrar</button>
         </div>
@@ -158,19 +160,6 @@
           <div class="profile-chip">
             <span>Email</span>
             <strong id="profile-email">-</strong>
-          </div>
-          <div class="preferences-card">
-            <span class="profile-caption">Preferencias rápidas</span>
-            <div class="preferences">
-              <label class="toggle-row">
-                <input type="checkbox" checked />
-                <span>Mostrar pantalla de bienvenida</span>
-              </label>
-              <label class="toggle-row">
-                <input type="checkbox" checked />
-                <span>Recordar sesión en este navegador</span>
-              </label>
-            </div>
           </div>
         </div>
 
@@ -320,13 +309,13 @@
       <div class="modal__panel modal__panel--small" role="dialog" aria-modal="true" aria-labelledby="admin-users-columns-title">
         <div class="modal__header">
           <div>
-            <span class="badge">Columnas</span>
-            <h2 id="admin-users-columns-title">Configurar tabla</h2>
+            <span class="badge">A tu medida</span>
+            <h2 id="admin-users-columns-title">Organiza tus columnas</h2>
           </div>
           <button class="button secondary" type="button" data-close-modal="admin-users-columns-modal">Cerrar</button>
         </div>
         <div id="admin-users-columns-list" class="column-manager-list"></div>
-        <p class="field-note">Arrastra para cambiar el orden y marca o desmarca columnas para ocultarlas o volver a mostrarlas.</p>
+        <p class="field-note">El orden y las columnas visibles se guardan autom&#225;ticamente para esta tabla.</p>
       </div>
     </section>
 

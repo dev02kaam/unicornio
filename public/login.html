@@ -7,7 +7,8 @@
     <link rel="stylesheet" href="/css/styles.css" />
   </head>
   <body>
-    <main class="shell">
+    <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
+    <main id="main-content" class="shell">
       <section class="card form-card">
         <a class="back-link" href="/">Volver</a>
         <h1>Acceso</h1>
@@ -15,14 +16,14 @@
         <form id="login-form" class="stack">
           <label>
             <span>Email</span>
-            <input type="email" name="email" placeholder="admin@unicornio.local" required />
+            <input type="email" name="email" placeholder="admin@unicornio.local" autocomplete="username" autocapitalize="none" spellcheck="false" required />
           </label>
           <label>
             <span>Contraseña</span>
-            <input type="password" name="password" placeholder="Introduce tu contraseña" required />
+            <input type="password" name="password" placeholder="Introduce tu contraseña" autocomplete="current-password" minlength="8" required />
           </label>
-          <p id="login-error" class="error" hidden></p>
-          <button class="button primary" type="submit">Entrar</button>
+          <p id="login-error" class="error" role="alert" aria-live="assertive" tabindex="-1" hidden></p>
+          <button id="login-submit" class="button primary" type="submit">Entrar</button>
         </form>
       </section>
     </main>

@@ -57,6 +57,7 @@ let filterSeed = 0;
 let currentGroupsRole = '';
 let groupAcademicYearPicker = null;
 const formHelpers = window.UnicornioFormHelpers || {};
+const escapeDynamicHtml = window.escapeHtml;
 
 const stageLabels = {
   PRIMARIA: 'Primaria',
@@ -118,7 +119,7 @@ const filterFields = {
 
 const operatorLabels = {
   contains: 'Contiene',
-  equals: 'Igual a',
+  equals: 'Es exactamente',
   startsWith: 'Empieza por',
   greaterThan: 'Mayor que',
   lessThan: 'Menor que',
@@ -277,18 +278,18 @@ function renderFilterBuilder() {
     .map((filter) => {
       const config = filterFields[filter.field] || filterFields.name;
       const operatorOptions = config.operators
-        .map((operator) => `<option value="${operator}" ${filter.operator === operator ? 'selected' : ''}>${operatorLabels[operator]}</option>`)
+        .map((operator) => `<option value="${escapeDynamicHtml(operator)}" ${filter.operator === operator ? 'selected' : ''}>${escapeDynamicHtml(operatorLabels[operator])}</option>`)
         .join('');
 
       const fieldOptions = Object.entries(filterFields)
-        .map(([key, fieldConfig]) => `<option value="${key}" ${filter.field === key ? 'selected' : ''}>${fieldConfig.label}</option>`)
+        .map(([key, fieldConfig]) => `<option value="${escapeDynamicHtml(key)}" ${filter.field === key ? 'selected' : ''}>${escapeDynamicHtml(fieldConfig.label)}</option>`)
         .join('');
 
       let valueControl = `
         <input
           type="text"
           data-filter-value
-          value="${filter.value ?? ''}"
+          value="${escapeDynamicHtml(filter.value ?? '')}"
           placeholder="Escribe un valor"
         />
       `;
@@ -298,8 +299,11 @@ function renderFilterBuilder() {
           <input
             type="number"
             min="0"
+            step="1"
+            inputmode="numeric"
+            aria-label="Número de usuarios"
             data-filter-value
-            value="${filter.value ?? ''}"
+            value="${escapeDynamicHtml(filter.value ?? '')}"
             placeholder="0"
           />
         `;
@@ -307,7 +311,7 @@ function renderFilterBuilder() {
 
       if (config.type === 'select') {
         const options = config.options
-          .map((option) => `<option value="${option.value}" ${String(filter.value || '').toUpperCase() === option.value ? 'selected' : ''}>${option.label}</option>`)
+          .map((option) => `<option value="${escapeDynamicHtml(option.value)}" ${String(filter.value || '').toUpperCase() === option.value ? 'selected' : ''}>${escapeDynamicHtml(option.label)}</option>`)
           .join('');
 
         valueControl = `
@@ -319,7 +323,7 @@ function renderFilterBuilder() {
       }
 
       return `
-        <article class="filter-row" data-filter-id="${filter.id}">
+        <article class="filter-row" data-filter-id="${escapeDynamicHtml(filter.id)}" data-filter-type="${escapeDynamicHtml(config.type)}">
           <label class="filter-row__field">
             <span>Campo</span>
             <select data-filter-field>
@@ -337,7 +341,7 @@ function renderFilterBuilder() {
             ${valueControl}
           </label>
           <div class="filter-row__actions">
-            <button class="button ghost button-small" type="button" data-filter-remove="${filter.id}">Quitar</button>
+            <button class="button ghost button-small" type="button" data-filter-remove="${escapeDynamicHtml(filter.id)}">Quitar</button>
           </div>
         </article>
       `;
@@ -361,7 +365,7 @@ function createFilter(partial = {}) {
   applyGroupFilters();
 }
 
-function updateFilter(id, patch) {
+function updateFilter(id, patch, { render = true } = {}) {
   groupFilters = groupFilters.map((filter) => {
     if (filter.id !== id) {
       return filter;
@@ -381,7 +385,9 @@ function updateFilter(id, patch) {
     return next;
   });
 
-  renderFilterBuilder();
+  if (render) {
+    renderFilterBuilder();
+  }
   applyGroupFilters();
 }
 
@@ -421,7 +427,7 @@ function renderGroupsTable() {
 
   groupsHead.innerHTML = `
     <tr>
-      ${columns.map((column) => `<th>${column.label}</th>`).join('')}
+      ${columns.map((column) => `<th scope="col">${escapeDynamicHtml(column.label)}</th>`).join('')}
     </tr>
   `;
 
@@ -432,38 +438,38 @@ function renderGroupsTable() {
           return `
             <td>
               <div class="table-cell-title">
-                <strong>${group.name}</strong>
-                <span>${group.center?.name || 'Sin centro'}</span>
+                <strong>${escapeDynamicHtml(group.name)}</strong>
+                <span>${escapeDynamicHtml(group.center?.name || 'Sin centro')}</span>
               </div>
             </td>
           `;
         }
 
         if (column.id === 'code') {
-          return `<td>${group.code || '-'}</td>`;
+          return `<td>${escapeDynamicHtml(group.code || '-')}</td>`;
         }
 
         if (column.id === 'stage') {
-          return `<td><span class="table-badge">${stageLabels[group.stage] || group.stage || '-'}</span></td>`;
+          return `<td><span class="table-badge">${escapeDynamicHtml(stageLabels[group.stage] || group.stage || '-')}</span></td>`;
         }
 
         if (column.id === 'course') {
-          return `<td>${group.course || '-'}</td>`;
+          return `<td>${escapeDynamicHtml(group.course || '-')}</td>`;
         }
 
         if (column.id === 'shift') {
-          return `<td>${group.shift || '-'}</td>`;
+          return `<td>${escapeDynamicHtml(group.shift || '-')}</td>`;
         }
 
         if (column.id === 'users') {
-          return `<td>${group.usersCount || 0}</td>`;
+          return `<td>${escapeDynamicHtml(group.usersCount || 0)}</td>`;
         }
 
         if (column.id === 'actions') {
           if (!canManageGroupMembers()) {
             return `
               <td class="table-cell-actions">
-                <button class="button ghost table-row-action" type="button" data-group-view="${group.id}">
+                <button class="button ghost table-row-action" type="button" data-group-view="${escapeDynamicHtml(group.id)}">
                   Ver
                 </button>
               </td>
@@ -472,7 +478,7 @@ function renderGroupsTable() {
 
           return `
             <td class="table-cell-actions">
-              <button class="button ghost table-row-action" type="button" data-group-manage="${group.id}">
+              <button class="button ghost table-row-action" type="button" data-group-manage="${escapeDynamicHtml(group.id)}">
                 Gestionar usuarios
               </button>
             </td>
@@ -552,12 +558,12 @@ function renderGroupMembers(groupUsers) {
       ({ user, assignment }, index) => `
         <article class="user-row user-row--compact" style="animation-delay:${index * 60}ms">
           <div>
-            <strong>${user.name}</strong>
-            <span>${user.email}</span>
+            <strong>${escapeDynamicHtml(user.name)}</strong>
+            <span>${escapeDynamicHtml(user.email)}</span>
           </div>
           <div class="user-meta">
-            <span>${assignment.role}</span>
-            ${editable ? `<button class="button secondary button-small" type="button" data-group-remove="${user.id}">Quitar</button>` : ''}
+            <span>${escapeDynamicHtml(assignment.role)}</span>
+            ${editable ? `<button class="button secondary button-small" type="button" data-group-remove="${escapeDynamicHtml(user.id)}">Quitar</button>` : ''}
           </div>
         </article>
       `,
@@ -593,7 +599,7 @@ function renderAvailableUsers(centerUsers, groupUsers) {
   availableUserSelect.disabled = false;
   addUserToGroupButton.disabled = false;
   availableUserSelect.innerHTML = availableUsers
-    .map((entry) => `<option value="${entry.user.id}">${entry.user.name} (${entry.user.email})</option>`)
+    .map((entry) => `<option value="${escapeDynamicHtml(entry.user.id)}">${escapeDynamicHtml(entry.user.name)} (${escapeDynamicHtml(entry.user.email)})</option>`)
     .join('');
 }
 
@@ -831,7 +837,8 @@ groupFiltersList?.addEventListener('change', (event) => {
 
   const field = row.querySelector('[data-filter-field]')?.value || 'name';
   const operator = row.querySelector('[data-filter-operator]')?.value || filterFields[field].operators[0];
-  const value = row.querySelector('[data-filter-value]')?.value || '';
+  const isFieldChange = event.target.matches('[data-filter-field]');
+  const value = isFieldChange ? '' : (row.querySelector('[data-filter-value]')?.value || '');
 
   updateFilter(filterId, { field, operator, value });
 });
@@ -847,7 +854,7 @@ groupFiltersList?.addEventListener('input', (event) => {
   const operator = row.querySelector('[data-filter-operator]')?.value || filterFields[field].operators[0];
   const value = row.querySelector('[data-filter-value]')?.value || '';
 
-  updateFilter(filterId, { field, operator, value });
+  updateFilter(filterId, { field, operator, value }, { render: false });
 });
 
 groupForm?.addEventListener('submit', async (event) => {

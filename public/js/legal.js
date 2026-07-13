@@ -5,6 +5,7 @@ const modalLogoutButton = document.getElementById('modal-logout-button');
 const profileNameElement = document.getElementById('profile-name');
 const profileEmailElement = document.getElementById('profile-email');
 const legalActiveCard = document.getElementById('legal-active-card');
+const legalActiveTitle = document.getElementById('legal-active-title');
 const legalHistorySection = document.getElementById('legal-history-section');
 const legalVersionsList = document.getElementById('legal-versions-list');
 const legalStatusBanner = document.getElementById('legal-status-banner');
@@ -16,6 +17,7 @@ const legalActivationTitle = document.getElementById('legal-activation-title');
 const legalActivationText = document.getElementById('legal-activation-text');
 const legalActivationCancelButton = document.getElementById('legal-activation-cancel-button');
 const legalActivationConfirmButton = document.getElementById('legal-activation-confirm-button');
+const escapeLegalMarkup = window.escapeHtml;
 
 let currentUser = null;
 let legalBannerTimer = null;
@@ -117,9 +119,9 @@ function renderVersionCard(version) {
     <article class="org-card ${version.isActive ? 'org-card--active' : ''} legal-version-card">
       <div class="org-card__top">
         <div>
-          <span class="org-kicker">Versión ${version.version}</span>
-          <h3>${version.title}</h3>
-          <p>${version.content}</p>
+          <span class="org-kicker">Versión ${escapeLegalMarkup(version.version)}</span>
+          <h3>${escapeLegalMarkup(version.title)}</h3>
+          <p>${escapeLegalMarkup(version.content)}</p>
         </div>
         <span class="table-badge ${version.isActive ? 'consent-badge--success' : 'consent-badge--muted'}">${version.isActive ? 'Activa' : 'Inactiva'}</span>
       </div>
@@ -127,11 +129,11 @@ function renderVersionCard(version) {
       <div class="consent-meta-grid">
         <div class="profile-chip">
           <span>Desde</span>
-          <strong>${formatDate(version.effectiveFrom)}</strong>
+          <strong>${escapeLegalMarkup(formatDate(version.effectiveFrom))}</strong>
         </div>
         <div class="profile-chip">
           <span>Hasta</span>
-          <strong>${formatDate(version.effectiveTo)}</strong>
+          <strong>${escapeLegalMarkup(formatDate(version.effectiveTo))}</strong>
         </div>
       </div>
 
@@ -141,8 +143,8 @@ function renderVersionCard(version) {
             class="button secondary"
             type="button"
             data-legal-version-action="${version.isActive ? 'deactivate' : 'activate'}"
-            data-version-id="${version.id}"
-            data-version-title="${version.title}"
+            data-version-id="${escapeLegalMarkup(version.id)}"
+            data-version-title="${escapeLegalMarkup(version.title)}"
           >
             ${version.isActive ? 'Desactivar' : 'Activar'}
           </button>
@@ -157,6 +159,9 @@ async function loadLegalVersions() {
   const versions = response.data.versions || [];
 
   const activeVersion = versions.find((version) => version.isActive) || null;
+  if (legalActiveTitle) {
+    legalActiveTitle.textContent = activeVersion?.title || 'Sin versión legal activa';
+  }
   if (legalActiveCard) {
     legalActiveCard.innerHTML = renderVersionCard(activeVersion);
   }
@@ -191,9 +196,10 @@ async function createLegalVersion(payload) {
 }
 
 async function updateLegalVersionState(versionId, action) {
+  const safeVersionId = encodeURIComponent(versionId);
   const endpoint = action === 'activate'
-    ? `/legal-text-versions/${versionId}/activate`
-    : `/legal-text-versions/${versionId}/deactivate`;
+    ? `/legal-text-versions/${safeVersionId}/activate`
+    : `/legal-text-versions/${safeVersionId}/deactivate`;
 
   showBanner(action === 'activate' ? 'Activando versión legal...' : 'Desactivando versión legal...', 'loading');
 

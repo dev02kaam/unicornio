@@ -17,6 +17,13 @@ const revokeConsentForm = document.getElementById('revoke-consent-form');
 const revokeConsentModal = document.getElementById('revoke-consent-modal');
 const revokeConsentIdField = revokeConsentForm?.querySelector('[name="consentId"]');
 const revokeReasonField = revokeConsentForm?.querySelector('[name="reason"]');
+const revokeConsentSubmit = revokeConsentForm?.querySelector('[type="submit"]');
+const consentDecisionModal = document.getElementById('consent-decision-modal');
+const consentDecisionTitle = document.getElementById('consent-decision-title');
+const consentDecisionText = document.getElementById('consent-decision-text');
+const consentDecisionCancel = document.getElementById('consent-decision-cancel');
+const consentDecisionConfirm = document.getElementById('consent-decision-confirm');
+const escapeConsentMarkup = window.escapeHtml;
 
 const consentStatusLabels = {
   PENDING: 'Pendiente',
@@ -36,6 +43,10 @@ const consentStatusClass = {
 
 let currentUser = null;
 let consentsBannerTimer = null;
+let visibleConsentsById = new Map();
+let pendingConsentDecision = null;
+let consentDecisionInFlight = false;
+let revokeConsentInFlight = false;
 
 function setLegalLinkVisible(isVisible) {
   if (!consentsLegalLink) {
@@ -121,7 +132,9 @@ function renderSummary(consentList) {
 }
 
 function consentCardActions(consent) {
-  const canActAsFamily = isFamilyRole() && currentUser?.linkedStudentId === consent.studentId;
+  const canActAsFamily = isFamilyRole()
+    && String(currentUser?.linkedStudentId || '') === String(consent.studentId || '');
+  const consentId = escapeConsentMarkup(consent.id);
 
   if (!canActAsFamily) {
     return isProfessionalRole()
@@ -132,8 +145,8 @@ function consentCardActions(consent) {
   if (consent.status === 'PENDING') {
     return `
       <div class="consent-card__actions">
-        <button class="button primary button-small" type="button" data-accept-consent="${consent.id}">Aceptar</button>
-        <button class="button secondary button-small" type="button" data-reject-consent="${consent.id}">Rechazar</button>
+        <button class="button primary button-small" type="button" data-accept-consent="${consentId}">Aceptar</button>
+        <button class="button secondary button-small" type="button" data-reject-consent="${consentId}">Rechazar</button>
       </div>
     `;
   }
@@ -141,7 +154,7 @@ function consentCardActions(consent) {
   if (consent.status === 'ACCEPTED') {
     return `
       <div class="consent-card__actions">
-        <button class="button secondary button-small" type="button" data-revoke-consent="${consent.id}">Revocar</button>
+        <button class="button secondary button-small" type="button" data-revoke-consent="${consentId}">Revocar</button>
       </div>
     `;
   }
@@ -154,37 +167,37 @@ function renderConsent(consent) {
     <article class="consent-card org-card ${consent.status === 'ACCEPTED' ? 'consent-card--active' : ''}">
       <div class="org-card__top">
         <div>
-          <span class="org-kicker">${consent.familyUser?.name || 'Familia vinculada'}</span>
-          <h3>${consent.student?.name || 'Estudiante'}</h3>
-          <p>${consent.legalTextVersion?.title || 'Texto legal'}</p>
+          <span class="org-kicker">${escapeConsentMarkup(consent.familyUser?.name || 'Familia vinculada')}</span>
+          <h3>${escapeConsentMarkup(consent.student?.name || 'Estudiante')}</h3>
+          <p>${escapeConsentMarkup(consent.legalTextVersion?.title || 'Texto legal')}</p>
         </div>
-        <span class="${consentStatusClass[consent.status] || 'table-badge'}">${consentStatusLabels[consent.status] || consent.status}</span>
+        <span class="${consentStatusClass[consent.status] || 'table-badge'}">${escapeConsentMarkup(consentStatusLabels[consent.status] || consent.status || 'Sin estado')}</span>
       </div>
 
       <div class="consent-meta-grid">
         <div class="profile-chip">
           <span>Centro</span>
-          <strong>${consent.center?.name || consent.centerId}</strong>
+          <strong>${escapeConsentMarkup(consent.center?.name || consent.centerId || 'Sin centro')}</strong>
         </div>
         <div class="profile-chip">
           <span>Versión legal</span>
-          <strong>${consent.legalTextVersion?.version || '-'}</strong>
+          <strong>${escapeConsentMarkup(consent.legalTextVersion?.version || '-')}</strong>
         </div>
         <div class="profile-chip">
           <span>Solicitado</span>
-          <strong>${formatDate(consent.createdAt)}</strong>
+          <strong>${escapeConsentMarkup(formatDate(consent.createdAt))}</strong>
         </div>
         <div class="profile-chip">
           <span>Actualizado</span>
-          <strong>${formatDate(consent.updatedAt)}</strong>
+          <strong>${escapeConsentMarkup(formatDate(consent.updatedAt))}</strong>
         </div>
       </div>
 
       <p class="field-note">
         ${consent.status === 'PENDING' ? 'Consentimiento pendiente de respuesta familiar.' : ''}
-        ${consent.status === 'ACCEPTED' ? `Aceptado el ${formatDate(consent.acceptedAt)}.` : ''}
-        ${consent.status === 'REJECTED' ? `Rechazado el ${formatDate(consent.rejectedAt)}.` : ''}
-        ${consent.status === 'REVOKED' ? `Revocado el ${formatDate(consent.revokedAt)}.` : ''}
+        ${consent.status === 'ACCEPTED' ? `Aceptado el ${escapeConsentMarkup(formatDate(consent.acceptedAt))}.` : ''}
+        ${consent.status === 'REJECTED' ? `Rechazado el ${escapeConsentMarkup(formatDate(consent.rejectedAt))}.` : ''}
+        ${consent.status === 'REVOKED' ? `Revocado el ${escapeConsentMarkup(formatDate(consent.revokedAt))}.` : ''}
         ${consent.status === 'EXPIRED' ? 'Marcado como caducado.' : ''}
       </p>
 
@@ -201,6 +214,11 @@ function renderConsents(consentList) {
   }
 
   renderSummary(consentList);
+  visibleConsentsById = new Map(
+    consentList
+      .filter((consent) => consent?.id !== undefined && consent?.id !== null)
+      .map((consent) => [String(consent.id), consent]),
+  );
 
   if (!consentList.length) {
     consentsList.innerHTML = `
@@ -245,15 +263,58 @@ async function loadConsents() {
 }
 
 async function acceptConsent(consentId) {
-  await apiRequest(`/consents/${consentId}/accept`, { method: 'POST' });
-  showBanner('Consentimiento aceptado correctamente.', 'success');
-  await loadConsents();
+  await apiRequest(`/consents/${encodeURIComponent(consentId)}/accept`, { method: 'POST' });
 }
 
 async function rejectConsent(consentId) {
-  await apiRequest(`/consents/${consentId}/reject`, { method: 'POST' });
-  showBanner('Consentimiento rechazado correctamente.', 'success');
-  await loadConsents();
+  await apiRequest(`/consents/${encodeURIComponent(consentId)}/reject`, { method: 'POST' });
+}
+
+function setConsentDecisionBusy(isBusy) {
+  consentDecisionInFlight = isBusy;
+  consentDecisionModal?.setAttribute('aria-busy', String(isBusy));
+  if (consentDecisionCancel) consentDecisionCancel.disabled = isBusy;
+  if (consentDecisionConfirm) {
+    consentDecisionConfirm.disabled = isBusy;
+    consentDecisionConfirm.setAttribute('aria-busy', String(isBusy));
+    consentDecisionConfirm.textContent = isBusy
+      ? 'Guardando…'
+      : pendingConsentDecision?.action === 'accept'
+        ? 'Sí, aceptar'
+        : 'Sí, rechazar';
+  }
+}
+
+function closeConsentDecisionModal() {
+  pendingConsentDecision = null;
+  setConsentDecisionBusy(false);
+  closeModalById('consent-decision-modal');
+}
+
+function openConsentDecisionModal(consentId, action) {
+  const consent = visibleConsentsById.get(String(consentId));
+  if (!consent || !['accept', 'reject'].includes(action)) {
+    showBanner('No se ha podido preparar esta decisión. Actualiza la lista e inténtalo de nuevo.', 'error');
+    return;
+  }
+
+  pendingConsentDecision = { consentId: String(consentId), action };
+  const studentName = consent.student?.name || 'el estudiante';
+  const legalTitle = consent.legalTextVersion?.title || 'el texto legal vigente';
+
+  if (consentDecisionTitle) {
+    consentDecisionTitle.textContent = action === 'accept'
+      ? 'Aceptar consentimiento'
+      : 'Rechazar consentimiento';
+  }
+  if (consentDecisionText) {
+    consentDecisionText.textContent = action === 'accept'
+      ? `Vas a aceptar el consentimiento de ${studentName} para “${legalTitle}”. Esta decisión quedará registrada.`
+      : `Vas a rechazar el consentimiento de ${studentName} para “${legalTitle}”. Esta decisión quedará registrada.`;
+  }
+
+  setConsentDecisionBusy(false);
+  openModalById('consent-decision-modal');
 }
 
 function openRevokeModal(consentId) {
@@ -269,12 +330,10 @@ function openRevokeModal(consentId) {
 }
 
 async function revokeConsent(consentId, reason) {
-  await apiRequest(`/consents/${consentId}/revoke`, {
+  await apiRequest(`/consents/${encodeURIComponent(consentId)}/revoke`, {
     method: 'POST',
     body: JSON.stringify({ reason }),
   });
-  showBanner('Consentimiento revocado correctamente.', 'success');
-  await loadConsents();
 }
 
 consentsList?.addEventListener('click', async (event) => {
@@ -284,9 +343,9 @@ consentsList?.addEventListener('click', async (event) => {
 
   try {
     if (acceptButton) {
-      await acceptConsent(acceptButton.getAttribute('data-accept-consent'));
+      openConsentDecisionModal(acceptButton.getAttribute('data-accept-consent'), 'accept');
     } else if (rejectButton) {
-      await rejectConsent(rejectButton.getAttribute('data-reject-consent'));
+      openConsentDecisionModal(rejectButton.getAttribute('data-reject-consent'), 'reject');
     } else if (revokeButton) {
       openRevokeModal(revokeButton.getAttribute('data-revoke-consent'));
     }
@@ -295,17 +354,88 @@ consentsList?.addEventListener('click', async (event) => {
   }
 });
 
+consentDecisionConfirm?.addEventListener('click', async () => {
+  if (!pendingConsentDecision || consentDecisionInFlight) {
+    return;
+  }
+
+  const decision = { ...pendingConsentDecision };
+  let decisionSaved = false;
+  setConsentDecisionBusy(true);
+  try {
+    if (decision.action === 'accept') {
+      await acceptConsent(decision.consentId);
+    } else {
+      await rejectConsent(decision.consentId);
+    }
+
+    decisionSaved = true;
+    closeConsentDecisionModal();
+    await loadConsents();
+    showBanner(
+      decision.action === 'accept'
+        ? 'Consentimiento aceptado correctamente.'
+        : 'Consentimiento rechazado correctamente.',
+      'success',
+    );
+  } catch (error) {
+    showBanner(
+      decisionSaved
+        ? 'La decisión se guardó, pero no se pudo actualizar la lista. Pulsa “Actualizar” para reintentarlo.'
+        : (error.message || 'No ha sido posible guardar la decisión.'),
+      'error',
+    );
+  } finally {
+    setConsentDecisionBusy(false);
+  }
+});
+
+consentDecisionCancel?.addEventListener('click', () => {
+  if (!consentDecisionInFlight) closeConsentDecisionModal();
+});
+consentDecisionModal?.addEventListener('unicornio:modal-closed', () => {
+  if (!consentDecisionInFlight) {
+    pendingConsentDecision = null;
+    setConsentDecisionBusy(false);
+  }
+});
+
 revokeConsentForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
+  if (revokeConsentInFlight) {
+    return;
+  }
 
+  revokeConsentInFlight = true;
+  revokeConsentForm.setAttribute('aria-busy', 'true');
+  if (revokeConsentSubmit) {
+    revokeConsentSubmit.disabled = true;
+    revokeConsentSubmit.setAttribute('aria-busy', 'true');
+  }
+  let revocationSaved = false;
   try {
     const formData = new FormData(revokeConsentForm);
     const consentId = formData.get('consentId');
     const reason = formData.get('reason');
     await revokeConsent(consentId, reason);
+    revocationSaved = true;
     closeModalById('revoke-consent-modal');
+    await loadConsents();
+    showBanner('Consentimiento revocado correctamente.', 'success');
   } catch (error) {
-    showBanner(error.message || 'No ha sido posible revocar el consentimiento.', 'error');
+    showBanner(
+      revocationSaved
+        ? 'La revocación se guardó, pero no se pudo actualizar la lista. Pulsa “Actualizar” para reintentarlo.'
+        : (error.message || 'No ha sido posible revocar el consentimiento.'),
+      'error',
+    );
+  } finally {
+    revokeConsentInFlight = false;
+    revokeConsentForm.removeAttribute('aria-busy');
+    if (revokeConsentSubmit) {
+      revokeConsentSubmit.disabled = false;
+      revokeConsentSubmit.removeAttribute('aria-busy');
+    }
   }
 });
 
@@ -315,17 +445,6 @@ reloadConsentsButton?.addEventListener('click', async () => {
     await loadConsents();
   } catch (error) {
     showBanner(error.message || 'No se han podido actualizar los consentimientos.', 'error');
-  }
-});
-
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && revokeConsentModal && !revokeConsentModal.hidden) {
-    closeModalById('revoke-consent-modal');
-    return;
-  }
-
-  if (event.key === 'Escape' && profileModal && !profileModal.hidden) {
-    closeModalById('profile-modal');
   }
 });
 

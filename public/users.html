@@ -7,7 +7,8 @@
     <link rel="stylesheet" href="/css/styles.css" />
   </head>
   <body>
-    <main class="shell dashboard-shell org-shell">
+    <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
+    <main id="main-content" class="shell dashboard-shell org-shell">
       <section class="card org-hero">
         <div class="hero-copy">
           <span class="badge">Administración</span>
@@ -59,6 +60,7 @@
 
         <div class="data-table-wrap">
           <table class="data-table">
+            <caption class="sr-only">Usuarios disponibles</caption>
             <thead id="users-head"></thead>
             <tbody id="users-body"></tbody>
           </table>
@@ -131,13 +133,13 @@
       <div class="modal__panel modal__panel--small" role="dialog" aria-modal="true" aria-labelledby="user-columns-title">
         <div class="modal__header">
           <div>
-            <span class="badge">Columnas</span>
-            <h2 id="user-columns-title">Configurar tabla</h2>
+            <span class="badge">A tu medida</span>
+            <h2 id="user-columns-title">Organiza tus columnas</h2>
           </div>
           <button class="button secondary" type="button" data-close-modal="user-columns-modal">Cerrar</button>
         </div>
         <div id="user-columns-list" class="column-manager-list"></div>
-        <p class="field-note">Arrastra para cambiar el orden y oculta o recupera columnas cuando quieras.</p>
+        <p class="field-note">El orden y las columnas visibles se guardan autom&#225;ticamente para esta tabla.</p>
       </div>
     </section>
 
@@ -147,7 +149,7 @@
         <div class="section-header">
           <div>
             <span class="badge">Perfil</span>
-            <h2 id="profile-modal-title">Datos y preferencias</h2>
+            <h2 id="profile-modal-title">Datos de perfil</h2>
           </div>
           <button id="profile-close-button" class="button secondary" type="button">Cerrar</button>
         </div>

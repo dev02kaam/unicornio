@@ -53,6 +53,7 @@ let currentCenterRole = '';
 let centerCityCombobox = null;
 let centerAcademicYearPicker = null;
 const formHelpers = window.UnicornioFormHelpers || {};
+const escapeDynamicHtml = window.escapeHtml;
 
 const centerTypeLabels = {
   PRIMARIA: 'Primaria',
@@ -166,7 +167,7 @@ function renderCentersTable() {
 
   centersHead.innerHTML = `
     <tr>
-      ${columns.map((column) => `<th>${column.label}</th>`).join('')}
+      ${columns.map((column) => `<th scope="col">${escapeDynamicHtml(column.label)}</th>`).join('')}
     </tr>
   `;
 
@@ -177,41 +178,41 @@ function renderCentersTable() {
           return `
             <td>
               <div class="table-cell-title">
-                <strong>${center.name}</strong>
-                <span>${formatCenterLine(center)}</span>
+                <strong>${escapeDynamicHtml(center.name)}</strong>
+                <span>${escapeDynamicHtml(formatCenterLine(center))}</span>
               </div>
             </td>
           `;
         }
 
         if (column.id === 'code') {
-          return `<td>${center.code || '-'}</td>`;
+          return `<td>${escapeDynamicHtml(center.code || '-')}</td>`;
         }
 
         if (column.id === 'city') {
-          return `<td>${center.city || '-'}</td>`;
+          return `<td>${escapeDynamicHtml(center.city || '-')}</td>`;
         }
 
         if (column.id === 'type') {
-          return `<td><span class="table-badge">${centerTypeLabels[center.type] || center.type || '-'}</span></td>`;
+          return `<td><span class="table-badge">${escapeDynamicHtml(centerTypeLabels[center.type] || center.type || '-')}</span></td>`;
         }
 
         if (column.id === 'academicYear') {
-          return `<td>${center.academicYear?.label || '-'}</td>`;
+          return `<td>${escapeDynamicHtml(center.academicYear?.label || '-')}</td>`;
         }
 
         if (column.id === 'groups') {
-          return `<td>${center.groupsCount || 0}</td>`;
+          return `<td>${escapeDynamicHtml(center.groupsCount || 0)}</td>`;
         }
 
         if (column.id === 'users') {
-          return `<td>${center.usersCount || 0}</td>`;
+          return `<td>${escapeDynamicHtml(center.usersCount || 0)}</td>`;
         }
 
         if (column.id === 'actions') {
           return `
             <td class="table-cell-actions">
-              <a class="button ghost table-row-action" href="/groups.html?centerId=${encodeURIComponent(center.id)}">Ver grupos</a>
+              <a class="button ghost table-row-action" href="/groups.html?centerId=${escapeDynamicHtml(encodeURIComponent(center.id))}">Ver grupos</a>
             </td>
           `;
         }

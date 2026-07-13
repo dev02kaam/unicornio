@@ -1,5 +1,6 @@
 const { getAllUsers, findUserById, updateUser, deactivateUser, createUser } = require('../services/users.service');
 const { database } = require('../config/database');
+const { sanitizeUser } = require('../models/user.model');
 const { sendSuccess } = require('../utils/response');
 const { AppError } = require('../utils/errors');
 
@@ -32,7 +33,7 @@ function getUserByIdController(req, res, next) {
       throw new AppError('No autorizado para ver este usuario.', 403);
     }
 
-    return sendSuccess(res, { user: user }, 'Usuario encontrado.');
+    return sendSuccess(res, { user: sanitizeUser(user) }, 'Usuario encontrado.');
   } catch (error) {
     return next(error);
   }
