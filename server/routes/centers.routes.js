@@ -11,7 +11,7 @@ const {
   createCenterController,
   getCenterController,
   updateCenterController,
-  deactivateCenterController,
+  deleteCenterController,
   listCenterGroupsController,
   listCenterUsersController,
   createGroupController,
@@ -26,7 +26,7 @@ centersRouter.get('/', listCentersController);
 centersRouter.post('/', validateCenterCreate, createCenterController);
 centersRouter.get('/:centerId', getCenterController);
 centersRouter.patch('/:centerId', validateCenterUpdate, updateCenterController);
-centersRouter.delete('/:centerId', deactivateCenterController);
+centersRouter.delete('/:centerId', deleteCenterController);
 centersRouter.get('/:centerId/groups', listCenterGroupsController);
 centersRouter.post('/:centerId/groups', validateGroupCreate, createGroupController);
 centersRouter.get('/:centerId/users', listCenterUsersController);

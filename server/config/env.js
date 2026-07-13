@@ -10,6 +10,7 @@ const env = {
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:3000',
   databaseUrl: process.env.DATABASE_URL || '',
   databaseSsl: process.env.DATABASE_SSL !== 'false',
+  dataFile: process.env.DATA_FILE || 'server/data/runtime-state.json',
 };
 
 module.exports = { env };

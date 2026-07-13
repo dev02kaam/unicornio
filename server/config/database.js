@@ -1,3 +1,5 @@
+const fs = require('fs/promises');
+const path = require('path');
 const { createDemoUsers } = require('../data/demoUsers');
 const { createDemoAcademicYears } = require('../data/demoAcademicYears');
 const { createDemoCenters } = require('../data/demoCenters');
@@ -57,6 +59,8 @@ let pool = null;
 let persistenceReady = false;
 let writeQueue = Promise.resolve();
 let persistenceError = null;
+let persistenceMode = 'none';
+let localDataFile = null;
 
 async function ensureSchema() {
   await pool.query(`
@@ -110,8 +114,55 @@ async function loadFromPostgres() {
   });
 }
 
+function hydrateState(snapshot) {
+  const collections = snapshot?.collections;
+  if (collections && typeof collections === 'object') {
+    collectionNames.forEach((name) => {
+      if (Array.isArray(collections[name])) {
+        state[name] = collections[name];
+      }
+    });
+  }
+
+  const savedSequences = snapshot?.sequences;
+  if (savedSequences && typeof savedSequences === 'object') {
+    Object.entries(savedSequences).forEach(([name, value]) => {
+      if (Number.isFinite(Number(value))) {
+        sequences[name] = Number(value);
+      }
+    });
+  }
+}
+
+async function loadFromLocalFile() {
+  try {
+    const contents = await fs.readFile(localDataFile, 'utf8');
+    hydrateState(JSON.parse(contents));
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      throw new Error(`No se pudo cargar el almacenamiento local: ${error.message}`);
+    }
+  }
+}
+
+function buildLocalSnapshot() {
+  return {
+    version: 1,
+    collections: Object.fromEntries(collectionNames.map((name) => [name, state[name] || []])),
+    sequences,
+  };
+}
+
+async function persistLocalSnapshot() {
+  const directory = path.dirname(localDataFile);
+  const temporaryFile = `${localDataFile}.tmp`;
+  await fs.mkdir(directory, { recursive: true });
+  await fs.writeFile(temporaryFile, JSON.stringify(buildLocalSnapshot(), null, 2), 'utf8');
+  await fs.rename(temporaryFile, localDataFile);
+}
+
 function enqueueWrite(task, label) {
-  if (!persistenceReady || !pool) {
+  if (!persistenceReady) {
     return Promise.resolve();
   }
 
@@ -127,6 +178,10 @@ function enqueueWrite(task, label) {
 }
 
 function persistCollection(name) {
+  if (persistenceMode === 'local') {
+    return enqueueWrite(persistLocalSnapshot, `el almacenamiento local tras cambiar ${name}`);
+  }
+
   return enqueueWrite(() => pool.query(
     `insert into unicornio_collections (name, data, updated_at)
      values ($1, $2::jsonb, now())
@@ -137,6 +192,10 @@ function persistCollection(name) {
 }
 
 function persistSequence(name) {
+  if (persistenceMode === 'local') {
+    return enqueueWrite(persistLocalSnapshot, `el almacenamiento local tras actualizar la secuencia ${name}`);
+  }
+
   return enqueueWrite(() => pool.query(
     `insert into unicornio_sequences (name, value, updated_at)
      values ($1, $2, now())
@@ -150,7 +209,11 @@ const database = {
   state,
   async initialize() {
     if (!env.databaseUrl) {
-      console.log('Proyecto Unicornio usando almacenamiento en memoria.');
+      localDataFile = path.resolve(process.cwd(), env.dataFile);
+      await loadFromLocalFile();
+      persistenceMode = 'local';
+      persistenceReady = true;
+      console.log(`Proyecto Unicornio usando almacenamiento local en ${localDataFile}.`);
       return;
     }
 
@@ -163,6 +226,7 @@ const database = {
     await ensureSchema();
     await seedIfNeeded();
     await loadFromPostgres();
+    persistenceMode = 'postgres';
     persistenceReady = true;
     console.log('Proyecto Unicornio conectado a PostgreSQL.');
   },

@@ -58,6 +58,24 @@ function validateLogin(req, _res, next) {
   return next();
 }
 
+function validateChangePassword(req, _res, next) {
+  const { currentPassword, newPassword } = req.body || {};
+  const errors = [];
+
+  if (!isNonEmptyString(currentPassword)) {
+    errors.push('La contraseña actual es obligatoria.');
+  }
+  if (!validatePassword(newPassword)) {
+    errors.push('La nueva contraseña debe tener al menos 8 caracteres.');
+  }
+
+  if (errors.length > 0) {
+    return next(new AppError('Validación fallida.', 400, errors));
+  }
+
+  return next();
+}
+
 function validateUserUpdate(req, _res, next) {
   const { name, email, password, role, schoolId, linkedStudentId, birthDate } = req.body || {};
   const errors = [];
@@ -357,6 +375,7 @@ function validateLegalTextVersionCreate(req, _res, next) {
 module.exports = {
   validateRegister,
   validateLogin,
+  validateChangePassword,
   validateUserUpdate,
   validateAdminCreateUser,
   validateCenterCreate,

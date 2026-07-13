@@ -22,6 +22,7 @@ const addGroupFilterButton = document.getElementById('add-group-filter');
 const clearGroupFiltersButton = document.getElementById('clear-group-filters');
 const createGroupTrigger = document.querySelector('[data-open-modal="create-group-modal"]');
 const groupForm = document.getElementById('group-form');
+const groupFormTitle = document.getElementById('create-group-title');
 const groupFormError = document.getElementById('group-form-error');
 const groupFormSuccess = document.getElementById('group-form-success');
 const groupFeedback = document.getElementById('group-feedback');
@@ -58,6 +59,8 @@ let currentGroupsRole = '';
 let groupAcademicYearPicker = null;
 const formHelpers = window.UnicornioFormHelpers || {};
 const escapeDynamicHtml = window.escapeHtml;
+const getGroupDataWarning = window.getDataQualityWarning;
+const showDestructiveActionConfirm = window.confirmDestructiveAction;
 
 const stageLabels = {
   PRIMARIA: 'Primaria',
@@ -153,12 +156,17 @@ function setGroupFormLoading(isLoading) {
   }
 
   groupFormSubmitButton.disabled = isLoading;
-  groupFormSubmitButton.textContent = isLoading ? 'Creando...' : 'Crear grupo';
+  const isEditing = Boolean(groupForm?.elements.id?.value);
+  groupFormSubmitButton.textContent = isLoading ? (isEditing ? 'Guardando...' : 'Creando...') : (isEditing ? 'Guardar cambios' : 'Crear grupo');
 }
 
 function canCreateGroups() {
   const role = String(groupsCurrentUser?.role || '').toUpperCase();
-  return role === 'ADMIN' || role === 'SCHOOL';
+  return role === 'ADMIN' || role === 'SCHOOL' || role === 'TEACHER';
+}
+
+function canManageGroupRecords() {
+  return canCreateGroups();
 }
 
 function canManageGroupMembers() {
@@ -438,7 +446,7 @@ function renderGroupsTable() {
           return `
             <td>
               <div class="table-cell-title">
-                <strong>${escapeDynamicHtml(group.name)}</strong>
+                <strong>${getGroupDataWarning('group', group, group.name || 'Este grupo', { centers: availableCenters })}${escapeDynamicHtml(group.name)}</strong>
                 <span>${escapeDynamicHtml(group.center?.name || 'Sin centro')}</span>
               </div>
             </td>
@@ -466,23 +474,13 @@ function renderGroupsTable() {
         }
 
         if (column.id === 'actions') {
-          if (!canManageGroupMembers()) {
-            return `
-              <td class="table-cell-actions">
-                <button class="button ghost table-row-action" type="button" data-group-view="${escapeDynamicHtml(group.id)}">
-                  Ver
-                </button>
-              </td>
-            `;
-          }
-
-          return `
-            <td class="table-cell-actions">
-              <button class="button ghost table-row-action" type="button" data-group-manage="${escapeDynamicHtml(group.id)}">
-                Gestionar usuarios
-              </button>
-            </td>
-          `;
+          const openAction = canManageGroupMembers()
+            ? `<button class="button ghost table-row-action" type="button" data-group-manage="${escapeDynamicHtml(group.id)}">Gestionar usuarios</button>`
+            : `<button class="button ghost table-row-action" type="button" data-group-view="${escapeDynamicHtml(group.id)}">Ver</button>`;
+          const recordActions = canManageGroupRecords()
+            ? `<button class="button ghost table-row-action" type="button" data-edit-group="${escapeDynamicHtml(group.id)}">Editar</button><button class="button ghost table-row-action" type="button" data-delete-group="${escapeDynamicHtml(group.id)}">Eliminar</button>`
+            : '';
+          return `<td class="table-cell-actions">${openAction}${recordActions}</td>`;
         }
 
         return '<td>-</td>';
@@ -636,10 +634,12 @@ function renderGroupSelection(groupId) {
       : 'La gestión de usuarios la realiza el centro.';
   }
 
-  if (currentCenterId) {
+  const groupCenterId = group.centerId || currentCenterId;
+  const hasAvailableCenter = availableCenters.some((center) => center.id === groupCenterId);
+  if (groupCenterId) {
     Promise.all([
       loadGroupUsers(group.id),
-      loadCenterUsers(currentCenterId),
+      hasAvailableCenter ? loadCenterUsers(groupCenterId) : Promise.resolve([]),
     ]).then(([groupUsers, centerUsers]) => {
       currentGroupUsers = groupUsers;
       currentCenterUsers = centerUsers;
@@ -681,7 +681,7 @@ async function loadProfile() {
 
   if (groupRoleNote) {
     groupRoleNote.textContent = canCreateGroups()
-      ? (canManageGroupMembers() ? 'Tienes permisos para crear y gestionar grupos.' : 'Puedes crear grupos, pero la gestión de usuarios la realiza el centro.')
+      ? (canManageGroupMembers() ? 'Tienes permisos para crear, editar y gestionar grupos.' : 'Puedes crear y editar grupos, pero la gestión de usuarios la realiza el centro.')
       : 'Solo puedes consultar los grupos asignados.';
   }
 }
@@ -726,9 +726,67 @@ function initializeFormHelpers() {
   }
 }
 
+function resetGroupForm() {
+  if (!groupForm) return;
+  groupForm.reset();
+  groupForm.elements.id.value = '';
+  if (groupFormTitle) groupFormTitle.textContent = 'Crear grupo';
+  setMessage(groupFormError, '', true);
+  setMessage(groupFormSuccess, '', false);
+  groupAcademicYearPicker?.setValue(new Date().getFullYear());
+  setGroupFormLoading(false);
+}
+
+function openEditGroup(groupId) {
+  const group = allGroups.find((item) => item.id === groupId);
+  if (!group || !canManageGroupRecords() || !groupForm) return;
+
+  resetGroupForm();
+  groupForm.elements.id.value = group.id;
+  groupForm.elements.name.value = group.name || '';
+  groupForm.elements.code.value = group.code || '';
+  groupForm.elements.stage.value = group.stage || '';
+  groupForm.elements.course.value = group.course || '';
+  const shift = groupForm.querySelector(`[name="shift"][value="${group.shift}"]`);
+  if (shift) shift.checked = true;
+  const startYear = String(group.academicYear?.label || '').match(/^\d{4}/)?.[0];
+  if (startYear) groupAcademicYearPicker?.setValue(startYear);
+  if (groupFormTitle) groupFormTitle.textContent = `Editar ${group.name}`;
+  setGroupFormLoading(false);
+  openModalById('create-group-modal');
+}
+
+async function deleteGroup(groupId) {
+  const group = allGroups.find((item) => item.id === groupId);
+  if (!group || !canManageGroupRecords()) return;
+
+  try {
+    const response = await apiRequest(`/deletion-impact/groups/${encodeURIComponent(groupId)}`);
+    const confirmed = await showDestructiveActionConfirm({
+      title: `Eliminar ${group.name}`,
+      description: 'El grupo se eliminará definitivamente. Los usuarios vinculados que permanezcan mostrarán un aviso de grupo eliminado.',
+      effects: response.data.impact.effects || [],
+      confirmLabel: 'Sí, eliminar grupo',
+    });
+    if (!confirmed) return;
+
+    await apiRequest(`/groups/${encodeURIComponent(groupId)}`, { method: 'DELETE' });
+    if (selectedGroupId === groupId) selectedGroupId = null;
+    await refreshGroupManagement();
+    setBanner(`${group.name} se ha eliminado correctamente.`, 'success');
+  } catch (error) {
+    setBanner(error.message || 'No se pudo eliminar el grupo.', 'error');
+  }
+}
+
 async function loadCentersAndGroups() {
   const response = await apiRequest('/centers');
   renderCenters(response.data.centers || []);
+
+  if (currentGroupsRole === 'ADMIN') {
+    await loadAllGroups();
+    return;
+  }
 
   if (currentCenterId) {
     await loadGroups(currentCenterId);
@@ -736,6 +794,13 @@ async function loadCentersAndGroups() {
   }
 
   renderGroups([]);
+}
+
+async function loadAllGroups() {
+  const response = await apiRequest('/groups');
+  const groups = response.data.groups || [];
+  renderGroups(groups);
+  return groups;
 }
 
 async function loadGroups(centerId) {
@@ -795,6 +860,12 @@ async function loadGroupUsers(groupId) {
 }
 
 async function refreshGroupManagement() {
+  if (currentGroupsRole === 'ADMIN') {
+    await loadAllGroups();
+    if (selectedGroupId) renderGroupSelection(selectedGroupId);
+    return;
+  }
+
   if (!currentCenterId) {
     renderGroupSelection(null);
     return;
@@ -870,6 +941,7 @@ groupForm?.addEventListener('submit', async (event) => {
   }
 
   const formData = new FormData(groupForm);
+  const groupId = formData.get('id');
   const payload = {
     name: formData.get('name'),
     code: formData.get('code'),
@@ -881,21 +953,18 @@ groupForm?.addEventListener('submit', async (event) => {
 
   try {
     setGroupFormLoading(true);
-    setBanner('Creando grupo...', 'loading');
-    const response = await apiRequest(`/centers/${currentCenterId}/groups`, {
-      method: 'POST',
+    setBanner(groupId ? 'Guardando cambios...' : 'Creando grupo...', 'loading');
+    const response = await apiRequest(groupId ? `/groups/${encodeURIComponent(groupId)}` : `/centers/${currentCenterId}/groups`, {
+      method: groupId ? 'PATCH' : 'POST',
       body: JSON.stringify(payload),
     });
 
-    setBanner('Grupo creado correctamente.', 'success');
-    setMessage(groupFormSuccess, 'Grupo creado correctamente.');
-    groupForm.reset();
-    if (groupAcademicYearPicker) {
-      groupAcademicYearPicker.setValue(new Date().getFullYear());
-    }
+    setBanner(groupId ? 'Grupo actualizado correctamente.' : 'Grupo creado correctamente.', 'success');
+    setMessage(groupFormSuccess, groupId ? 'Grupo actualizado correctamente.' : 'Grupo creado correctamente.');
     selectedGroupId = response.data.group.id;
     await loadGroups(currentCenterId);
     closeModalById('create-group-modal');
+    resetGroupForm();
   } catch (error) {
     setBanner(error.message || 'No se pudo crear el grupo.', 'error');
     setMessage(groupFormError, error.message, true);
@@ -920,9 +989,17 @@ groupsBody?.addEventListener('click', async (event) => {
   }
 
   const button = event.target.closest('[data-group-manage]');
-  if (!button) {
+  const editButton = event.target.closest('[data-edit-group]');
+  const deleteButton = event.target.closest('[data-delete-group]');
+  if (editButton) {
+    openEditGroup(editButton.getAttribute('data-edit-group'));
     return;
   }
+  if (deleteButton) {
+    await deleteGroup(deleteButton.getAttribute('data-delete-group'));
+    return;
+  }
+  if (!button) return;
 
   if (!canManageGroupMembers()) {
     await openGroupManager(button.getAttribute('data-group-manage'));
@@ -948,7 +1025,18 @@ groupMembersList?.addEventListener('click', async (event) => {
   }
 
   try {
-    await apiRequest(`/groups/${group.id}/users/${button.getAttribute('data-group-remove')}`, {
+    const userId = button.getAttribute('data-group-remove');
+    const member = currentGroupUsers.find((entry) => entry.user.id === userId)?.user;
+    const response = await apiRequest(`/deletion-impact/group-users/${encodeURIComponent(group.id)}?relatedId=${encodeURIComponent(userId)}`);
+    const confirmed = await showDestructiveActionConfirm({
+      title: `Quitar a ${member?.name || 'este usuario'}`,
+      description: `Dejará de pertenecer al grupo ${group.name}.`,
+      effects: response.data.impact.effects || [],
+      confirmLabel: 'Sí, quitar del grupo',
+    });
+    if (!confirmed) return;
+
+    await apiRequest(`/groups/${group.id}/users/${userId}`, {
       method: 'DELETE',
     });
     await openGroupManager(group.id);
@@ -957,6 +1045,8 @@ groupMembersList?.addEventListener('click', async (event) => {
     setMessage(groupFormError, error.message, true);
   }
 });
+
+createGroupTrigger?.addEventListener('click', resetGroupForm);
 
 addUserToGroupButton?.addEventListener('click', async () => {
   if (!canManageGroupMembers()) {

@@ -363,20 +363,43 @@ function updateUser(id, updates, options = {}) {
   return sanitizeUser(user);
 }
 
-function deactivateUser(id) {
+function deleteUser(id) {
   const user = findUserById(id);
   if (!user) {
     throw new AppError('Usuario no encontrado.', 404);
   }
 
-  user.isActive = false;
-  user.updatedAt = new Date().toISOString();
+  const centerAssignments = database.getCollection('userCenterAssignments') || [];
+  const groupAssignments = database.getCollection('userGroupAssignments') || [];
+  database.setCollection('userCenterAssignments', centerAssignments.filter((assignment) => assignment.userId !== user.id));
+  database.setCollection('userGroupAssignments', groupAssignments.filter((assignment) => assignment.userId !== user.id));
+  database.setUsers(database.getUsers().filter((candidate) => candidate.id !== user.id));
   database.persistUsers();
   return sanitizeUser(user);
 }
 
 function verifyPassword(user, password) {
   return bcrypt.compareSync(password, user.passwordHash);
+}
+
+function changePassword(id, currentPassword, newPassword) {
+  const user = findUserById(id);
+  if (!user) {
+    throw new AppError('Usuario no encontrado.', 404);
+  }
+
+  if (!verifyPassword(user, String(currentPassword || ''))) {
+    throw new AppError('La contraseña actual no es correcta.', 400);
+  }
+
+  if (!validatePassword(newPassword)) {
+    throw new AppError('La nueva contraseña debe tener al menos 8 caracteres.', 400);
+  }
+
+  user.passwordHash = bcrypt.hashSync(String(newPassword), 10);
+  user.updatedAt = new Date().toISOString();
+  database.persistUsers();
+  return sanitizeUser(user);
 }
 
 module.exports = {
@@ -386,6 +409,7 @@ module.exports = {
   createUser,
   createUserWithPasswordHash,
   updateUser,
-  deactivateUser,
+  changePassword,
+  deleteUser,
   verifyPassword,
 };

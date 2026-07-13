@@ -30,12 +30,16 @@ let currentUser = null;
 let users = [];
 let visibleUsers = [];
 let centers = [];
+let groups = [];
 let userFilters = [];
 let filterSeed = 0;
 
 function escapeUserMarkup(value) {
   return window.escapeHtml(value);
 }
+
+const getUserDataWarning = window.getDataQualityWarning;
+const showDestructiveActionConfirm = window.confirmDestructiveAction;
 
 const roleLabels = {
   ADMIN: 'Administrador',
@@ -453,7 +457,7 @@ function renderUsers() {
         return `
           <td>
             <div class="table-cell-title">
-              <strong>${escapeUserMarkup(user.name)}</strong>
+              <strong>${getUserDataWarning('user', user, user.name || 'Este usuario', { users, centers, groups })}${escapeUserMarkup(user.name)}</strong>
               <span>${escapeUserMarkup(user.id)}</span>
             </div>
           </td>
@@ -481,6 +485,7 @@ function renderUsers() {
         return `
           <td class="table-cell-actions">
             <button class="button ghost table-row-action" type="button" data-edit-user="${escapeUserMarkup(user.id)}">Editar</button>
+            <button class="button ghost table-row-action" type="button" data-delete-user="${escapeUserMarkup(user.id)}">Eliminar</button>
           </td>
         `;
       }
@@ -545,12 +550,14 @@ function openEditForm(userId) {
 }
 
 async function loadData() {
-  const [usersResponse, centersResponse] = await Promise.all([
+  const [usersResponse, centersResponse, groupsResponse] = await Promise.all([
     apiRequest('/users'),
     apiRequest('/centers'),
+    apiRequest('/groups'),
   ]);
   users = usersResponse.data.users || [];
   centers = centersResponse.data.centers || [];
+  groups = groupsResponse.data.groups || [];
   renderSelects();
   renderFilterBuilder();
   applyUserFilters();
@@ -632,6 +639,28 @@ async function submitUserForm(event) {
   }
 }
 
+async function deleteUser(userId) {
+  const user = users.find((item) => item.id === userId);
+  if (!user) return;
+
+  try {
+    const response = await apiRequest(`/deletion-impact/users/${encodeURIComponent(userId)}`);
+    const confirmed = await showDestructiveActionConfirm({
+      title: `Eliminar a ${user.name}`,
+      description: 'Esta cuenta se eliminará definitivamente. Los registros vinculados que permanezcan mostrarán un aviso de referencia eliminada.',
+      effects: response.data.impact.effects || [],
+      confirmLabel: 'Sí, eliminar usuario',
+    });
+    if (!confirmed) return;
+
+    await apiRequest(`/users/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+    await loadData();
+    showFeedback(`${user.name} se ha eliminado correctamente.`);
+  } catch (error) {
+    showFeedback(error.message || 'No se pudo eliminar el usuario.', true);
+  }
+}
+
 async function doLogout() {
   try {
     await apiRequest('/auth/logout', { method: 'POST' });
@@ -666,8 +695,14 @@ userGlobalSearch?.addEventListener('input', applyUserFilters);
 userRole?.addEventListener('change', updateFieldVisibility);
 userForm?.addEventListener('submit', submitUserForm);
 usersBody?.addEventListener('click', (event) => {
-  const button = event.target.closest('[data-edit-user]');
-  if (button) openEditForm(button.getAttribute('data-edit-user'));
+  const editButton = event.target.closest('[data-edit-user]');
+  if (editButton) {
+    openEditForm(editButton.getAttribute('data-edit-user'));
+    return;
+  }
+
+  const deleteButton = event.target.closest('[data-delete-user]');
+  if (deleteButton) deleteUser(deleteButton.getAttribute('data-delete-user'));
 });
 
 userFiltersList?.addEventListener('click', (event) => {

@@ -27,12 +27,21 @@ const centerCount = document.getElementById('center-count');
 const centerRoleNote = document.getElementById('center-role-note');
 const centerHeroCopy = document.getElementById('center-hero-copy');
 const centerForm = document.getElementById('center-form');
+const centerFormTitle = document.getElementById('create-center-title');
+const centerFormSubmit = document.getElementById('center-form-submit');
+const centerLinkedAccountFields = document.getElementById('center-linked-account-fields');
+const createCenterButton = document.getElementById('create-center-button');
 const centerFormError = document.getElementById('center-form-error');
 const centerFormSuccess = document.getElementById('center-form-success');
 const refreshCentersButton = document.getElementById('refresh-centers');
+const centerGlobalSearch = document.getElementById('center-global-search');
+const centerFiltersList = document.getElementById('center-filters-list');
+const addCenterFilterButton = document.getElementById('add-center-filter');
+const clearCenterFiltersButton = document.getElementById('clear-center-filters');
 const centersHead = document.getElementById('centers-head');
 const centersBody = document.getElementById('centers-body');
 const centersToolbar = document.getElementById('centers-toolbar');
+const centersFiltersPanel = document.getElementById('centers-filters-panel');
 const centersListPanel = document.getElementById('centers-list-panel');
 const schoolCenterPanel = document.getElementById('school-center-panel');
 const schoolCenterNote = document.getElementById('school-center-note');
@@ -48,18 +57,52 @@ const schoolCenterGroupsLink = document.getElementById('school-center-groups-lin
 
 let centersCurrentUser = null;
 let centersData = [];
+let visibleCenters = [];
+let centerFilters = [];
+let centerFilterSeed = 0;
 let currentCenterSummary = null;
 let currentCenterRole = '';
 let centerCityCombobox = null;
 let centerAcademicYearPicker = null;
 const formHelpers = window.UnicornioFormHelpers || {};
 const escapeDynamicHtml = window.escapeHtml;
+const getCenterDataWarning = window.getDataQualityWarning;
+const showDestructiveActionConfirm = window.confirmDestructiveAction;
 
 const centerTypeLabels = {
   PRIMARIA: 'Primaria',
   SECUNDARIA: 'Secundaria',
   PRIMARIA_SECUNDARIA: 'Primaria y secundaria',
   OTRO: 'Otro',
+};
+
+const centerFilterFields = {
+  name: { label: 'Nombre', type: 'text', operators: ['contains', 'equals', 'startsWith'] },
+  code: { label: 'Código', type: 'text', operators: ['contains', 'equals', 'startsWith'] },
+  city: { label: 'Ciudad', type: 'text', operators: ['contains', 'equals', 'startsWith'] },
+  type: {
+    label: 'Tipo',
+    type: 'select',
+    operators: ['equals'],
+    options: Object.entries(centerTypeLabels).map(([value, label]) => ({ value, label })),
+  },
+  academicYear: { label: 'Curso escolar', type: 'text', operators: ['contains', 'equals', 'startsWith'] },
+  groupsCount: { label: 'Grupos', type: 'number', operators: ['equals', 'greaterThan', 'lessThan'] },
+  usersCount: { label: 'Usuarios', type: 'number', operators: ['equals', 'greaterThan', 'lessThan'] },
+  status: {
+    label: 'Estado',
+    type: 'select',
+    operators: ['equals'],
+    options: [{ value: 'ACTIVE', label: 'Activo' }, { value: 'INACTIVE', label: 'Inactivo' }],
+  },
+};
+
+const centerOperatorLabels = {
+  contains: 'Contiene',
+  equals: 'Es exactamente',
+  startsWith: 'Empieza por',
+  greaterThan: 'Mayor que',
+  lessThan: 'Menor que',
 };
 
 const centerColumns = setupColumnManager({
@@ -158,6 +201,123 @@ function renderSchoolCenter(center) {
   }
 }
 
+function getSearchableCenterText(center) {
+  return [
+    center.name,
+    center.code,
+    center.city,
+    centerTypeLabels[center.type] || center.type,
+    center.academicYear?.label,
+    String(center.groupsCount ?? ''),
+    String(center.usersCount ?? ''),
+    center.isActive ? 'Activo' : 'Inactivo',
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function getCenterFilterValue(center, field) {
+  if (field === 'type') return String(center.type || '').toUpperCase();
+  if (field === 'status') return center.isActive ? 'ACTIVE' : 'INACTIVE';
+  if (field === 'groupsCount' || field === 'usersCount') return Number(center[field] || 0);
+  if (field === 'academicYear') return String(center.academicYear?.label || '').toLowerCase();
+  return String(center[field] || '').toLowerCase();
+}
+
+function matchesCenterFilter(center, filter) {
+  const config = centerFilterFields[filter.field];
+  if (!config || !filter.operator) return true;
+
+  const rawValue = String(filter.value ?? '').trim();
+  if (!rawValue) return true;
+
+  const centerValue = getCenterFilterValue(center, filter.field);
+  if (config.type === 'number') {
+    const numberValue = Number(rawValue);
+    if (Number.isNaN(numberValue)) return true;
+    if (filter.operator === 'greaterThan') return centerValue > numberValue;
+    if (filter.operator === 'lessThan') return centerValue < numberValue;
+    return centerValue === numberValue;
+  }
+
+  if (config.type === 'select') return centerValue === rawValue.toUpperCase();
+  const normalizedValue = rawValue.toLowerCase();
+  if (filter.operator === 'startsWith') return centerValue.startsWith(normalizedValue);
+  if (filter.operator === 'equals') return centerValue === normalizedValue;
+  return centerValue.includes(normalizedValue);
+}
+
+function renderCenterFilterBuilder() {
+  if (!centerFiltersList) return;
+  if (centerFilters.length === 0) {
+    centerFiltersList.innerHTML = '<article class="filter-empty"><strong>Sin filtros activos</strong><p>Usa la búsqueda global o añade condiciones para afinar los resultados.</p></article>';
+    return;
+  }
+
+  centerFiltersList.innerHTML = centerFilters.map((filter) => {
+    const config = centerFilterFields[filter.field] || centerFilterFields.name;
+    const fieldOptions = Object.entries(centerFilterFields)
+      .map(([key, fieldConfig]) => `<option value="${escapeDynamicHtml(key)}" ${filter.field === key ? 'selected' : ''}>${escapeDynamicHtml(fieldConfig.label)}</option>`).join('');
+    const operatorOptions = config.operators
+      .map((operator) => `<option value="${escapeDynamicHtml(operator)}" ${filter.operator === operator ? 'selected' : ''}>${escapeDynamicHtml(centerOperatorLabels[operator])}</option>`).join('');
+    let valueControl = `<input type="text" data-filter-value value="${escapeDynamicHtml(filter.value ?? '')}" placeholder="Escribe un valor" />`;
+
+    if (config.type === 'number') {
+      valueControl = `<input type="number" min="0" step="1" inputmode="numeric" data-filter-value value="${escapeDynamicHtml(filter.value ?? '')}" placeholder="0" />`;
+    } else if (config.type === 'select') {
+      const options = config.options.map((option) => `<option value="${escapeDynamicHtml(option.value)}" ${String(filter.value || '').toUpperCase() === option.value ? 'selected' : ''}>${escapeDynamicHtml(option.label)}</option>`).join('');
+      valueControl = `<select data-filter-value><option value="">Selecciona...</option>${options}</select>`;
+    }
+
+    return `<article class="filter-row" data-filter-id="${escapeDynamicHtml(filter.id)}" data-filter-type="${escapeDynamicHtml(config.type)}">
+      <label class="filter-row__field"><span>Campo</span><select data-filter-field>${fieldOptions}</select></label>
+      <label class="filter-row__field"><span>Operador</span><select data-filter-operator>${operatorOptions}</select></label>
+      <label class="filter-row__field"><span>Valor</span>${valueControl}</label>
+      <div class="filter-row__actions"><button class="button ghost button-small" type="button" data-filter-remove="${escapeDynamicHtml(filter.id)}">Quitar</button></div>
+    </article>`;
+  }).join('');
+}
+
+function createCenterFilter(partial = {}) {
+  const field = partial.field || 'name';
+  const config = centerFilterFields[field] || centerFilterFields.name;
+  centerFilters.push({ id: `center-filter-${++centerFilterSeed}`, field, operator: partial.operator || config.operators[0], value: partial.value ?? '' });
+  renderCenterFilterBuilder();
+  applyCenterFilters();
+}
+
+function updateCenterFilter(id, patch, { render = true } = {}) {
+  centerFilters = centerFilters.map((filter) => {
+    if (filter.id !== id) return filter;
+    const next = { ...filter, ...patch };
+    const config = centerFilterFields[next.field] || centerFilterFields.name;
+    if (!config.operators.includes(next.operator)) next.operator = config.operators[0];
+    return next;
+  });
+  if (render) renderCenterFilterBuilder();
+  applyCenterFilters();
+}
+
+function removeCenterFilter(id) {
+  centerFilters = centerFilters.filter((filter) => filter.id !== id);
+  renderCenterFilterBuilder();
+  applyCenterFilters();
+}
+
+function clearCenterFilters() {
+  centerFilters = [];
+  if (centerGlobalSearch) centerGlobalSearch.value = '';
+  renderCenterFilterBuilder();
+  applyCenterFilters();
+}
+
+function applyCenterFilters() {
+  const query = String(centerGlobalSearch?.value || '').trim().toLowerCase();
+  visibleCenters = centersData.filter((center) => (!query || getSearchableCenterText(center).includes(query)) && centerFilters.every((filter) => matchesCenterFilter(center, filter)));
+  if (getUserRole() === 'ADMIN' && centerCount) {
+    centerCount.textContent = `${visibleCenters.length} ${visibleCenters.length === 1 ? 'centro' : 'centros'}`;
+  }
+  renderCentersTable();
+}
+
 function renderCentersTable() {
   if (!centersHead || !centersBody) {
     return;
@@ -171,14 +331,19 @@ function renderCentersTable() {
     </tr>
   `;
 
-  centersBody.innerHTML = centersData
+  if (!visibleCenters.length) {
+    centersBody.innerHTML = '<tr><td colspan="99"><article class="empty-state"><strong>No hay centros que coincidan</strong><p>Prueba a quitar filtros o a buscar por otro campo.</p></article></td></tr>';
+    return;
+  }
+
+  centersBody.innerHTML = visibleCenters
     .map((center, index) => {
       const cells = columns.map((column) => {
         if (column.id === 'name') {
           return `
             <td>
               <div class="table-cell-title">
-                <strong>${escapeDynamicHtml(center.name)}</strong>
+                <strong>${getCenterDataWarning('center', center, center.name || 'Este centro')}${escapeDynamicHtml(center.name)}</strong>
                 <span>${escapeDynamicHtml(formatCenterLine(center))}</span>
               </div>
             </td>
@@ -213,6 +378,8 @@ function renderCentersTable() {
           return `
             <td class="table-cell-actions">
               <a class="button ghost table-row-action" href="/groups.html?centerId=${escapeDynamicHtml(encodeURIComponent(center.id))}">Ver grupos</a>
+              <button class="button ghost table-row-action" type="button" data-edit-center="${escapeDynamicHtml(center.id)}">Editar</button>
+              <button class="button ghost table-row-action" type="button" data-delete-center="${escapeDynamicHtml(center.id)}">Eliminar</button>
             </td>
           `;
         }
@@ -227,6 +394,7 @@ function renderCentersTable() {
 
 function renderCenters(centers) {
   centersData = centers;
+  visibleCenters = centers;
   centerCount.textContent = `${centers.length} ${centers.length === 1 ? 'centro' : 'centros'}`;
 
   if (getUserRole() !== 'ADMIN') {
@@ -234,7 +402,7 @@ function renderCenters(centers) {
     return;
   }
 
-  renderCentersTable();
+  applyCenterFilters();
 }
 
 async function loadCenters() {
@@ -251,6 +419,7 @@ async function loadProfile() {
   if (role === 'ADMIN') {
     centerRoleNote.textContent = 'Puedes crear, editar y revisar todos los centros.';
     centerHeroCopy.textContent = 'Consulta los centros disponibles, crea el centro y su cuenta vinculada en un único paso y entra a sus grupos con un clic.';
+    setPanelVisible(centersFiltersPanel, true, 'block');
     setPanelVisible(centersListPanel, true, 'grid');
     setPanelVisible(schoolCenterPanel, false);
     if (centersToolbar) {
@@ -276,6 +445,7 @@ async function loadProfile() {
     centerHeroCopy.textContent = 'Tu cuenta de centro solo muestra sus propios datos y accesos vinculados.';
   }
   setPanelVisible(centersListPanel, false);
+  setPanelVisible(centersFiltersPanel, false);
   setPanelVisible(schoolCenterPanel, true, 'grid');
 }
 
@@ -322,6 +492,59 @@ function initializeFormHelpers() {
   }
 }
 
+function resetCenterForm() {
+  if (!centerForm) return;
+  centerForm.reset();
+  centerForm.elements.id.value = '';
+  if (centerFormTitle) centerFormTitle.textContent = 'Crear centro';
+  if (centerFormSubmit) centerFormSubmit.textContent = 'Crear centro';
+  if (centerLinkedAccountFields) centerLinkedAccountFields.hidden = false;
+  setMessage(centerFormError, '', true);
+  setMessage(centerFormSuccess, '', false);
+  centerCityCombobox?.setValue('');
+  centerAcademicYearPicker?.setValue(new Date().getFullYear());
+}
+
+function openEditCenter(centerId) {
+  const center = centersData.find((item) => item.id === centerId);
+  if (!center || getUserRole() !== 'ADMIN' || !centerForm) return;
+
+  resetCenterForm();
+  centerForm.elements.id.value = center.id;
+  centerForm.elements.name.value = center.name || '';
+  centerForm.elements.code.value = center.code || '';
+  centerForm.elements.type.value = center.type || '';
+  const startYear = String(center.academicYear?.label || '').match(/^\d{4}/)?.[0];
+  if (startYear) centerAcademicYearPicker?.setValue(startYear);
+  centerCityCombobox?.setValue(center.city || '');
+  if (centerFormTitle) centerFormTitle.textContent = `Editar ${center.name}`;
+  if (centerFormSubmit) centerFormSubmit.textContent = 'Guardar cambios';
+  if (centerLinkedAccountFields) centerLinkedAccountFields.hidden = true;
+  openModalById('create-center-modal');
+}
+
+async function deleteCenter(centerId) {
+  const center = centersData.find((item) => item.id === centerId);
+  if (!center) return;
+
+  try {
+    const response = await apiRequest(`/deletion-impact/centers/${encodeURIComponent(centerId)}`);
+    const confirmed = await showDestructiveActionConfirm({
+      title: `Eliminar ${center.name}`,
+      description: 'El centro se eliminará definitivamente. Los grupos, usuarios y consentimientos vinculados que permanezcan mostrarán un aviso de centro eliminado.',
+      effects: response.data.impact.effects || [],
+      confirmLabel: 'Sí, eliminar centro',
+    });
+    if (!confirmed) return;
+
+    await apiRequest(`/centers/${encodeURIComponent(centerId)}`, { method: 'DELETE' });
+    await loadCenters();
+    setMessage(centerFormSuccess, `${center.name} se ha eliminado correctamente.`);
+  } catch (error) {
+    setMessage(centerFormError, error.message || 'No se pudo eliminar el centro.', true);
+  }
+}
+
 async function doLogout() {
   try {
     await apiRequest('/auth/logout', { method: 'POST' });
@@ -339,6 +562,7 @@ async function init() {
     await loadProfile();
     await loadAccountSheet();
     await loadCenters();
+    renderCenterFilterBuilder();
   } catch (_error) {
     clearToken();
     window.location.href = '/login.html';
@@ -351,34 +575,31 @@ centerForm?.addEventListener('submit', async (event) => {
   setMessage(centerFormSuccess, '', false);
 
   const formData = new FormData(centerForm);
+  const centerId = formData.get('id');
   const payload = {
     name: formData.get('name'),
     code: formData.get('code'),
     type: formData.get('type') || undefined,
     academicYearId: formData.get('academicYearId') || undefined,
     city: formData.get('city') || undefined,
-    userName: formData.get('userName') || undefined,
-    userEmail: formData.get('userEmail') || undefined,
-    userPassword: formData.get('userPassword') || undefined,
   };
 
+  if (!centerId) {
+    payload.userName = formData.get('userName') || undefined;
+    payload.userEmail = formData.get('userEmail') || undefined;
+    payload.userPassword = formData.get('userPassword') || undefined;
+  }
+
   try {
-    const response = await apiRequest('/centers', {
-      method: 'POST',
+    const response = await apiRequest(centerId ? `/centers/${encodeURIComponent(centerId)}` : '/centers', {
+      method: centerId ? 'PATCH' : 'POST',
       body: JSON.stringify(payload),
     });
 
-    setMessage(centerFormSuccess, response.message || 'Centro y cuenta vinculada creados correctamente.');
-    centerForm.reset();
-    if (centerCityCombobox) {
-      centerCityCombobox.setValue('');
-    } else if (centerCityHidden) {
-      centerCityHidden.value = '';
-    }
-    if (centerAcademicYearPicker) {
-      centerAcademicYearPicker.setValue(new Date().getFullYear());
-    }
+    setMessage(centerFormSuccess, response.message || (centerId ? 'Centro actualizado correctamente.' : 'Centro y cuenta vinculada creados correctamente.'));
     await loadCenters();
+    closeModalById('create-center-modal');
+    resetCenterForm();
   } catch (error) {
     setMessage(centerFormError, error.message, true);
   }
@@ -401,6 +622,50 @@ refreshCentersButton?.addEventListener('click', async () => {
   } catch (error) {
     setMessage(centerFormError, error.message, true);
   }
+});
+
+addCenterFilterButton?.addEventListener('click', () => createCenterFilter());
+clearCenterFiltersButton?.addEventListener('click', clearCenterFilters);
+centerGlobalSearch?.addEventListener('input', applyCenterFilters);
+
+centerFiltersList?.addEventListener('click', (event) => {
+  const removeButton = event.target.closest('[data-filter-remove]');
+  if (removeButton) removeCenterFilter(removeButton.getAttribute('data-filter-remove'));
+});
+
+centerFiltersList?.addEventListener('change', (event) => {
+  const row = event.target.closest('[data-filter-id]');
+  if (!row) return;
+  const filterId = row.getAttribute('data-filter-id');
+  const field = row.querySelector('[data-filter-field]')?.value || 'name';
+  const config = centerFilterFields[field] || centerFilterFields.name;
+  const operator = row.querySelector('[data-filter-operator]')?.value || config.operators[0];
+  const isFieldChange = event.target.matches('[data-filter-field]');
+  const value = isFieldChange ? '' : (row.querySelector('[data-filter-value]')?.value || '');
+  updateCenterFilter(filterId, { field, operator, value });
+});
+
+centerFiltersList?.addEventListener('input', (event) => {
+  const row = event.target.closest('[data-filter-id]');
+  if (!row) return;
+  const filterId = row.getAttribute('data-filter-id');
+  const field = row.querySelector('[data-filter-field]')?.value || 'name';
+  const config = centerFilterFields[field] || centerFilterFields.name;
+  const operator = row.querySelector('[data-filter-operator]')?.value || config.operators[0];
+  const value = row.querySelector('[data-filter-value]')?.value || '';
+  updateCenterFilter(filterId, { field, operator, value }, { render: false });
+});
+
+createCenterButton?.addEventListener('click', resetCenterForm);
+centersBody?.addEventListener('click', (event) => {
+  const editButton = event.target.closest('[data-edit-center]');
+  if (editButton) {
+    openEditCenter(editButton.getAttribute('data-edit-center'));
+    return;
+  }
+
+  const deleteButton = event.target.closest('[data-delete-center]');
+  if (deleteButton) deleteCenter(deleteButton.getAttribute('data-delete-center'));
 });
 
 init();

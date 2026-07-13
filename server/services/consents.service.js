@@ -176,6 +176,10 @@ function expireConsentsForLegalVersionIds(legalVersionIds, performedByUser) {
     });
   });
 
+  if (expired.length > 0) {
+    database.persistCollection('consents');
+  }
+
   return expired.map(buildConsentSummary);
 }
 
@@ -524,6 +528,7 @@ function ensureConsentEditable(consent) {
     consent.status = CONSENT_STATUSES.EXPIRED;
     consent.expiresAt = nowIso();
     consent.updatedAt = consent.expiresAt;
+    database.persistCollection('consents');
     return false;
   }
 
@@ -567,6 +572,7 @@ function acceptConsent(consentId, currentUser) {
   consent.revocationReason = null;
   consent.expiresAt = getCurrentConsentVersion(consent)?.effectiveTo || null;
   consent.updatedAt = now;
+  database.persistCollection('consents');
 
   createConsentAuditLog({
     consentId: consent.id,
@@ -620,6 +626,7 @@ function rejectConsent(consentId, currentUser) {
   consent.revocationReason = null;
   consent.expiresAt = null;
   consent.updatedAt = now;
+  database.persistCollection('consents');
 
   createConsentAuditLog({
     consentId: consent.id,
@@ -662,6 +669,7 @@ function revokeConsent(consentId, reason, currentUser) {
   consent.revocationReason = revocationReason;
   consent.expiresAt = null;
   consent.updatedAt = now;
+  database.persistCollection('consents');
 
   createConsentAuditLog({
     consentId: consent.id,
@@ -694,6 +702,7 @@ function expireConsent(consentId, currentUser = null, metadata = {}) {
   consent.status = CONSENT_STATUSES.EXPIRED;
   consent.expiresAt = now;
   consent.updatedAt = now;
+  database.persistCollection('consents');
 
   createConsentAuditLog({
     consentId: consent.id,

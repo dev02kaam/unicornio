@@ -20,10 +20,11 @@
           </div>
         </div>
         <button id="profile-button" class="account-trigger" type="button" aria-label="Abrir perfil">
-          <span class="avatar-badge avatar-large" aria-hidden="true">U</span>
+          <span class="avatar-badge avatar-large" aria-hidden="true">
+            <svg class="avatar-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="8" r="3.25" fill="currentColor" /><path d="M5.5 19.25C6.18 15.87 8.37 14 12 14C15.63 14 17.82 15.87 18.5 19.25" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" /></svg>
+          </span>
         </button>
         <div hidden>
-          <strong id="center-count">0 centros</strong>
           <small id="center-role-note">Cargando acceso...</small>
         </div>
       </section>
@@ -58,17 +59,38 @@
         </article>
       </section>
 
+      <section id="centers-filters-panel" class="card org-panel">
+        <div class="section-header">
+          <div>
+            <span class="badge">Filtros</span>
+            <h2>Buscar centros</h2>
+          </div>
+          <p>Combina varios filtros y se aplican al instante.</p>
+        </div>
+
+        <div class="org-toolbar">
+          <label class="org-toolbar-field org-toolbar-field--wide">
+            <span>Búsqueda global</span>
+            <input id="center-global-search" type="search" placeholder="Nombre, código, ciudad, tipo..." autocomplete="off" />
+          </label>
+          <div id="centers-toolbar" class="toolbar-group">
+            <button id="add-center-filter" class="button secondary" type="button">Añadir filtro</button>
+            <button id="clear-center-filters" class="button secondary" type="button">Limpiar</button>
+            <button id="refresh-centers" class="button secondary" type="button">Actualizar</button>
+            <button id="create-center-button" class="button secondary" type="button" data-open-modal="create-center-modal">Crear centro</button>
+            <button class="button secondary" type="button" data-open-modal="center-columns-modal">Columnas</button>
+          </div>
+        </div>
+        <div id="center-filters-list" class="filter-builder"></div>
+      </section>
+
       <section id="centers-list-panel" class="card org-panel">
         <div class="section-header">
           <div>
             <span class="badge">Listado</span>
             <h2>Centros disponibles</h2>
           </div>
-          <div id="centers-toolbar" class="toolbar-group">
-            <button id="refresh-centers" class="button secondary" type="button">Actualizar</button>
-            <button class="button secondary" type="button" data-open-modal="create-center-modal">Crear centro</button>
-            <button class="button secondary" type="button" data-open-modal="center-columns-modal">Columnas</button>
-          </div>
+          <span id="center-count" class="org-counter">0 centros</span>
         </div>
         <div class="data-table-wrap">
           <table class="data-table">
@@ -86,11 +108,12 @@
         <div class="modal__header">
           <div>
             <span class="badge">Nuevo centro</span>
-            <h2 id="create-center-title">Crear centro</h2>
+          <h2 id="create-center-title">Crear centro</h2>
           </div>
           <button class="button secondary" type="button" data-close-modal="create-center-modal">Cerrar</button>
         </div>
         <form id="center-form" class="dialog-form-grid">
+          <input type="hidden" name="id" />
           <label>
             <span>Nombre</span>
             <input type="text" name="name" placeholder="Colegio Unicornio Sur" required />
@@ -149,7 +172,7 @@
               </div>
             </div>
           </label>
-          <div class="consent-version-card org-form-wide">
+          <div id="center-linked-account-fields" class="consent-version-card org-form-wide">
             <div class="consent-version-card__head">
               <span class="badge">Cuenta vinculada</span>
               <span class="table-badge consent-badge--muted">Se crea al mismo tiempo</span>
@@ -173,7 +196,7 @@
           <p id="center-form-error" class="error" hidden></p>
           <p id="center-form-success" class="success" hidden></p>
           <div class="modal__footer">
-            <button class="button primary" type="submit">Crear centro</button>
+            <button id="center-form-submit" class="button primary" type="submit">Crear centro</button>
           </div>
         </form>
       </div>
@@ -216,9 +239,46 @@
           </div>
         </div>
 
+        <div class="preferences-card">
+          <span class="profile-caption">Preferencias de acceso</span>
+          <label class="toggle-row">
+            <input type="checkbox" data-remember-session aria-describedby="remember-session-help" />
+            <span>Recordar mi sesión en este dispositivo</span>
+          </label>
+          <p id="remember-session-help" class="field-note">Si lo desactivas, tendrás que volver a iniciar sesión al cerrar esta pestaña.</p>
+        </div>
+
         <div class="action-row modal-actions">
           <button id="modal-logout-button" class="button secondary" type="button">Cerrar sesión</button>
         </div>
+
+        <form class="profile-password-form" data-profile-password-form>
+          <div class="section-header section-header--compact">
+            <div>
+              <span class="badge">Seguridad</span>
+              <h3>Cambiar contraseña</h3>
+            </div>
+            <button class="button secondary profile-password-close" type="button" data-close-password-modal>Cerrar</button>
+          </div>
+          <label>
+            <span>Contraseña actual</span>
+            <input type="password" name="currentPassword" autocomplete="current-password" required />
+          </label>
+          <label>
+            <span>Nueva contraseña</span>
+            <input type="password" name="newPassword" autocomplete="new-password" minlength="8" required />
+          </label>
+          <p class="field-note">Usa al menos 8 caracteres. Tendrás que volver a iniciar sesión si la sesión caduca.</p>
+          <p class="error" data-profile-password-error hidden></p>
+          <p class="success" data-profile-password-success hidden></p>
+          <div class="modal-actions">
+            <button class="button primary" type="submit">Actualizar contraseña</button>
+          </div>
+        </form>
+
+        <button class="button secondary profile-password-trigger" type="button" data-open-password-modal>
+          Cambiar contraseña
+        </button>
       </div>
     </section>
 

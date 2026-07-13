@@ -359,53 +359,18 @@ function updateCenter(centerId, data, user) {
   }
 
   center.updatedAt = new Date().toISOString();
+  database.persistCollection('centers');
   return buildCenterSummary(center);
 }
 
-function deactivateCenter(centerId, user) {
+function deleteCenter(centerId, user) {
   const center = assertCenterExists(centerId);
 
   if (!isAdmin(user)) {
-    throw new AppError('No autorizado para desactivar centros.', 403);
+    throw new AppError('No autorizado para eliminar centros.', 403);
   }
-
-  center.isActive = false;
-  center.updatedAt = new Date().toISOString();
-
-  const groups = database.getCollection('groups') || [];
-  const groupIds = new Set(groups.filter((group) => group.centerId === center.id).map((group) => group.id));
-  groups.forEach((group) => {
-    if (group.centerId === center.id) {
-      group.isActive = false;
-      group.updatedAt = center.updatedAt;
-    }
-  });
-  database.setCollection('groups', groups);
-
-  const centerAssignments = database.getCollection('userCenterAssignments') || [];
-  const affectedUserIds = new Set();
-  centerAssignments.forEach((assignment) => {
-    if (assignment.centerId === center.id) {
-      assignment.isActive = false;
-      assignment.updatedAt = center.updatedAt;
-      affectedUserIds.add(assignment.userId);
-    }
-  });
-  database.setCollection('userCenterAssignments', centerAssignments);
-
-  const groupAssignments = database.getCollection('userGroupAssignments') || [];
-  groupAssignments.forEach((assignment) => {
-    const group = groups.find((item) => item.id === assignment.groupId);
-    if (group && groupIds.has(group.id)) {
-      assignment.isActive = false;
-      assignment.updatedAt = center.updatedAt;
-      affectedUserIds.add(assignment.userId);
-    }
-  });
-  database.setCollection('userGroupAssignments', groupAssignments);
-
-  affectedUserIds.forEach((userId) => syncUserPlacementFromAssignments(userId));
-
+  database.setCollection('centers', (database.getCollection('centers') || [])
+    .filter((item) => item.id !== center.id));
   return buildCenterSummary(center);
 }
 
@@ -421,6 +386,17 @@ function listGroupsForCenter(centerId, user) {
   }
 
   return groups.map(buildGroupSummary);
+}
+
+function listGroupsForUser(user) {
+  const groups = database.getCollection('groups') || [];
+  if (isAdmin(user)) {
+    return groups.map(buildGroupSummary);
+  }
+
+  return groups
+    .filter((group) => group.isActive && hasGroupAccess(user, group.id))
+    .map(buildGroupSummary);
 }
 
 function getGroupDetails(groupId, user = null) {
@@ -511,30 +487,17 @@ function updateGroup(groupId, data, user) {
   }
 
   group.updatedAt = new Date().toISOString();
+  database.persistCollection('groups');
   return buildGroupSummary(group);
 }
 
-function deactivateGroup(groupId, user) {
+function deleteGroup(groupId, user) {
   const group = assertGroupExists(groupId);
   if (!canManageGroup(user, group.id) && !isAdmin(user)) {
-    throw new AppError('No autorizado para desactivar este grupo.', 403);
+    throw new AppError('No autorizado para eliminar este grupo.', 403);
   }
-
-  group.isActive = false;
-  group.updatedAt = new Date().toISOString();
-
-  const assignments = database.getCollection('userGroupAssignments') || [];
-  const affectedUserIds = new Set();
-  assignments.forEach((assignment) => {
-    if (assignment.groupId === group.id) {
-      assignment.isActive = false;
-      assignment.updatedAt = group.updatedAt;
-      affectedUserIds.add(assignment.userId);
-    }
-  });
-  database.setCollection('userGroupAssignments', assignments);
-  affectedUserIds.forEach((userId) => syncUserPlacementFromAssignments(userId));
-
+  database.setCollection('groups', (database.getCollection('groups') || [])
+    .filter((item) => item.id !== group.id));
   return buildGroupSummary(group);
 }
 
@@ -786,6 +749,10 @@ function removeUserFromGroup(groupId, userId, actorUser) {
     throw new AppError('Solo el centro puede quitar usuarios de grupos.', 403);
   }
 
+  if (!hasCenterAccess(actorUser, group.centerId)) {
+    throw new AppError('No autorizado para gestionar este grupo.', 403);
+  }
+
   const assignments = database.getCollection('userGroupAssignments') || [];
   const assignment = assignments.find((item) => item.userId === user.id && item.groupId === group.id);
 
@@ -854,12 +821,13 @@ module.exports = {
   getCenterDetails,
   createCenter,
   updateCenter,
-  deactivateCenter,
+  deleteCenter,
   listGroupsForCenter,
+  listGroupsForUser,
   getGroupDetails,
   createGroup,
   updateGroup,
-  deactivateGroup,
+  deleteGroup,
   assignUserToCenter,
   removeUserFromCenter,
   assignUserToGroup,

@@ -219,6 +219,7 @@ function syncUserPlacementFromAssignments(userId) {
   user.schoolId = primaryCenter ? primaryCenter.centerId : null;
   user.groupId = primaryGroup ? primaryGroup.groupId : null;
   user.updatedAt = new Date().toISOString();
+  database.persistUsers();
 
   return sanitizeUser(user);
 }

@@ -59,16 +59,23 @@ const relationshipPanel = document.getElementById('relationship-panel');
 const relationshipPanelBadge = document.getElementById('relationship-panel-badge');
 const relationshipPanelTitle = document.getElementById('relationship-panel-title');
 const relationshipPanelBody = document.getElementById('relationship-panel-body');
+const dashboardWelcome = document.getElementById('dashboard-welcome');
+const dashboardRoleLabel = document.getElementById('dashboard-role-label');
+const dashboardSubtitle = document.getElementById('dashboard-subtitle');
 
 let currentUser = null;
 let currentEditingUserId = null;
 let availableCenters = [];
+let availableGroups = [];
 let availableCenterStudents = [];
 let adminUsers = [];
 
 function escapeDashboardMarkup(value) {
   return window.escapeHtml(value);
 }
+
+const getDashboardUserWarning = window.getDataQualityWarning;
+const showDestructiveActionConfirm = window.confirmDestructiveAction;
 
 const centerTypeLabels = {
   PRIMARIA: 'Primaria',
@@ -359,7 +366,7 @@ function renderAdminUsersTable() {
           return `
             <td>
               <div class="table-cell-title">
-                <strong>${escapeDashboardMarkup(user.name)}</strong>
+                <strong>${getDashboardUserWarning('user', user, user.name || 'Este usuario', { users: adminUsers, centers: availableCenters, groups: availableGroups })}${escapeDashboardMarkup(user.name)}</strong>
                 <span>${escapeDashboardMarkup(user.id)}</span>
               </div>
             </td>
@@ -390,6 +397,7 @@ function renderAdminUsersTable() {
           return `
             <td class="table-cell-actions">
               <button class="button ghost table-row-action" type="button" data-row-user="${escapeDashboardMarkup(user.id)}">Editar</button>
+              <button class="button ghost table-row-action" type="button" data-dashboard-delete-user="${escapeDashboardMarkup(user.id)}">Eliminar</button>
             </td>
           `;
         }
@@ -404,11 +412,13 @@ function renderAdminUsersTable() {
 
 adminUsersBody?.addEventListener('click', (event) => {
   const button = event.target.closest('[data-row-user]');
-  if (!button) {
+  if (button) {
+    openUserDetail(button.getAttribute('data-row-user'));
     return;
   }
 
-  openUserDetail(button.getAttribute('data-row-user'));
+  const deleteButton = event.target.closest('[data-dashboard-delete-user]');
+  if (deleteButton) deleteDashboardUser(deleteButton.getAttribute('data-dashboard-delete-user'));
 });
 
 function renderAdminUsers(users) {
@@ -453,6 +463,112 @@ function summarizeConsentList(consents) {
     revoked: consents.filter((consent) => consent.status === 'REVOKED').length,
     expired: consents.filter((consent) => consent.status === 'EXPIRED').length,
   };
+}
+
+function getConsentCoverage(summary) {
+  const total = Number(summary?.total || 0);
+  if (!total) return 0;
+  return Math.round((Number(summary?.accepted || 0) / total) * 100);
+}
+
+function getDashboardConsentBreakdown(summary) {
+  const total = Number(summary?.total || 0);
+  const accepted = Number(summary?.accepted || 0);
+  const pending = Number(summary?.pending || 0);
+  const other = Math.max(0, total - accepted - pending);
+
+  return [
+    { label: 'Aceptados', value: accepted, tone: 'accepted' },
+    { label: 'Pendientes', value: pending, tone: 'pending' },
+    { label: 'Otros estados', value: other, tone: 'other' },
+  ];
+}
+
+function renderDashboardWorkspace({ badge, title, intro, metrics, priority, actions, consentSummary }) {
+  if (!relationshipPanel || !relationshipPanelBody) return;
+
+  const coverage = getConsentCoverage(consentSummary);
+  const breakdown = getDashboardConsentBreakdown(consentSummary);
+  const total = Number(consentSummary?.total || 0);
+  const chartMaximum = Math.max(...breakdown.map((item) => item.value), 1);
+  const pending = Number(consentSummary?.pending || 0);
+  const meterLabel = total
+    ? `${coverage}% con consentimiento aceptado`
+    : 'Sin consentimientos pendientes de seguimiento';
+  const priorityTone = pending > 0 ? 'is-actionable' : 'is-clear';
+
+  if (relationshipPanelBadge) relationshipPanelBadge.textContent = badge;
+  if (relationshipPanelTitle) relationshipPanelTitle.textContent = title;
+
+  relationshipPanelBody.innerHTML = `
+    <div class="dashboard-workspace">
+      <section class="dashboard-command" aria-labelledby="dashboard-command-title">
+        <div class="dashboard-command__copy">
+          <p class="dashboard-command__eyebrow">Pulso de consentimientos</p>
+          <h3 id="dashboard-command-title">${escapeDashboardMarkup(intro)}</h3>
+          <p>Información disponible en tu ámbito de acceso. Revisa primero lo que necesita una decisión.</p>
+        </div>
+        <div class="consent-meter" role="img" aria-label="${escapeDashboardMarkup(meterLabel)}" style="--consent-progress: ${coverage}%">
+          <div class="consent-meter__content">
+            <span class="consent-meter__value">${coverage}%</span>
+            <span class="consent-meter__label">aceptados</span>
+          </div>
+        </div>
+      </section>
+
+      <div class="dashboard-metric-rail" aria-label="Indicadores principales">
+        ${metrics.map((metric) => `
+          <div class="dashboard-metric">
+            <span>${escapeDashboardMarkup(metric.label)}</span>
+            <strong>${escapeDashboardMarkup(String(metric.value))}</strong>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="dashboard-reading-grid">
+        <section class="dashboard-chart" aria-labelledby="dashboard-chart-title">
+          <div class="dashboard-section-heading">
+            <div>
+              <span>Distribución actual</span>
+              <h3 id="dashboard-chart-title">Estado de consentimientos</h3>
+            </div>
+            <strong>${total}</strong>
+          </div>
+          <div class="dashboard-bars" role="list">
+            ${breakdown.map((item) => `
+              <div class="dashboard-bar dashboard-bar--${item.tone}" role="listitem">
+                <div class="dashboard-bar__label"><span>${escapeDashboardMarkup(item.label)}</span><strong>${item.value}</strong></div>
+                <span class="dashboard-bar__track" aria-hidden="true"><span style="--bar-size: ${Math.round((item.value / chartMaximum) * 100)}%"></span></span>
+              </div>
+            `).join('')}
+          </div>
+        </section>
+
+        <aside class="dashboard-priority ${priorityTone}" aria-labelledby="dashboard-priority-title">
+          <span class="dashboard-priority__signal" aria-hidden="true"></span>
+          <div>
+            <span class="dashboard-priority__label">${pending > 0 ? 'Prioridad de hoy' : 'Todo al día'}</span>
+            <h3 id="dashboard-priority-title">${escapeDashboardMarkup(priority.title)}</h3>
+            <p>${escapeDashboardMarkup(priority.description)}</p>
+            <a class="button ${pending > 0 ? 'primary' : 'secondary'}" href="${escapeDashboardMarkup(priority.href)}">${escapeDashboardMarkup(priority.action)}</a>
+          </div>
+        </aside>
+      </div>
+
+      <nav class="dashboard-routes" aria-label="Accesos del área">
+        ${actions.map((action) => `
+          <a href="${escapeDashboardMarkup(action.href)}">
+            ${getAppIcon(action.icon, 'dashboard-routes__icon')}
+            <span><strong>${escapeDashboardMarkup(action.label)}</strong><small>${escapeDashboardMarkup(action.description)}</small></span>
+            <b aria-hidden="true">→</b>
+          </a>
+        `).join('')}
+      </nav>
+    </div>
+  `;
+
+  refreshAppIcons(relationshipPanelBody);
+  setPanelVisible(relationshipPanel, true, 'block');
 }
 
 function getDashboardRelationshipContext(role, context, consentSummary = null) {
@@ -609,75 +725,125 @@ function renderRoleDashboardSummary(role, context, assignments, options = {}) {
   const groups = assignments?.groups || [];
   const center = options.center || centers[0]?.center || context?.center || null;
   const group = groups[0]?.group || context?.group || null;
-  const consentSummary = options.consentSummary || null;
-  const usersCount = options.usersCount ?? '-';
-  const centersCount = options.centersCount ?? (centers.length || '-');
-  const groupsCount = options.groupsCount ?? (groups.length || '-');
+  const consentSummary = options.consentSummary || summarizeConsentList([]);
+  const usersCount = options.usersCount ?? 0;
+  const centersCount = options.centersCount ?? centers.length;
+  const groupsCount = options.groupsCount ?? groups.length;
+  const pending = Number(consentSummary.pending || 0);
+  const defaultPriority = pending
+    ? {
+      title: `${pending} ${pending === 1 ? 'solicitud necesita' : 'solicitudes necesitan'} revisión`,
+      description: 'Hay autorizaciones esperando una respuesta o una comprobación.',
+      href: '/consents.html',
+      action: 'Revisar ahora',
+    }
+    : {
+      title: 'No hay acciones pendientes',
+      description: 'El estado de los consentimientos visibles está al día.',
+      href: '/consents.html',
+      action: 'Ver consentimientos',
+    };
 
-  if (normalizedRole === 'ADMIN') {
-    renderModuleSummary({
+  const viewByRole = {
+    ADMIN: {
       badge: 'Administración',
-      title: 'Resumen general',
-      cards: [
-        { label: 'Usuarios', value: `${usersCount}`, description: 'Altas, edición y recuperación de acceso.', href: '/users.html', action: 'Gestionar' },
-        { label: 'Centros', value: `${centersCount}`, description: 'Centros creados y cuentas de centro asociadas.', href: '/centers.html', action: 'Abrir' },
-        { label: 'Grupos', value: `${groupsCount}`, description: 'Estructura organizativa disponible.', href: '/groups.html', action: 'Abrir' },
-        { label: 'Consentimientos', value: `${consentSummary?.pending ?? 0} pendientes`, description: 'Solicitudes familiares por revisar.', href: '/consents.html', action: 'Revisar', highlight: (consentSummary?.pending || 0) > 0 },
-        { label: 'Texto legal', value: 'Admin', description: 'Versiones del texto legal.', href: '/legal.html', action: 'Gestionar' },
+      title: 'Visión general',
+      intro: 'La organización está bajo control.',
+      metrics: [
+        { label: 'Usuarios activos', value: usersCount },
+        { label: 'Centros', value: centersCount },
+        { label: 'Grupos activos', value: groupsCount },
       ],
-    });
-    return;
-  }
-
-  if (normalizedRole === 'SCHOOL') {
-    renderModuleSummary({
+      priority: defaultPriority,
+      actions: [
+        { label: 'Usuarios', description: 'Altas y accesos', href: '/users.html', icon: 'users' },
+        { label: 'Centros', description: 'Estructura escolar', href: '/centers.html', icon: 'school' },
+        { label: 'Texto legal', description: 'Versiones vigentes', href: '/legal.html', icon: 'legal' },
+      ],
+    },
+    SCHOOL: {
       badge: 'Centro',
-      title: 'Resumen del centro',
-      cards: [
-        { label: 'Mi centro', value: center?.name || 'Sin centro', description: 'Datos del centro y acceso a grupos.', href: '/centers.html', action: 'Ver detalle' },
-        { label: 'Grupos', value: `${groupsCount}`, description: 'Grupos del centro y gestión de usuarios.', href: '/groups.html', action: 'Gestionar' },
-        { label: 'Consentimientos', value: `${consentSummary?.pending ?? 0} pendientes`, description: 'Solicitudes de alumnos del centro.', href: '/consents.html', action: 'Revisar', highlight: (consentSummary?.pending || 0) > 0 },
+      title: 'Pulso del centro',
+      intro: center ? `Todo lo relevante de ${center.name}.` : 'Conecta un centro para activar este espacio.',
+      metrics: [
+        { label: 'Centro vinculado', value: center ? 'Sí' : 'No' },
+        { label: 'Grupos', value: groupsCount },
+        { label: 'Por revisar', value: pending },
       ],
-    });
-    return;
-  }
-
-  if (normalizedRole === 'TEACHER') {
-    renderModuleSummary({
-      badge: 'Profesor',
-      title: 'Resumen docente',
-      cards: [
-        { label: 'Centro', value: center?.name || 'Sin centro', description: 'Centro al que está vinculada tu cuenta.', href: '/centers.html', action: 'Ver centro' },
-        { label: 'Grupo principal', value: group?.name || 'Sin grupo', description: 'Grupo asociado para consulta docente.', href: '/groups.html', action: 'Ver grupos' },
-        { label: 'Consentimientos', value: `${consentSummary?.pending ?? 0} pendientes`, description: 'Estado de autorización del alumnado visible.', href: '/consents.html', action: 'Consultar', highlight: (consentSummary?.pending || 0) > 0 },
+      priority: defaultPriority,
+      actions: [
+        { label: 'Mi centro', description: 'Datos y equipos', href: '/centers.html', icon: 'school' },
+        { label: 'Grupos', description: 'Organización diaria', href: '/groups.html', icon: 'groups' },
+        { label: 'Consentimientos', description: 'Solicitudes familiares', href: '/consents.html', icon: 'consent' },
       ],
-    });
-    return;
-  }
-
-  if (normalizedRole === 'PROFESSIONAL') {
-    renderModuleSummary({
-      badge: 'Profesional',
-      title: 'Resumen profesional',
-      cards: [
-        { label: 'Centro', value: center?.name || 'Sin centro', description: 'Centro vinculado a tu cuenta.', href: '/centers.html', action: 'Ver centro' },
-        { label: 'Consentimientos válidos', value: `${consentSummary?.accepted ?? 0}`, description: 'Consentimientos aceptados visibles.', href: '/consents.html', action: 'Consultar' },
-        { label: 'Pendientes', value: `${consentSummary?.pending ?? 0}`, description: 'Solicitudes pendientes de respuesta familiar.', href: '/consents.html', action: 'Revisar', highlight: (consentSummary?.pending || 0) > 0 },
+    },
+    TEACHER: {
+      badge: 'Profesorado',
+      title: 'Panorama docente',
+      intro: group ? `Tu foco hoy: ${group.name}.` : 'Tu espacio docente está preparado para consultar.',
+      metrics: [
+        { label: 'Centro', value: center?.code || '—' },
+        { label: 'Grupo principal', value: group?.name || '—' },
+        { label: 'Por revisar', value: pending },
       ],
-    });
-    return;
-  }
-
-  if (normalizedRole === 'STUDENT') {
-    renderModuleSummary({
+      priority: defaultPriority,
+      actions: [
+        { label: 'Mis grupos', description: 'Alumnado visible', href: '/groups.html', icon: 'groups' },
+        { label: 'Centro', description: 'Información general', href: '/centers.html', icon: 'school' },
+        { label: 'Consentimientos', description: 'Consulta autorizaciones', href: '/consents.html', icon: 'consent' },
+      ],
+    },
+    PROFESSIONAL: {
+      badge: 'Consulta profesional',
+      title: 'Estado de autorizaciones',
+      intro: center ? `Consulta autorizada para ${center.name}.` : 'Consulta solo la información autorizada.',
+      metrics: [
+        { label: 'Centro asignado', value: center ? 'Sí' : 'No' },
+        { label: 'Válidos', value: consentSummary.accepted || 0 },
+        { label: 'Por revisar', value: pending },
+      ],
+      priority: defaultPriority,
+      actions: [
+        { label: 'Consentimientos', description: 'Estado y detalle', href: '/consents.html', icon: 'consent' },
+        { label: 'Centro', description: 'Datos del centro', href: '/centers.html', icon: 'school' },
+      ],
+    },
+    FAMILY: {
+      badge: 'Familia',
+      title: 'Acompañamiento familiar',
+      intro: context?.linkedStudent ? `El seguimiento de ${context.linkedStudent.name}, en un vistazo.` : 'Vincula un alumno para ver su seguimiento.',
+      metrics: [
+        { label: 'Alumno vinculado', value: context?.linkedStudent ? 'Sí' : 'No' },
+        { label: 'Aceptados', value: consentSummary.accepted || 0 },
+        { label: 'Pendientes', value: pending },
+      ],
+      priority: defaultPriority,
+      actions: [
+        { label: 'Mi hijo/a', description: 'Ficha y contexto', href: '/child.html', icon: 'child' },
+        { label: 'Consentimientos', description: 'Responder solicitudes', href: '/consents.html', icon: 'consent' },
+      ],
+    },
+    STUDENT: {
       badge: 'Alumno',
-      title: 'Resumen del alumno',
-      cards: [
-        { label: 'Mi perfil', value: currentUser?.name || 'Alumno', description: 'Datos personales, centro, grupo, familia y profesor.', href: '/child.html', action: 'Ver detalle' },
-        { label: 'Familia vinculada', value: context?.linkedFamily?.name || 'Sin familia', description: 'Cuenta familiar asociada a tu perfil.', href: '/child.html', action: 'Consultar' },
-        { label: 'Consentimientos', value: `${consentSummary?.accepted ?? 0} activos`, description: 'Estado de autorización visible para tu cuenta.', href: '/consents.html', action: 'Ver estado' },
+      title: 'Mi espacio',
+      intro: group ? `Tu contexto actual: ${group.name}.` : 'Tu información está reunida aquí.',
+      metrics: [
+        { label: 'Centro', value: center?.code || '—' },
+        { label: 'Grupo', value: group?.name || '—' },
+        { label: 'Activos', value: consentSummary.accepted || 0 },
       ],
-    });
+      priority: defaultPriority,
+      actions: [
+        { label: 'Mi perfil', description: 'Datos y vínculos', href: '/child.html', icon: 'profile' },
+        { label: 'Consentimientos', description: 'Mi estado actual', href: '/consents.html', icon: 'consent' },
+        { label: 'Grupos', description: 'Mi grupo escolar', href: '/groups.html', icon: 'groups' },
+      ],
+    },
+  };
+
+  const view = viewByRole[normalizedRole];
+  if (view) {
+    renderDashboardWorkspace({ ...view, consentSummary });
     return;
   }
 
@@ -761,8 +927,12 @@ async function loadCentersForAdmin() {
     return;
   }
 
-  const response = await apiRequest('/centers');
-  availableCenters = response.data.centers || [];
+  const [centersResponse, groupsResponse] = await Promise.all([
+    apiRequest('/centers'),
+    apiRequest('/groups'),
+  ]);
+  availableCenters = centersResponse.data.centers || [];
+  availableGroups = groupsResponse.data.groups || [];
 
   adminSchoolSelect.innerHTML = `
     <option value="">Sin vincular</option>
@@ -880,6 +1050,27 @@ async function renderProfessionalPanel(assignments) {
   if (professionalLegalLink) professionalLegalLink.hidden = true;
 }
 
+async function deleteDashboardUser(userId) {
+  const user = adminUsers.find((item) => item.id === userId);
+  if (!user) return;
+
+  try {
+    const response = await apiRequest(`/deletion-impact/users/${encodeURIComponent(userId)}`);
+    const confirmed = await showDestructiveActionConfirm({
+      title: `Eliminar a ${user.name}`,
+      description: 'Esta cuenta se eliminará definitivamente. Los registros vinculados que permanezcan mostrarán un aviso de referencia eliminada.',
+      effects: response.data.impact.effects || [],
+      confirmLabel: 'Sí, eliminar usuario',
+    });
+    if (!confirmed) return;
+
+    await apiRequest(`/users/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+    await loadAdminUsers();
+  } catch (error) {
+    setMessage(createUserError, error.message || 'No se pudo eliminar el usuario.', true);
+  }
+}
+
 async function doLogout() {
   try {
     await apiRequest('/auth/logout', { method: 'POST' });
@@ -932,6 +1123,18 @@ async function loadProfile() {
     }
 
     renderDashboardQuickActions(role);
+    const heroCenter = summaryOptions.center || assignments?.centers?.[0]?.center || context?.center || null;
+    if (dashboardWelcome) {
+      dashboardWelcome.textContent = `Hola, ${String(currentUser.name || '').split(' ')[0] || 'de nuevo'}`;
+    }
+    if (dashboardRoleLabel) {
+      dashboardRoleLabel.textContent = roleLabels[role] || 'Área privada';
+    }
+    if (dashboardSubtitle) {
+      dashboardSubtitle.textContent = heroCenter
+        ? `${heroCenter.name} · consulta el estado y gestiona tus tareas desde aquí.`
+        : 'Consulta tu información y gestiona tus tareas desde aquí.';
+    }
 
     if (role === 'ADMIN') {
       setPanelVisible(adminPanel, false);
@@ -941,7 +1144,7 @@ async function loadProfile() {
       await loadAdminUsers();
       summaryOptions = {
         ...summaryOptions,
-        usersCount: adminUsers.length,
+        usersCount: adminUsers.filter((user) => user.isActive).length,
         centersCount: availableCenters.length,
         groupsCount: availableCenters.reduce((count, center) => count + Number(center.groupsCount || 0), 0),
       };

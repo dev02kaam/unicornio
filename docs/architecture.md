@@ -13,7 +13,7 @@ Proyecto Unicornio se organiza en capas:
 
 La app puede arrancar en dos modos:
 
-- Sin `DATABASE_URL`: usa memoria con datos demo.
+- Sin `DATABASE_URL`: usa un archivo JSON local, inicializado con datos demo en el primer arranque.
 - Con `DATABASE_URL`: usa PostgreSQL y persiste las colecciones actuales en tablas tecnicas `jsonb`.
 
 Tablas creadas automaticamente:

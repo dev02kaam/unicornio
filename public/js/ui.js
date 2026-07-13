@@ -166,11 +166,12 @@ const appIconPaths = {
   clear: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3"/>',
   back: '<path d="m15 18-6-6 6-6M9 12h12"/>',
   close: '<path d="m18 6-12 12M6 6l12 12"/>',
-  logout: '<path d="M10 17l5-5-5-5M15 12H3"/><path d="M14 4h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-5"/>',
+  logout: '<path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/>',
   search: '<circle cx="11" cy="11" r="6"/><path d="m20 20-4-4"/>',
   check: '<path d="m5 12 4 4L19 6"/>',
   family: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.9-8.6a5.5 5.5 0 0 0-.1-7.8Z"/>',
   sparkle: '<path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3ZM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z"/>',
+  warning: '<circle cx="12" cy="12" r="9"/><path d="M12 7v6"/><path d="M12 17h.01" stroke-width="2.8"/>',
 };
 
 function getAppIcon(name, extraClass = '') {
@@ -196,6 +197,7 @@ function getAppIconName(value = '') {
   if (label.includes('filtro')) return 'filter';
   if (label.includes('limpiar') || label.includes('eliminar')) return 'clear';
   if (label.includes('volver') || label.includes('atrás')) return 'back';
+  if (label.includes('cerrar') && label.includes('sesi')) return 'logout';
   if (label.includes('cerrar')) return 'close';
   if (label.includes('sesión')) return 'logout';
   if (label.includes('buscar')) return 'search';
@@ -243,6 +245,173 @@ window.getAppIconName = getAppIconName;
 window.refreshAppIcons = refreshAppIcons;
 
 refreshAppIcons();
+
+function ensureModuleNavigation() {
+  const navigationRows = Array.from(document.querySelectorAll('.dashboard-links'))
+    .filter((row) => row.id !== 'dashboard-links');
+  if (!navigationRows.length) {
+    return;
+  }
+
+  const modules = [
+    { label: 'Usuarios', href: '/users.html', icon: 'users' },
+    { label: 'Centros', href: '/centers.html', icon: 'school' },
+    { label: 'Grupos', href: '/groups.html', icon: 'groups' },
+    { label: 'Consentimientos', href: '/consents.html', icon: 'consent' },
+    { label: 'Texto legal', href: '/legal.html', icon: 'legal' },
+  ];
+  const currentPath = window.location.pathname;
+
+  navigationRows.forEach((existingLinks) => {
+    const existingHrefs = new Set(Array.from(existingLinks.querySelectorAll('a[href]')).map((link) => link.getAttribute('href')));
+    modules
+      .filter((module) => module.href !== currentPath && !existingHrefs.has(module.href))
+      .forEach((module) => {
+        const link = document.createElement('a');
+        link.className = 'button secondary';
+        link.href = module.href;
+        link.setAttribute('aria-label', module.label);
+        link.innerHTML = `${getAppIcon(module.icon)}<span>${escapeHtml(module.label)}</span>`;
+        existingLinks.append(link);
+      });
+  });
+}
+
+ensureModuleNavigation();
+
+const rememberSessionControl = document.querySelector('[data-remember-session]');
+if (rememberSessionControl && typeof shouldRememberSession === 'function') {
+  rememberSessionControl.checked = shouldRememberSession();
+  rememberSessionControl.addEventListener('change', () => {
+    setRememberSession(rememberSessionControl.checked);
+  });
+}
+
+function hasMissingReference(id, collection) {
+  return Boolean(id && Array.isArray(collection) && !collection.some((item) => String(item.id) === String(id)));
+}
+
+function getRequiredDataIssues(entityType, entity = {}, references = {}) {
+  const issues = [];
+  const role = String(entity.role || '').toUpperCase();
+
+  if (entityType === 'user') {
+    if (!String(entity.name || '').trim()) issues.push('nombre');
+    if (!String(entity.email || '').trim()) issues.push('email');
+    if (role === 'STUDENT' && !entity.birthDate) issues.push('fecha de nacimiento');
+    if (role === 'FAMILY' && !entity.linkedStudentId) issues.push('estudiante vinculado');
+    if (role === 'FAMILY' && hasMissingReference(entity.linkedStudentId, references.users)) issues.push('estudiante eliminado');
+    if (['STUDENT', 'TEACHER', 'PROFESSIONAL', 'SCHOOL'].includes(role) && !entity.schoolId) issues.push('centro asignado');
+    if (hasMissingReference(entity.schoolId, references.centers)) issues.push('centro eliminado');
+    if (hasMissingReference(entity.groupId, references.groups)) issues.push('grupo eliminado');
+  }
+
+  if (entityType === 'center' && !String(entity.name || '').trim()) issues.push('nombre');
+  if (entityType === 'group') {
+    if (!String(entity.name || '').trim()) issues.push('nombre');
+    if (!entity.centerId && !entity.center?.id) issues.push('centro asignado');
+    if (hasMissingReference(entity.centerId || entity.center?.id, references.centers)) issues.push('centro eliminado');
+  }
+
+  if (entityType === 'consent') {
+    if (hasMissingReference(entity.studentId, references.users)) issues.push('alumno eliminado');
+    if (hasMissingReference(entity.familyUserId, references.users)) issues.push('familia eliminada');
+    if (hasMissingReference(entity.centerId, references.centers)) issues.push('centro eliminado');
+  }
+
+  return issues;
+}
+
+function getDataQualityWarning(entityType, entity, label = 'Este registro', references = {}) {
+  const issues = getRequiredDataIssues(entityType, entity, references);
+  if (!issues.length) return '';
+
+  const message = `${label}: falta ${issues.join(', ')}.`;
+  return `<span class="data-quality-warning" role="img" aria-label="${escapeHtml(message)}" title="${escapeHtml(message)}">!</span>`;
+}
+
+function ensureDestructiveActionModal() {
+  let modal = document.getElementById('destructive-action-modal');
+  if (modal) return modal;
+
+  modal = document.createElement('section');
+  modal.id = 'destructive-action-modal';
+  modal.className = 'modal destructive-action-modal';
+  modal.hidden = true;
+  modal.setAttribute('aria-hidden', 'true');
+  modal.innerHTML = `
+    <div class="modal__backdrop" data-close-modal="destructive-action-modal"></div>
+    <div class="modal__panel modal__panel--small" role="dialog" aria-modal="true" aria-labelledby="destructive-action-title" aria-describedby="destructive-action-description">
+      <div class="destructive-action-modal__lead">
+        <span class="destructive-action-modal__icon" aria-hidden="true">!</span>
+        <div>
+          <span class="badge">Eliminación definitiva</span>
+          <h2 id="destructive-action-title">Confirmar acción</h2>
+        </div>
+      </div>
+      <p id="destructive-action-description"></p>
+      <div id="destructive-action-effects" class="destructive-action-effects" hidden></div>
+      <p class="field-note">La eliminación no se puede deshacer. Los registros vinculados que se conserven señalarán la referencia eliminada.</p>
+      <div class="modal__footer">
+        <button class="button secondary" type="button" data-destructive-cancel>Cancelar</button>
+        <button class="button destructive-action-modal__confirm" type="button" data-destructive-confirm>Eliminar</button>
+      </div>
+    </div>
+  `;
+  document.body.append(modal);
+  return modal;
+}
+
+function confirmDestructiveAction({ title, description, effects = [], confirmLabel = 'Eliminar' }) {
+  const modal = ensureDestructiveActionModal();
+  const titleElement = modal.querySelector('#destructive-action-title');
+  const descriptionElement = modal.querySelector('#destructive-action-description');
+  const effectsElement = modal.querySelector('#destructive-action-effects');
+  const confirmButton = modal.querySelector('[data-destructive-confirm]');
+  const cancelButton = modal.querySelector('[data-destructive-cancel]');
+
+  titleElement.textContent = title;
+  descriptionElement.textContent = description;
+  confirmButton.textContent = confirmLabel;
+  effectsElement.replaceChildren();
+  effectsElement.hidden = effects.length === 0;
+
+  effects.forEach((item) => {
+    const entry = document.createElement('div');
+    entry.className = 'destructive-action-effects__item';
+    const count = document.createElement('strong');
+    count.textContent = String(item.count);
+    const copy = document.createElement('span');
+    copy.innerHTML = `<b>${escapeHtml(item.label)}</b><small>${escapeHtml(item.detail)}</small>`;
+    entry.append(count, copy);
+    effectsElement.append(entry);
+  });
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (accepted) => {
+      if (settled) return;
+      settled = true;
+      confirmButton.removeEventListener('click', onConfirm);
+      cancelButton.removeEventListener('click', onCancel);
+      modal.removeEventListener('unicornio:modal-closed', onClosed);
+      if (!modal.hidden) closeModalById('destructive-action-modal');
+      resolve(accepted);
+    };
+    const onConfirm = () => finish(true);
+    const onCancel = () => finish(false);
+    const onClosed = () => finish(false);
+
+    confirmButton.addEventListener('click', onConfirm);
+    cancelButton.addEventListener('click', onCancel);
+    modal.addEventListener('unicornio:modal-closed', onClosed);
+    openModalById('destructive-action-modal');
+  });
+}
+
+window.getRequiredDataIssues = getRequiredDataIssues;
+window.getDataQualityWarning = getDataQualityWarning;
+window.confirmDestructiveAction = confirmDestructiveAction;
 
 // Los desplegables nativos usan el menú y el color de selección del sistema
 // operativo. Conservamos el <select> para formularios y scripts existentes, pero
@@ -690,6 +859,56 @@ document.addEventListener('click', (event) => {
   if (!event.target.closest('.select-control')) {
     closeAllCustomSelects();
   }
+});
+
+document.querySelectorAll('[data-profile-password-form]').forEach((form) => {
+  const errorElement = form.querySelector('[data-profile-password-error]');
+  const successElement = form.querySelector('[data-profile-password-success]');
+  const submitButton = form.querySelector('button[type="submit"]');
+  const openButton = form.parentElement?.querySelector('[data-open-password-modal]');
+  const closeButton = form.querySelector('[data-close-password-modal]');
+
+  const closePasswordForm = () => {
+    form.classList.remove('is-open');
+    form.setAttribute('aria-hidden', 'true');
+    openButton?.focus();
+  };
+
+  openButton?.addEventListener('click', () => {
+    form.classList.add('is-open');
+    form.setAttribute('aria-hidden', 'false');
+    form.setAttribute('role', 'dialog');
+    form.setAttribute('aria-modal', 'true');
+    form.querySelector('input')?.focus();
+  });
+  closeButton?.addEventListener('click', closePasswordForm);
+  form.closest('.profile-modal')?.addEventListener('unicornio:modal-closed', closePasswordForm);
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    errorElement.hidden = true;
+    successElement.hidden = true;
+    submitButton.disabled = true;
+
+    const formData = new FormData(form);
+    try {
+      await apiRequest('/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({
+          currentPassword: formData.get('currentPassword'),
+          newPassword: formData.get('newPassword'),
+        }),
+      });
+      form.reset();
+      successElement.textContent = 'Contraseña actualizada correctamente.';
+      successElement.hidden = false;
+    } catch (error) {
+      errorElement.textContent = getApiErrorMessage(error);
+      errorElement.hidden = false;
+    } finally {
+      submitButton.disabled = false;
+    }
+  });
 });
 
 document.addEventListener('keydown', (event) => {

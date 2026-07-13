@@ -29,7 +29,7 @@ Base tecnica inicial de Proyecto Unicornio: una aplicacion web cliente-servidor 
 
 - Node.js 18 o superior.
 - npm.
-- PostgreSQL opcional para persistencia real.
+- PostgreSQL opcional para usar una base de datos compartida.
 
 ## Instalacion
 
@@ -60,8 +60,9 @@ Copiar `.env.example` a `.env` y ajustar:
 - `CORS_ORIGIN`
 - `DATABASE_URL`
 - `DATABASE_SSL`
+- `DATA_FILE`
 
-Si `DATABASE_URL` esta vacia, la app usa datos demo en memoria. Si `DATABASE_URL` esta definida, la app crea las tablas tecnicas necesarias en PostgreSQL y persiste las colecciones actuales como `jsonb`.
+Si `DATABASE_URL` esta vacia, la app guarda los datos en `server/data/runtime-state.json` (configurable con `DATA_FILE`) y los recupera al reiniciar. Si `DATABASE_URL` esta definida, la app crea las tablas tecnicas necesarias en PostgreSQL y persiste las colecciones actuales como `jsonb`.
 
 ## Usuarios demo
 

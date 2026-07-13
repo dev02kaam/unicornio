@@ -1,4 +1,4 @@
-const { getAllUsers, findUserById, updateUser, deactivateUser, createUser } = require('../services/users.service');
+const { getAllUsers, findUserById, updateUser, deleteUser, createUser } = require('../services/users.service');
 const { database } = require('../config/database');
 const { sanitizeUser } = require('../models/user.model');
 const { sendSuccess } = require('../utils/response');
@@ -55,15 +55,15 @@ async function updateUserController(req, res, next) {
   }
 }
 
-async function deactivateUserController(req, res, next) {
+async function deleteUserController(req, res, next) {
   try {
     if (req.user.role !== 'ADMIN') {
       throw new AppError('No autorizado.', 403);
     }
 
-    const user = deactivateUser(req.params.id);
+    const user = deleteUser(req.params.id);
     await database.flush();
-    return sendSuccess(res, { user }, 'Usuario desactivado correctamente.');
+    return sendSuccess(res, { user }, 'Usuario eliminado correctamente.');
   } catch (error) {
     return next(error);
   }
@@ -74,5 +74,5 @@ module.exports = {
   listUsersController,
   getUserByIdController,
   updateUserController,
-  deactivateUserController,
+  deleteUserController,
 };

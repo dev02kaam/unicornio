@@ -4,12 +4,13 @@ const {
   getCenterDetails,
   createCenter,
   updateCenter,
-  deactivateCenter,
+  deleteCenter,
   listGroupsForCenter,
+  listGroupsForUser,
   getGroupDetails,
   createGroup,
   updateGroup,
-  deactivateGroup,
+  deleteGroup,
   assignUserToCenter,
   removeUserFromCenter,
   assignUserToGroup,
@@ -66,11 +67,11 @@ async function updateCenterController(req, res, next) {
   }
 }
 
-async function deactivateCenterController(req, res, next) {
+async function deleteCenterController(req, res, next) {
   try {
-    const center = deactivateCenter(req.params.centerId, req.user);
+    const center = deleteCenter(req.params.centerId, req.user);
     await database.flush();
-    return sendSuccess(res, { center }, 'Centro desactivado correctamente.');
+    return sendSuccess(res, { center }, 'Centro eliminado correctamente.');
   } catch (error) {
     return next(error);
   }
@@ -80,6 +81,14 @@ function listCenterGroupsController(req, res, next) {
   try {
     const groups = listGroupsForCenter(req.params.centerId, req.user);
     return sendSuccess(res, { groups }, 'Grupos cargados.');
+  } catch (error) {
+    return next(error);
+  }
+}
+
+function listGroupsController(req, res, next) {
+  try {
+    return sendSuccess(res, { groups: listGroupsForUser(req.user) }, 'Grupos cargados.');
   } catch (error) {
     return next(error);
   }
@@ -123,11 +132,11 @@ async function updateGroupController(req, res, next) {
   }
 }
 
-async function deactivateGroupController(req, res, next) {
+async function deleteGroupController(req, res, next) {
   try {
-    const group = deactivateGroup(req.params.groupId, req.user);
+    const group = deleteGroup(req.params.groupId, req.user);
     await database.flush();
-    return sendSuccess(res, { group }, 'Grupo desactivado correctamente.');
+    return sendSuccess(res, { group }, 'Grupo eliminado correctamente.');
   } catch (error) {
     return next(error);
   }
@@ -197,13 +206,14 @@ module.exports = {
   createCenterController,
   getCenterController,
   updateCenterController,
-  deactivateCenterController,
+  deleteCenterController,
   listCenterGroupsController,
+  listGroupsController,
   listCenterUsersController,
   createGroupController,
   getGroupController,
   updateGroupController,
-  deactivateGroupController,
+  deleteGroupController,
   listGroupUsersController,
   assignUserToCenterController,
   removeUserFromCenterController,

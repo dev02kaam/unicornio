@@ -11,12 +11,19 @@
     <main id="main-content" class="shell dashboard-shell">
       <section class="dashboard-hero card">
         <div class="hero-copy">
-          <h1>Bienvenido</h1>
+          <span id="dashboard-role-label" class="dashboard-role-label">Área privada</span>
+          <h1 id="dashboard-welcome">Bienvenido</h1>
+          <p id="dashboard-subtitle" class="dashboard-subtitle">Tu espacio de trabajo está listo.</p>
           <div id="dashboard-links" class="action-row dashboard-links icon-navigation"></div>
         </div>
 
         <button id="profile-button" class="account-trigger" type="button" aria-label="Abrir perfil">
-          <span class="avatar-badge avatar-large" aria-hidden="true">U</span>
+          <span class="avatar-badge avatar-large" aria-hidden="true">
+            <svg class="avatar-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="8" r="3.25" fill="currentColor" />
+              <path d="M5.5 19.25C6.18 15.87 8.37 14 12 14C15.63 14 17.82 15.87 18.5 19.25" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+            </svg>
+          </span>
         </button>
       </section>
 
@@ -163,9 +170,46 @@
           </div>
         </div>
 
+        <div class="preferences-card">
+          <span class="profile-caption">Preferencias de acceso</span>
+          <label class="toggle-row">
+            <input type="checkbox" data-remember-session aria-describedby="remember-session-help" />
+            <span>Recordar mi sesión en este dispositivo</span>
+          </label>
+          <p id="remember-session-help" class="field-note">Si lo desactivas, tendrás que volver a iniciar sesión al cerrar esta pestaña.</p>
+        </div>
+
         <div class="action-row modal-actions">
           <button id="modal-logout-button" class="button secondary" type="button">Cerrar sesión</button>
         </div>
+
+        <form class="profile-password-form" data-profile-password-form>
+          <div class="section-header section-header--compact">
+            <div>
+              <span class="badge">Seguridad</span>
+              <h3>Cambiar contraseña</h3>
+            </div>
+            <button class="button secondary profile-password-close" type="button" data-close-password-modal>Cerrar</button>
+          </div>
+          <label>
+            <span>Contraseña actual</span>
+            <input type="password" name="currentPassword" autocomplete="current-password" required />
+          </label>
+          <label>
+            <span>Nueva contraseña</span>
+            <input type="password" name="newPassword" autocomplete="new-password" minlength="8" required />
+          </label>
+          <p class="field-note">Usa al menos 8 caracteres. Tendrás que volver a iniciar sesión si la sesión caduca.</p>
+          <p class="error" data-profile-password-error hidden></p>
+          <p class="success" data-profile-password-success hidden></p>
+          <div class="modal-actions">
+            <button class="button primary" type="submit">Actualizar contraseña</button>
+          </div>
+        </form>
+
+        <button class="button secondary profile-password-trigger" type="button" data-open-password-modal>
+          Cambiar contraseña
+        </button>
       </div>
     </section>
 
@@ -232,6 +276,17 @@
             <button class="button primary" type="submit">Guardar cambios</button>
           </div>
         </form>
+
+        <div class="profile-grid" hidden aria-hidden="true">
+          <div class="preferences-card">
+            <span class="profile-caption">Preferencias de acceso</span>
+            <label class="toggle-row">
+              <input type="checkbox" data-admin-remember-session aria-describedby="remember-session-help" />
+              <span>Recordar mi sesión en este dispositivo</span>
+            </label>
+            <p id="remember-session-help" class="field-note">Si lo desactivas, tendrás que volver a iniciar sesión al cerrar esta pestaña.</p>
+          </div>
+        </div>
 
         <div class="profile-grid">
           <div class="preferences-card">

@@ -7,7 +7,7 @@ const {
   listUsersController,
   getUserByIdController,
   updateUserController,
-  deactivateUserController,
+  deleteUserController,
 } = require('../controllers/users.controller');
 
 const usersRouter = express.Router();
@@ -18,6 +18,6 @@ usersRouter.post('/', requireRole(['ADMIN']), validateAdminCreateUser, createUse
 usersRouter.get('/', requireRole(['ADMIN']), listUsersController);
 usersRouter.get('/:id', getUserByIdController);
 usersRouter.patch('/:id', validateUserUpdate, updateUserController);
-usersRouter.patch('/:id/deactivate', requireRole(['ADMIN']), deactivateUserController);
+usersRouter.delete('/:id', requireRole(['ADMIN']), deleteUserController);
 
 module.exports = { usersRouter };

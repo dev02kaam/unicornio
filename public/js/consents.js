@@ -24,6 +24,7 @@ const consentDecisionText = document.getElementById('consent-decision-text');
 const consentDecisionCancel = document.getElementById('consent-decision-cancel');
 const consentDecisionConfirm = document.getElementById('consent-decision-confirm');
 const escapeConsentMarkup = window.escapeHtml;
+const getConsentDataWarning = window.getDataQualityWarning;
 
 const consentStatusLabels = {
   PENDING: 'Pendiente',
@@ -163,12 +164,16 @@ function consentCardActions(consent) {
 }
 
 function renderConsent(consent) {
+  const consentReferences = {
+    users: [consent.student, consent.familyUser].filter(Boolean),
+    centers: [consent.center].filter(Boolean),
+  };
   return `
     <article class="consent-card org-card ${consent.status === 'ACCEPTED' ? 'consent-card--active' : ''}">
       <div class="org-card__top">
         <div>
           <span class="org-kicker">${escapeConsentMarkup(consent.familyUser?.name || 'Familia vinculada')}</span>
-          <h3>${escapeConsentMarkup(consent.student?.name || 'Estudiante')}</h3>
+          <h3>${getConsentDataWarning('consent', consent, 'Este consentimiento', consentReferences)}${escapeConsentMarkup(consent.student?.name || 'Estudiante eliminado')}</h3>
           <p>${escapeConsentMarkup(consent.legalTextVersion?.title || 'Texto legal')}</p>
         </div>
         <span class="${consentStatusClass[consent.status] || 'table-badge'}">${escapeConsentMarkup(consentStatusLabels[consent.status] || consent.status || 'Sin estado')}</span>
