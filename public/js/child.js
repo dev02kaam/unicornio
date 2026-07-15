@@ -280,6 +280,20 @@ async function loadProfile() {
   const context = currentUser.context || {};
   const targetStudent = role === 'FAMILY' ? context.linkedStudent : currentUser;
 
+  if (!targetStudent) {
+    setMessage(childStatusBanner, 'Todavía no hay un alumno vinculado a esta cuenta. Pide ayuda al centro para completar el vínculo.', true);
+    if (childSummaryName) childSummaryName.textContent = 'Vínculo pendiente';
+    if (childSummaryNote) childSummaryNote.textContent = 'El centro debe vincular un alumno antes de mostrar este espacio.';
+    window.UnicornioCompanion?.setState('reassuring', {
+      message: 'Aún falta un vínculo. Un adulto del centro puede ayudarte.',
+      announce: true,
+      ttl: 5000,
+    });
+    return { currentUser, targetStudent: null };
+  }
+
+  window.UnicornioCompanion?.setAgeContext(targetStudent);
+
   if (childRoleBadge) {
     childRoleBadge.textContent = getRoleLabel(role);
   }
@@ -354,9 +368,14 @@ async function init() {
 
   try {
     await loadProfile();
-  } catch (_error) {
-    clearToken();
-    window.location.href = '/login.html';
+  } catch (error) {
+    if (error.status === 401) {
+      clearToken();
+      window.location.href = '/login.html';
+      return;
+    }
+    setMessage(childStatusBanner, 'No hemos podido cargar la información. Comprueba tu conexión e inténtalo de nuevo.', true);
+    window.UnicornioCompanion?.setState('reassuring', { announce: true, ttl: 5000 });
   }
 }
 

@@ -31,6 +31,7 @@ form.addEventListener('submit', async (event) => {
     });
 
     setToken(response.data.token);
+    setRememberSession(formData.get('remember') === 'on');
     window.location.href = '/dashboard.html';
   } catch (error) {
     const wait = error.payload?.data?.retryAfterMinutes;

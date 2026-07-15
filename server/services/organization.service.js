@@ -779,8 +779,14 @@ function listCenterUsersForRequest(centerId, user) {
   }
 
   const centerUsers = getCenterUsers(center.id);
-  if (String(user?.role || '').toUpperCase() === 'FAMILY' && user.linkedStudentId) {
-    return centerUsers.filter((entry) => entry.user.id === String(user.linkedStudentId));
+  const role = String(user?.role || '').toUpperCase();
+  if (role === 'FAMILY') {
+    return user.linkedStudentId
+      ? centerUsers.filter((entry) => entry.user.id === String(user.linkedStudentId))
+      : [];
+  }
+  if (role === 'STUDENT') {
+    return centerUsers.filter((entry) => entry.user.id === String(user.id));
   }
 
   return centerUsers;
@@ -793,8 +799,14 @@ function listGroupUsersForRequest(groupId, user) {
   }
 
   const groupUsers = getGroupUsers(group.id);
-  if (String(user?.role || '').toUpperCase() === 'FAMILY' && user.linkedStudentId) {
-    return groupUsers.filter((entry) => entry.user.id === String(user.linkedStudentId));
+  const role = String(user?.role || '').toUpperCase();
+  if (role === 'FAMILY') {
+    return user.linkedStudentId
+      ? groupUsers.filter((entry) => entry.user.id === String(user.linkedStudentId))
+      : [];
+  }
+  if (role === 'STUDENT') {
+    return groupUsers.filter((entry) => entry.user.id === String(user.id));
   }
 
   return groupUsers;

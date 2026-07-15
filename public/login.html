@@ -4,14 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Login | Proyecto Unicornio</title>
+    <meta name="theme-color" content="#0F1833" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/companions/favicon-64.png" />
+    <link rel="apple-touch-icon" href="/assets/companions/favicon-192.png" />
     <link rel="stylesheet" href="/css/styles.css" />
+    <link rel="stylesheet" href="/css/galaxy.css" />
   </head>
   <body>
     <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
     <main id="main-content" class="shell">
       <section class="card form-card">
-        <h1>Acceso</h1>
-        <p>Introduce tus credenciales para acceder.</p>
+        <h1>Hola, qué alegría verte</h1>
+        <p>Entra en tu espacio seguro. Tu compañero Unicornio te está esperando.</p>
         <form id="login-form" class="stack">
           <label>
             <span>Email</span>
@@ -21,8 +25,13 @@
             <span>Contraseña</span>
             <input type="password" name="password" placeholder="Introduce tu contraseña" autocomplete="current-password" minlength="8" required />
           </label>
+          <label class="login-remember-row">
+            <input type="checkbox" name="remember" />
+            <span>Recordarme en este dispositivo</span>
+          </label>
+          <p class="field-note login-device-note">Déjalo desmarcado si compartes este ordenador en casa o en el cole.</p>
           <p id="login-error" class="error" role="alert" aria-live="assertive" tabindex="-1" hidden></p>
-          <button id="login-submit" class="button primary" type="submit">Entrar</button>
+          <button id="login-submit" class="button primary" type="submit">Entrar con mi compañero</button>
         </form>
       </section>
     </main>

@@ -12,10 +12,11 @@ const {
   ACADEMIC_YEAR_STAGES,
   CENTER_ASSIGNMENT_ROLES,
   GROUP_ASSIGNMENT_ROLES,
+  UNICORN_GENDERS,
 } = require('../utils/constants');
 
 function validateRegister(req, _res, next) {
-  const { name, email, password, birthDate } = req.body || {};
+  const { name, email, password, birthDate, schoolId, groupId } = req.body || {};
   const errors = [];
 
   if (!isNonEmptyString(name)) {
@@ -31,6 +32,9 @@ function validateRegister(req, _res, next) {
     errors.push('La fecha de nacimiento es obligatoria para alumnos.');
   } else if (!isPastOrTodayDate(birthDate)) {
     errors.push('La fecha de nacimiento no es valida.');
+  }
+  if (isNonEmptyString(schoolId) || isNonEmptyString(groupId)) {
+    errors.push('La asignacion a centros y grupos debe realizarla un centro autorizado.');
   }
 
   if (errors.length > 0) {
@@ -71,6 +75,15 @@ function validateChangePassword(req, _res, next) {
 
   if (errors.length > 0) {
     return next(new AppError('Validación fallida.', 400, errors));
+  }
+
+  return next();
+}
+
+function validateCompanionPreference(req, _res, next) {
+  const { unicornGender } = req.body || {};
+  if (!isOneOf(String(unicornGender || '').toUpperCase(), Object.values(UNICORN_GENDERS))) {
+    return next(new AppError('Selecciona una preferencia valida para tu unicornio.', 400));
   }
 
   return next();
@@ -376,6 +389,7 @@ module.exports = {
   validateRegister,
   validateLogin,
   validateChangePassword,
+  validateCompanionPreference,
   validateUserUpdate,
   validateAdminCreateUser,
   validateCenterCreate,

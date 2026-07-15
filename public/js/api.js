@@ -2,9 +2,9 @@ const API_BASE = '/api';
 const TOKEN_KEY = 'unicornio_token';
 const REMEMBER_SESSION_KEY_PREFIX = 'unicornio_remember_session:';
 
-// El token solo se usa aquí para identificar el usuario. La autenticación
-// sigue dependiendo de la validación del token en el servidor.
-function getTokenSubject(token) {
+// El contenido del token solo se usa para adaptar la interfaz. La autenticación
+// sigue dependiendo siempre de la validación del servidor.
+function getTokenPayload(token) {
   try {
     const payload = token?.split('.')[1];
     if (!payload) {
@@ -13,10 +13,18 @@ function getTokenSubject(token) {
 
     const normalizedPayload = payload.replace(/-/g, '+').replace(/_/g, '/');
     const decodedPayload = atob(normalizedPayload.padEnd(Math.ceil(normalizedPayload.length / 4) * 4, '='));
-    return JSON.parse(decodedPayload).sub || null;
+    return JSON.parse(decodedPayload);
   } catch (_error) {
     return null;
   }
+}
+
+function getTokenSubject(token) {
+  return getTokenPayload(token)?.sub || null;
+}
+
+function getTokenRole(token = getToken()) {
+  return getTokenPayload(token)?.role || null;
 }
 
 function getRememberSessionKey(token = getToken()) {
@@ -82,19 +90,33 @@ async function apiRequest(path, options = {}) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
+  const method = String(options.method || 'GET').toUpperCase();
+  const requestDetail = { path, method };
+  document.dispatchEvent(new CustomEvent('unicornio:request-start', { detail: requestDetail }));
 
-  const payload = await response.json().catch(() => ({}));
+  try {
+    const response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+    });
 
-  if (!response.ok) {
-    const error = new Error(payload.message || 'Error en la peticion.');
-    error.payload = payload;
-    error.status = response.status;
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const error = new Error(payload.message || 'Error en la peticion.');
+      error.payload = payload;
+      error.status = response.status;
+      throw error;
+    }
+
+    document.dispatchEvent(new CustomEvent('unicornio:request-end', {
+      detail: { ...requestDetail, ok: true },
+    }));
+    return payload;
+  } catch (error) {
+    document.dispatchEvent(new CustomEvent('unicornio:request-end', {
+      detail: { ...requestDetail, ok: false, status: error.status || 0 },
+    }));
     throw error;
   }
-
-  return payload;
 }

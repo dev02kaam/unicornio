@@ -14,6 +14,8 @@ Base tecnica inicial de Proyecto Unicornio: una aplicacion web cliente-servidor 
 - Seguridad basica.
 - Area privada demo.
 - Alta de usuarios desde el panel de administracion.
+- Identidad visual de Proyecto Unicornio con logo, favicon y paleta propia.
+- Companero reactivo con Nico, Luna, Orion y Sol, expresiones ligadas a la actividad y preferencia persistente.
 
 ## Que no incluye esta fase
 
@@ -94,9 +96,19 @@ Contrasenha demo:
 ### Users
 
 - `GET /api/users`
+- `PATCH /api/users/me/companion`
 - `GET /api/users/:id`
 - `PATCH /api/users/:id`
 - `PATCH /api/users/:id/deactivate`
+
+## Companero Unicornio
+
+- De 6 a 11 anos se muestran Nico o Luna.
+- Desde los 12 anos se muestran Orion o Sol.
+- La variante masculina o femenina es una preferencia del unicornio y no representa el genero del usuario.
+- La edad se deriva de `birthDate`; en cuentas familiares se usa la del alumno vinculado.
+- El personaje reacciona a escritura, peticiones, exitos y errores mediante estados visuales de escucha, pensamiento, celebracion y apoyo.
+- Las laminas suministradas se presentan como una escena 2.5D con profundidad y parallax. Para sustituirla por 3D riggeado real hacen falta modelos GLB/GLTF con esqueleto, clips y morph targets.
 
 ### Centers
 
@@ -145,6 +157,8 @@ Contrasenha demo:
 
 - Las contrasenas se guardan con hash.
 - El acceso a usuarios esta protegido por token y roles.
+- Los alumnos y familias no pueden enumerar perfiles ajenos de su centro o grupo.
+- El registro publico no permite autoasignarse a un centro o grupo.
 - El login usa limitacion de peticiones.
 - Si se supera el limite de login, la respuesta incluye el tiempo estimado para reintentar.
 - Este prototipo no usa datos reales de menores.

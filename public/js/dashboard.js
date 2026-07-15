@@ -1092,8 +1092,13 @@ async function loadProfile() {
     resetTransientUiState();
     const response = await apiRequest('/auth/me');
     currentUser = response.data.user;
-    profileNameElement.textContent = currentUser.name;
-    profileEmailElement.textContent = currentUser.email;
+    document.body.classList.remove('auth-pending');
+    if (profileNameElement) {
+      profileNameElement.textContent = currentUser.name;
+    }
+    if (profileEmailElement) {
+      profileEmailElement.textContent = currentUser.email;
+    }
     const context = currentUser.context || null;
     const role = String(currentUser.role || '').toUpperCase();
     const assignmentsResponse = await apiRequest(`/users/${currentUser.id}/assignments`);
@@ -1171,9 +1176,14 @@ async function loadProfile() {
     setPanelVisible(schoolPanel, false);
     setPanelVisible(professionalPanel, false);
     renderRoleDashboardSummary(role, context, assignments, summaryOptions);
-  } catch (_error) {
-    clearToken();
-    window.location.href = '/login.html';
+  } catch (error) {
+    if (error.status === 401 || error.status === 403) {
+      clearToken();
+      window.location.replace('/login.html');
+      return;
+    }
+
+    document.body.classList.remove('auth-pending');
   }
 }
 
@@ -1347,6 +1357,7 @@ adminSchoolSelect?.addEventListener('change', async () => {
 
 window.addEventListener('pageshow', () => {
   if (!getToken()) {
+    document.body.classList.add('auth-pending');
     window.location.replace('/login.html');
     return;
   }

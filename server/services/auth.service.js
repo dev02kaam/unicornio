@@ -9,8 +9,6 @@ function register(payload) {
     email: payload.email,
     password: payload.password,
     role: 'STUDENT',
-    schoolId: payload.schoolId,
-    groupId: payload.groupId,
     birthDate: payload.birthDate,
     ageRange: payload.ageRange,
   });
@@ -40,7 +38,7 @@ function login(payload) {
     throw new AppError('Credenciales invalidas.', 401);
   }
 
-  const publicUser = sanitizeUser(user);
+  const publicUser = sanitizeUser(user, { includePreferences: true });
   const token = createToken({
     sub: publicUser.id,
     role: publicUser.role,

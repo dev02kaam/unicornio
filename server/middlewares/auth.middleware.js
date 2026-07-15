@@ -20,7 +20,8 @@ function authMiddleware(req, _res, next) {
     }
 
     req.auth = payload;
-    req.user = sanitizeUser(user);
+    // Las preferencias solo viajan en el contexto del propio usuario.
+    req.user = sanitizeUser(user, { includePreferences: true });
     next();
   } catch (error) {
     next(new AppError('Autenticacion invalida.', 401));
@@ -28,4 +29,3 @@ function authMiddleware(req, _res, next) {
 }
 
 module.exports = { authMiddleware };
-

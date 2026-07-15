@@ -4,7 +4,7 @@ const { createUserModel, sanitizeUser } = require('../models/user.model');
 const { createCenterAssignmentModel } = require('../models/assignment.model');
 const { AppError } = require('../utils/errors');
 const { isEmail, isNonEmptyString, validatePassword, normalizeRole, pickDefined, isPastOrTodayDate, normalizeDateOnly } = require('../utils/validators');
-const { CENTER_ASSIGNMENT_ROLES } = require('../utils/constants');
+const { CENTER_ASSIGNMENT_ROLES, UNICORN_GENDERS } = require('../utils/constants');
 
 function getAllUsers() {
   return database.getUsers().map(sanitizeUser);
@@ -402,6 +402,23 @@ function changePassword(id, currentPassword, newPassword) {
   return sanitizeUser(user);
 }
 
+function updateUnicornGender(id, unicornGender) {
+  const user = findUserById(id);
+  if (!user) {
+    throw new AppError('Usuario no encontrado.', 404);
+  }
+
+  const normalizedGender = String(unicornGender || '').toUpperCase();
+  if (!Object.values(UNICORN_GENDERS).includes(normalizedGender)) {
+    throw new AppError('La preferencia del unicornio no es valida.', 400);
+  }
+
+  user.unicornGender = normalizedGender;
+  user.updatedAt = new Date().toISOString();
+  database.persistUsers();
+  return sanitizeUser(user, { includePreferences: true });
+}
+
 module.exports = {
   getAllUsers,
   findUserById,
@@ -410,6 +427,7 @@ module.exports = {
   createUserWithPasswordHash,
   updateUser,
   changePassword,
+  updateUnicornGender,
   deleteUser,
   verifyPassword,
 };

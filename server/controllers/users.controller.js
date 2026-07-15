@@ -1,4 +1,11 @@
-const { getAllUsers, findUserById, updateUser, deleteUser, createUser } = require('../services/users.service');
+const {
+  getAllUsers,
+  findUserById,
+  updateUser,
+  updateUnicornGender,
+  deleteUser,
+  createUser,
+} = require('../services/users.service');
 const { database } = require('../config/database');
 const { sanitizeUser } = require('../models/user.model');
 const { sendSuccess } = require('../utils/response');
@@ -69,10 +76,21 @@ async function deleteUserController(req, res, next) {
   }
 }
 
+async function updateOwnCompanionController(req, res, next) {
+  try {
+    const user = updateUnicornGender(req.user.id, req.body.unicornGender);
+    await database.flush();
+    return sendSuccess(res, { user }, 'Compañero actualizado correctamente.');
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   createUserController,
   listUsersController,
   getUserByIdController,
   updateUserController,
+  updateOwnCompanionController,
   deleteUserController,
 };

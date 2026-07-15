@@ -3228,7 +3228,7 @@ th {
 
 /* Identidad cromática global: violeta mágico, luminoso y reconocible. */
 :root {
-  --bg: #f8f5ff;
+  --bg: #f1efec;
   --surface-strong: #f0e9ff;
   --surface-soft: #fcfaff;
   --text: #2f2148;
@@ -3240,7 +3240,7 @@ th {
 }
 
 body {
-  background: #f8f5ff;
+  background: #f1efec;
   color: var(--text);
 }
 

@@ -1,10 +1,12 @@
-function sanitizeUser(user) {
+function sanitizeUser(user, { includePreferences = false } = {}) {
   if (!user) {
     return null;
   }
 
-  const { passwordHash, ...publicUser } = user;
-  return publicUser;
+  const { passwordHash, unicornGender, ...publicUser } = user;
+  return includePreferences
+    ? { ...publicUser, unicornGender: unicornGender ?? null }
+    : publicUser;
 }
 
 function createUserModel(input) {
@@ -20,6 +22,7 @@ function createUserModel(input) {
     linkedStudentId: input.linkedStudentId ?? null,
     birthDate: input.birthDate ?? null,
     ageRange: input.ageRange ?? null,
+    unicornGender: input.unicornGender ?? null,
     createdAt: input.createdAt,
     updatedAt: input.updatedAt,
   };

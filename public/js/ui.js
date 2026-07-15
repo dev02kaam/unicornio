@@ -254,22 +254,28 @@ function ensureModuleNavigation() {
   }
 
   const modules = [
-    { label: 'Usuarios', href: '/users.html', icon: 'users' },
-    { label: 'Centros', href: '/centers.html', icon: 'school' },
-    { label: 'Grupos', href: '/groups.html', icon: 'groups' },
-    { label: 'Consentimientos', href: '/consents.html', icon: 'consent' },
-    { label: 'Texto legal', href: '/legal.html', icon: 'legal' },
+    { label: 'Usuarios', href: '/users.html', icon: 'users', roles: ['ADMIN'] },
+    { label: 'Centros', href: '/centers.html', icon: 'school', roles: ['ADMIN', 'SCHOOL', 'TEACHER', 'PROFESSIONAL'] },
+    { label: 'Grupos', href: '/groups.html', icon: 'groups', roles: ['ADMIN', 'SCHOOL', 'TEACHER', 'PROFESSIONAL', 'STUDENT'] },
+    { label: 'Consentimientos', href: '/consents.html', icon: 'consent', roles: ['ADMIN', 'SCHOOL', 'TEACHER', 'PROFESSIONAL', 'FAMILY', 'STUDENT'] },
+    { label: 'Texto legal', href: '/legal.html', icon: 'legal', roles: ['ADMIN'] },
   ];
   const currentPath = window.location.pathname;
+  const currentRole = typeof getTokenRole === 'function' ? String(getTokenRole() || '').toUpperCase() : '';
 
   navigationRows.forEach((existingLinks) => {
     const existingHrefs = new Set(Array.from(existingLinks.querySelectorAll('a[href]')).map((link) => link.getAttribute('href')));
     modules
-      .filter((module) => module.href !== currentPath && !existingHrefs.has(module.href))
+      .filter((module) => (
+        module.href !== currentPath
+        && !existingHrefs.has(module.href)
+        && (!currentRole || module.roles.includes(currentRole))
+      ))
       .forEach((module) => {
         const link = document.createElement('a');
         link.className = 'button secondary';
         link.href = module.href;
+        link.dataset.moduleLink = module.href;
         link.setAttribute('aria-label', module.label);
         link.innerHTML = `${getAppIcon(module.icon)}<span>${escapeHtml(module.label)}</span>`;
         existingLinks.append(link);
@@ -490,6 +496,7 @@ function refreshCustomSelect(select) {
       select.dispatchEvent(new Event('input', { bubbles: true }));
       select.dispatchEvent(new Event('change', { bubbles: true }));
       refreshCustomSelect(select);
+      instance.trigger.focus({ preventScroll: true });
     });
     optionButtons.append(optionButton);
   });
@@ -561,6 +568,8 @@ function enhanceSelect(select) {
   select.parentNode.insertBefore(wrapper, select);
   wrapper.append(select, trigger, menu);
   select.classList.add('select-control__native');
+  select.tabIndex = -1;
+  select.setAttribute('aria-hidden', 'true');
 
   const instance = { select, wrapper, trigger, value, menu };
   customSelectInstances.set(select, instance);
@@ -614,6 +623,7 @@ function enhanceSelect(select) {
 
   select.addEventListener('input', () => refreshCustomSelect(select));
   select.addEventListener('change', () => refreshCustomSelect(select));
+  select.addEventListener('focus', () => trigger.focus({ preventScroll: true }));
   select.addEventListener('invalid', () => {
     setCustomSelectOpen(instance, true);
     trigger.focus();

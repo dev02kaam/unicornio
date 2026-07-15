@@ -7,6 +7,12 @@ const ROLES = Object.freeze({
   FAMILY: 'FAMILY',
 });
 
+// Preferencia visual del compañero. No representa el género del usuario.
+const UNICORN_GENDERS = Object.freeze({
+  MASCULINE: 'MASCULINE',
+  FEMININE: 'FEMININE',
+});
+
 const CENTER_TYPES = Object.freeze({
   PRIMARY: 'PRIMARIA',
   SECONDARY: 'SECUNDARIA',
@@ -75,6 +81,7 @@ const PUBLIC_USER_FIELDS = [
 
 module.exports = {
   ROLES,
+  UNICORN_GENDERS,
   CENTER_TYPES,
   ACADEMIC_YEAR_STAGES,
   CENTER_ASSIGNMENT_ROLES,
