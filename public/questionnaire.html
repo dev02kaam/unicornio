@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mi cuestionario | Proyecto Unicornio</title>
+    <meta name="theme-color" content="#0F1833" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/companions/favicon-64.png" />
+    <link rel="apple-touch-icon" href="/assets/companions/favicon-192.png" />
+    <link rel="stylesheet" href="/css/styles.css" />
+    <link rel="stylesheet" href="/css/galaxy.css" />
+    <link rel="stylesheet" href="/css/cosmos.css" />
+    <link rel="stylesheet" href="/css/questionnaires.css" />
+    <script src="/js/api.js"></script>
+    <script src="/js/ui.js" defer></script>
+    <script src="/js/cosmos.js" defer></script>
+    <script src="/js/companion.js" defer></script>
+    <script src="/js/questionnaire-runner.js" defer></script>
+  </head>
+  <body class="questionnaire-app questionnaire-student auth-pending">
+    <!--
+      Impeccable design contract
+      Context: student assignment list and one-question-at-a-time supervised response flow.
+      Brand: Unicornio cosmos, calm and age-respectful; no clinical scoring language.
+      Reuse: established color tokens, controls and companion imagery.
+      Divergence: distraction-free runner with a persistent help control is safety-critical.
+      Layout: centered reading column; one question, four large answers, explicit progress.
+      Aesthetic: “Constelación serena”; generous space and minimal visual noise.
+      Responsive: same semantic order at every width; controls become full width below 640px.
+      Accessibility: fieldset/legend, keyboard radios, live save status, 44px targets, reduced motion.
+      Seed: be775961.
+    -->
+    <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
+
+    <main id="main-content" class="shell dashboard-shell student-shell">
+      <section class="dashboard-hero card questionnaire-page-hero">
+        <a class="app-brand-lockup" href="/dashboard.html" aria-label="Proyecto Unicornio, volver al dashboard">
+          <img src="/assets/brand/logo_proyecto_unicornio_horizontal_limpio.png" alt="Proyecto Unicornio — Escuchar antes. Cuidar mejor." />
+        </a>
+        <div class="hero-copy">
+          <span id="student-session-label" class="badge">Mi espacio</span>
+          <h1>Cuestionarios</h1>
+          <p id="student-page-subtitle" class="dashboard-subtitle">Responde con calma, una pregunta cada vez. Tus respuestas se guardan y puedes pedir ayuda en cualquier momento.</p>
+          <nav class="action-row dashboard-links icon-navigation" aria-label="Navegación del alumno">
+            <a class="button secondary" href="/dashboard.html">Inicio</a>
+            <a class="button secondary" aria-current="page" href="/questionnaire.html">Cuestionarios</a>
+            <button id="student-logout-button" class="button secondary compact-button" type="button">Salir</button>
+          </nav>
+        </div>
+        <a class="account-trigger" href="/dashboard.html" aria-label="Volver a mi espacio">
+          <span class="avatar-badge avatar-large" aria-hidden="true">
+            <svg class="avatar-icon" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="8" r="3.25" fill="currentColor" />
+              <path d="M5.5 19.25C6.18 15.87 8.37 14 12 14C15.63 14 17.82 15.87 18.5 19.25" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+            </svg>
+          </span>
+        </a>
+      </section>
+
+      <section id="student-gate" class="pilot-gate card" hidden>
+        <span class="eyebrow">Piloto protegido</span>
+        <h1>El cuestionario no está disponible</h1>
+        <p id="student-gate-message">Tu profesional te avisará cuando la sesión esté preparada.</p>
+        <div class="preview-launcher" aria-labelledby="student-preview-title">
+          <div>
+            <span class="eyebrow">Modo de prueba</span>
+            <h2 id="student-preview-title">Abrir sin campaña ni consentimiento</h2>
+            <p>Úsalo para comprobar el recorrido. Nada de lo que marques se guardará ni generará avisos.</p>
+          </div>
+          <div class="action-row">
+            <a class="button primary" href="/questionnaire.html?preview=9-12">Probar 9–12 años</a>
+            <a class="button secondary" href="/questionnaire.html?preview=13-16">Probar 13–16 años</a>
+          </div>
+        </div>
+        <a class="button secondary" href="/dashboard.html">Volver a mi espacio</a>
+      </section>
+
+      <section id="assignment-view" class="assignment-view card" hidden>
+        <header class="student-intro">
+          <span class="eyebrow">Cuestionarios disponibles</span>
+          <h1>Tu espacio para responder</h1>
+          <p>Solo verás una pregunta cada vez. Tus respuestas se guardan al avanzar y puedes pedir ayuda en cualquier momento.</p>
+        </header>
+        <div id="assignment-list" class="assignment-list"></div>
+        <p id="assignment-empty" class="empty-copy" hidden>No tienes cuestionarios disponibles ahora.</p>
+      </section>
+
+      <section id="runner-view" class="runner-view card" hidden>
+        <div id="preview-notice" class="preview-notice" role="status" hidden>
+          <strong>Modo de prueba funcional</strong>
+          <span>Las respuestas no se guardan ni generan resultados o alertas.</span>
+        </div>
+        <header class="runner-progress">
+          <div>
+            <span id="runner-question-count">Pregunta 1 de 20</span>
+            <span id="runner-save-status" role="status" aria-live="polite">Todo listo</span>
+          </div>
+          <div
+            id="runner-progressbar"
+            class="runner-progressbar"
+            role="progressbar"
+            aria-label="Progreso del cuestionario"
+            aria-valuemin="0"
+            aria-valuemax="20"
+            aria-valuenow="0"
+          >
+            <span id="runner-progress-fill"></span>
+          </div>
+        </header>
+
+        <form id="question-form" class="question-panel">
+          <fieldset>
+            <legend id="question-text" tabindex="-1">Cargando pregunta…</legend>
+            <div id="answer-options" class="answer-options"></div>
+          </fieldset>
+
+          <button
+            id="help-button"
+            class="help-button"
+            type="button"
+            aria-label="Pedir ayuda con mi compañero Unicornio"
+          >
+            <span class="help-button__avatar" aria-hidden="true">
+              <img
+                data-companion-image
+                src="/assets/companions/luna/avatar-v2.png"
+                alt=""
+                width="48"
+                height="48"
+              />
+            </span>
+            <span class="help-button__copy">
+              <strong><span data-companion-name>Tu compañero</span> está contigo</strong>
+              <small>Si algo te preocupa, podéis pedir ayuda juntos.</small>
+            </span>
+            <span class="help-button__action" aria-hidden="true">Pedir ayuda <span>→</span></span>
+          </button>
+
+          <div class="runner-navigation">
+            <button id="previous-question-button" class="button secondary" type="button">Anterior</button>
+            <button id="next-question-button" class="button primary" type="submit">Guardar y continuar</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="completion-view" class="completion-view card" tabindex="-1" hidden>
+        <div class="completion-companion" aria-hidden="true">
+          <img
+            data-companion-image
+            src="/assets/companions/luna/avatar-v2.png"
+            alt=""
+            width="180"
+            height="180"
+          />
+          <span class="completion-companion__check">✓</span>
+        </div>
+        <div class="completion-view__content">
+          <span id="completion-eyebrow" class="eyebrow">Respuestas guardadas</span>
+          <h1>Has terminado</h1>
+          <p id="completion-message"></p>
+          <div class="action-row">
+            <a id="completion-primary-action" class="button primary" href="/dashboard.html">Volver a mi espacio</a>
+            <a id="completion-secondary-action" class="button secondary" href="/questionnaire.html" hidden>Probar la otra versión</a>
+          </div>
+        </div>
+      </section>
+
+      <section id="help-view" class="help-view card" hidden>
+        <div id="help-view-mark" class="help-view__mark" aria-hidden="true">✓</div>
+        <span id="help-view-eyebrow" class="eyebrow">Has pedido ayuda</span>
+        <h1>Has sido muy valiente</h1>
+        <p id="help-view-message">No pasa nada. Has hecho bien en contarlo. Ahora el profesional se hará cargo de escucharte y acompañarte.</p>
+        <p id="help-delivery-warning" class="help-delivery-warning" role="alert" hidden></p>
+        <div class="help-reassurance">
+          <strong>Unicornio se queda contigo</strong>
+          <p>Respira con calma. No tienes que explicar todo de golpe; el profesional te escuchará paso a paso.</p>
+        </div>
+        <button id="retry-help-button" class="button secondary" type="button" hidden>Volver a pedir ayuda</button>
+      </section>
+    </main>
+
+    <dialog id="help-dialog" class="pilot-dialog help-dialog" aria-labelledby="help-dialog-title">
+      <div class="dialog-heading">
+        <div>
+          <span class="eyebrow">Pedir ayuda</span>
+          <h2 id="help-dialog-title">¿Quieres pedir ayuda?</h2>
+        </div>
+        <button class="icon-action" type="button" data-close-dialog aria-label="Cerrar">×</button>
+      </div>
+      <p id="help-dialog-description">Haremos una pausa, guardaremos lo que ya has respondido y avisaremos al profesional para que pueda escucharte.</p>
+      <div id="help-dialog-status" class="inline-status" role="status" aria-live="polite"></div>
+      <div class="action-row">
+        <button id="confirm-help-button" class="button primary support-confirm-button" type="button">Pedir ayuda</button>
+        <button class="button secondary" type="button" data-close-dialog>Seguir con el cuestionario</button>
+      </div>
+    </dialog>
+  </body>
+</html>

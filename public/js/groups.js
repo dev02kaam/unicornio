@@ -170,7 +170,8 @@ function canManageGroupRecords() {
 }
 
 function canManageGroupMembers() {
-  return String(groupsCurrentUser?.role || '').toUpperCase() === 'SCHOOL';
+  const role = String(groupsCurrentUser?.role || '').toUpperCase();
+  return role === 'ADMIN' || role === 'SCHOOL';
 }
 
 function getCenterById(centerId) {
@@ -583,7 +584,14 @@ function renderAvailableUsers(centerUsers, groupUsers) {
 
   groupAvailableUsersCard.hidden = false;
   const groupUserIds = new Set(groupUsers.map(({ user }) => user.id));
-  const availableUsers = centerUsers.filter(({ user }) => user.isActive && !groupUserIds.has(user.id));
+  const assignableRoles = new Set(['STUDENT', 'TEACHER', 'PROFESSIONAL']);
+  const availableUsers = centerUsers.filter(({ user }) => {
+    const role = String(user.role || '').toUpperCase();
+    return user.isActive
+      && assignableRoles.has(role)
+      && user.id !== groupsCurrentUser?.id
+      && !groupUserIds.has(user.id);
+  });
 
   availableUsersCount.textContent = String(availableUsers.length);
 
@@ -597,7 +605,15 @@ function renderAvailableUsers(centerUsers, groupUsers) {
   availableUserSelect.disabled = false;
   addUserToGroupButton.disabled = false;
   availableUserSelect.innerHTML = availableUsers
-    .map((entry) => `<option value="${escapeDynamicHtml(entry.user.id)}">${escapeDynamicHtml(entry.user.name)} (${escapeDynamicHtml(entry.user.email)})</option>`)
+    .map((entry) => {
+      const roleLabels = {
+        STUDENT: 'Alumno',
+        TEACHER: 'Profesor',
+        PROFESSIONAL: 'Profesional',
+      };
+      const role = String(entry.user.role || '').toUpperCase();
+      return `<option value="${escapeDynamicHtml(entry.user.id)}">${escapeDynamicHtml(entry.user.name)} · ${escapeDynamicHtml(roleLabels[role] || role)} (${escapeDynamicHtml(entry.user.email)})</option>`;
+    })
     .join('');
 }
 

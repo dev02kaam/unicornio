@@ -196,9 +196,16 @@ function renderConsent(consent) {
           <span>Actualizado</span>
           <strong>${escapeConsentMarkup(formatDate(consent.updatedAt))}</strong>
         </div>
+        ${consent.campaignId ? `
+          <div class="profile-chip">
+            <span>Alcance</span>
+            <strong>Campaña específica</strong>
+          </div>
+        ` : ''}
       </div>
 
       <p class="field-note">
+        ${consent.campaignId ? 'Esta autorización corresponde únicamente a la campaña de cuestionario indicada por el centro. ' : ''}
         ${consent.status === 'PENDING' ? 'Consentimiento pendiente de respuesta familiar.' : ''}
         ${consent.status === 'ACCEPTED' ? `Aceptado el ${escapeConsentMarkup(formatDate(consent.acceptedAt))}.` : ''}
         ${consent.status === 'REJECTED' ? `Rechazado el ${escapeConsentMarkup(formatDate(consent.rejectedAt))}.` : ''}

@@ -171,7 +171,17 @@ function validateAdminCreateUser(req, _res, next) {
 }
 
 function validateCenterCreate(req, _res, next) {
-  const { name, code, type, academicYearId, city, userName, userEmail, userPassword } = req.body || {};
+  const {
+    name,
+    code,
+    type,
+    academicYearId,
+    city,
+    questionnaireSupportContact,
+    userName,
+    userEmail,
+    userPassword,
+  } = req.body || {};
   const errors = [];
 
   if (!isNonEmptyString(name)) {
@@ -188,6 +198,9 @@ function validateCenterCreate(req, _res, next) {
   }
   if (city !== undefined && !isNonEmptyString(city)) {
     errors.push('La ciudad no puede estar vacia.');
+  }
+  if (questionnaireSupportContact !== undefined && !isNonEmptyString(questionnaireSupportContact)) {
+    errors.push('El contacto de apoyo no puede estar vacio.');
   }
   if (userName !== undefined && !isNonEmptyString(userName)) {
     errors.push('El nombre de acceso no puede estar vacio.');
@@ -207,7 +220,7 @@ function validateCenterCreate(req, _res, next) {
 }
 
 function validateCenterUpdate(req, _res, next) {
-  const { name, code, type, academicYearId, city } = req.body || {};
+  const { name, code, type, academicYearId, city, questionnaireSupportContact } = req.body || {};
   const errors = [];
 
   if (name !== undefined && !isNonEmptyString(name)) {
@@ -224,6 +237,9 @@ function validateCenterUpdate(req, _res, next) {
   }
   if (city !== undefined && !isNonEmptyString(city)) {
     errors.push('La ciudad no puede estar vacia.');
+  }
+  if (questionnaireSupportContact !== undefined && !isNonEmptyString(questionnaireSupportContact)) {
+    errors.push('El contacto de apoyo no puede estar vacio.');
   }
 
   if (errors.length > 0) {
@@ -317,7 +333,7 @@ function validateAssignmentDelete(_req, _res, next) {
 }
 
 function validateConsentRequest(req, _res, next) {
-  const { studentId, familyUserId, legalTextVersionId, centerId } = req.body || {};
+  const { studentId, familyUserId, legalTextVersionId, centerId, campaignId } = req.body || {};
   const errors = [];
 
   if (!isNonEmptyString(studentId)) {
@@ -331,6 +347,9 @@ function validateConsentRequest(req, _res, next) {
   }
   if (centerId !== undefined && !isNonEmptyString(centerId)) {
     errors.push('El centro no es valido.');
+  }
+  if (campaignId !== undefined && campaignId !== null && !isNonEmptyString(campaignId)) {
+    errors.push('La campaña no es válida.');
   }
 
   if (errors.length > 0) {

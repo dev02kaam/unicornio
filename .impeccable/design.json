@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-31T10:02:16.1394458+02:00",
+  "title": "Design System: Proyecto Unicornio",
+  "extensions": {
+    "colorMeta": {
+      "night": {
+        "role": "primary",
+        "displayName": "Noche profunda",
+        "canonical": "#0F1833",
+        "tonalRamp": ["#080D1C", "#0F1833", "#1A2852", "#2E4173", "#52638F", "#7F8BAA", "#B6BECE", "#EDF1F7"]
+      },
+      "primary": {
+        "role": "primary",
+        "displayName": "Violeta órbita",
+        "canonical": "#5943B7",
+        "tonalRamp": ["#21164F", "#31216F", "#43308F", "#5943B7", "#7966CF", "#A394E1", "#D0C8F1", "#F0EDFB"]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Lienzo frío",
+        "canonical": "#EDF1F7",
+        "tonalRamp": ["#17203B", "#303A54", "#535D73", "#7B8496", "#A4ACB9", "#C8CED8", "#E0E5EC", "#EDF1F7"]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Rojo de ayuda",
+        "canonical": "#B4232C",
+        "tonalRamp": ["#3E090D", "#671017", "#8C1821", "#B4232C", "#CD4F56", "#E58388", "#F3BABD", "#FFF0F1"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display cálido",
+        "purpose": "Acceso, estados vacíos y finalización."
+      },
+      "body": {
+        "displayName": "Lectura serena",
+        "purpose": "Instrucciones, respuestas y contexto operativo."
+      }
+    },
+    "shadows": [
+      {
+        "name": "surface-ambient",
+        "value": "0 22px 60px rgba(15, 24, 51, 0.08)",
+        "purpose": "Workspace principal."
+      },
+      {
+        "name": "dialog-elevated",
+        "value": "0 30px 90px rgba(15, 24, 51, 0.24)",
+        "purpose": "Confirmaciones modales."
+      },
+      {
+        "name": "help-persistent",
+        "value": "0 12px 32px rgba(180, 35, 44, 0.16)",
+        "purpose": "Acción persistente de ayuda."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out-expo",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Cambios de estado entre 160 y 420 ms; se desactiva cuando se solicita movimiento reducido."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "mobile",
+        "value": "760px"
+      },
+      {
+        "name": "workspace-stack",
+        "value": "1120px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Botón principal",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Una única acción dominante por contexto.",
+      "html": "<button class=\"ds-button-primary\">Continuar</button>",
+      "css": ".ds-button-primary { min-height: 44px; padding: 12px 20px; border: 1px solid var(--night, #0F1833); border-radius: 999px; background: var(--night, #0F1833); color: #FFFFFF; font: 700 16px/1.2 Aptos, 'Segoe UI', sans-serif; transition: background-color 180ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-button-primary:hover { background: var(--night-soft, #1A2852); } .ds-button-primary:focus-visible { outline: 3px solid rgba(20, 112, 255, 0.38); outline-offset: 3px; }"
+    },
+    {
+      "name": "Botón secundario",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Acción reversible o de menor jerarquía.",
+      "html": "<button class=\"ds-button-secondary\">Anterior</button>",
+      "css": ".ds-button-secondary { min-height: 44px; padding: 12px 20px; border: 1px solid rgba(23, 32, 59, 0.12); border-radius: 999px; background: #FFFFFF; color: #0F1833; font: 700 16px/1.2 Aptos, 'Segoe UI', sans-serif; transition: background-color 180ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-button-secondary:hover { background: #F8F9FC; } .ds-button-secondary:focus-visible { outline: 3px solid rgba(20, 112, 255, 0.38); outline-offset: 3px; }"
+    },
+    {
+      "name": "Opción de respuesta",
+      "kind": "input",
+      "refersTo": "answer-choice",
+      "description": "Control táctil grande para una respuesta del cuestionario.",
+      "html": "<label class=\"ds-answer\"><input type=\"radio\" name=\"answer\" /> <span>A veces</span></label>",
+      "css": ".ds-answer { display: flex; min-height: 56px; align-items: center; gap: 12px; padding: 16px; border: 2px solid rgba(23, 32, 59, 0.12); border-radius: 16px; background: #FFFFFF; color: #0F1833; font: 600 16px/1.4 Aptos, 'Segoe UI', sans-serif; } .ds-answer:hover { border-color: #5943B7; background: #F0EDFB; } .ds-answer:focus-within { outline: 3px solid rgba(20, 112, 255, 0.38); outline-offset: 3px; }"
+    },
+    {
+      "name": "Badge de estado",
+      "kind": "chip",
+      "description": "Estado operativo expresado con color y texto.",
+      "html": "<span class=\"ds-status\">Recepción confirmada</span>",
+      "css": ".ds-status { display: inline-flex; min-height: 28px; align-items: center; padding: 4px 10px; border-radius: 999px; background: #FFF5DF; color: #9A5A00; font: 700 13px/1.2 Aptos, 'Segoe UI', sans-serif; } .ds-status:focus-visible { outline: 3px solid rgba(20, 112, 255, 0.38); outline-offset: 3px; }"
+    },
+    {
+      "name": "Fila de alerta",
+      "kind": "custom",
+      "refersTo": "alert-row",
+      "description": "Alerta persistente con persona, prioridad, estado y siguiente acción.",
+      "html": "<article class=\"ds-alert\"><strong>Alumno demo</strong><span>Prioridad alta · Abierta</span><time>10:02</time></article>",
+      "css": ".ds-alert { display: grid; gap: 8px; padding: 16px; border: 1px solid rgba(23, 32, 59, 0.12); border-radius: 10px; background: #FFFFFF; color: #17203B; box-shadow: inset 4px 0 #B4232C; font: 400 16px/1.4 Aptos, 'Segoe UI', sans-serif; } .ds-alert strong { color: #0F1833; } .ds-alert:focus-within { outline: 3px solid rgba(20, 112, 255, 0.38); outline-offset: 3px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Constelación serena",
+    "overview": "Unicornio es un espacio educativo sereno, humano y confiable. La identidad cósmica organiza la información sin convertir las tareas sensibles en una pantalla clínica.",
+    "keyCharacteristics": [
+      "Serena y luminosa, sin infantilizar.",
+      "Cósmica en identidad, sobria en las tareas sensibles.",
+      "Responsive, accesible y trazable.",
+      "Una señal automática orienta; una persona formada valora y actúa."
+    ],
+    "rules": [
+      {
+        "name": "The Human Signal Rule",
+        "body": "Nunca se comunica prioridad, estado o interpretación únicamente mediante color; siempre se añade una etiqueta textual.",
+        "section": "colors"
+      },
+      {
+        "name": "The Red Is Help Rule",
+        "body": "El rojo solo identifica ayuda o alertas que requieren atención.",
+        "section": "colors"
+      },
+      {
+        "name": "The Calm Surface Rule",
+        "body": "Ninguna animación decorativa compite con una pregunta o alerta.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do mantener el botón de ayuda accesible y sus contactos visibles incluso ante un fallo de red.",
+      "Do combinar color, texto y semántica para estados, prioridades y progreso.",
+      "Do reservar las respuestas y puntuaciones para el profesional asignado."
+    ],
+    "donts": [
+      "Don't presentar los cuestionarios experimentales como diagnósticos, BYI-2 o pruebas validadas.",
+      "Don't mostrar puntuaciones, bandas, respuestas ni interpretaciones al alumno, familia, centro o administrador.",
+      "Don't afirmar que una alerta fue entregada cuando la API no lo ha confirmado."
+    ]
+  }
+}

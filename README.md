@@ -1,6 +1,6 @@
 # Proyecto Unicornio
 
-Base tecnica inicial de Proyecto Unicornio: una aplicacion web cliente-servidor orientada al ambito educativo e infanto-juvenil.
+Aplicación web cliente-servidor orientada al ámbito educativo e infanto-juvenil.
 
 ## Que incluye esta fase
 
@@ -10,28 +10,29 @@ Base tecnica inicial de Proyecto Unicornio: una aplicacion web cliente-servidor 
 - Autenticacion con JWT.
 - Modulo de usuarios.
 - Modulo organizativo de centros, grupos y asignaciones.
-- Modulo de consentimientos familiares demo.
+- Módulo de consentimientos familiares versionados.
+- Piloto supervisado de cuestionarios experimentales de estado de ánimo para 9–12 y 13–16 años.
+- Campañas, sesiones, guardado por respuesta, resultados profesionales, alertas y notificaciones internas.
+- Cifrado AES-256-GCM de respuestas y resultados sensibles.
+- Migraciones relacionales PostgreSQL para el piloto.
 - Seguridad basica.
 - Area privada demo.
 - Alta de usuarios desde el panel de administracion.
 - Identidad visual de Proyecto Unicornio con logo, favicon y paleta propia.
 - Companero reactivo con Nico, Luna, Orion y Sol, expresiones ligadas a la actividad y preferencia persistente.
 
-## Que no incluye esta fase
+## Límites del piloto
 
-- Cuestionarios.
-- Respuestas.
-- Scoring.
-- Alertas.
-- Estadisticas.
-- Informes.
-- Logica clinica o psicologica.
+- No diagnostica ni publica instrumentos BYI-2.
+- No se activa para datos reales por defecto.
+- No incluye ideación autolítica, acoso, editor de cuestionarios, estadísticas grupales, correo ni SMS.
+- Requiere revisión clínica, de propiedad intelectual y de impacto en protección de datos antes de un uso real.
 
 ## Requisitos
 
 - Node.js 18 o superior.
 - npm.
-- PostgreSQL opcional para usar una base de datos compartida.
+- PostgreSQL obligatorio para el piloto de cuestionarios.
 
 ## Instalacion
 
@@ -51,6 +52,15 @@ Abrir:
 http://localhost:3000
 ```
 
+Si el puerto 3000 está ocupado, en PowerShell:
+
+```powershell
+$env:PORT=3100
+npm run dev
+```
+
+La aplicación quedará en `http://localhost:3100`.
+
 ## Variables de entorno
 
 Copiar `.env.example` a `.env` y ajustar:
@@ -63,8 +73,29 @@ Copiar `.env.example` a `.env` y ajustar:
 - `DATABASE_URL`
 - `DATABASE_SSL`
 - `DATA_FILE`
+- `QUESTIONNAIRE_PILOT_ENABLED`
+- `QUESTIONNAIRE_DATA_KEY`
+- `QUESTIONNAIRE_DATA_KEY_VERSION`
+- `QUESTIONNAIRE_SESSION_MAX_MINUTES`
 
-Si `DATABASE_URL` esta vacia, la app guarda los datos en `server/data/runtime-state.json` (configurable con `DATA_FILE`) y los recupera al reiniciar. Si `DATABASE_URL` esta definida, la app crea las tablas tecnicas necesarias en PostgreSQL y persiste las colecciones actuales como `jsonb`.
+Si `DATABASE_URL` está vacía, la aplicación mantiene los módulos heredados en `server/data/runtime-state.json`; el piloto seguirá bloqueado. Al usar PostgreSQL, el arranque ejecuta migraciones idempotentes y sincroniza el módulo de consentimientos con tablas relacionales.
+
+El piloto permanece apagado con:
+
+```dotenv
+QUESTIONNAIRE_PILOT_ENABLED=false
+```
+
+Para una prueba local supervisada, genera una clave de 32 bytes:
+
+```powershell
+$env:QUESTIONNAIRE_DATA_KEY = node -e "process.stdout.write(require('crypto').randomBytes(32).toString('base64'))"
+$env:QUESTIONNAIRE_PILOT_ENABLED = 'true'
+$env:PORT = '3100'
+npm run dev
+```
+
+No reutilices una clave efímera con datos que necesites recuperar. La versión de clave se configura con `QUESTIONNAIRE_DATA_KEY_VERSION`.
 
 ## Usuarios demo
 
@@ -153,6 +184,52 @@ Contrasenha demo:
 - `POST /api/legal-text-versions/:id/activate`
 - `POST /api/legal-text-versions/:id/deactivate`
 
+### Piloto de cuestionarios
+
+- `GET /api/questionnaire-definitions`
+- `GET|POST /api/questionnaire-campaigns`
+- `GET /api/questionnaire-campaigns/:campaignId/monitor`
+- `POST /api/questionnaire-campaigns/:campaignId/consents`
+- `POST /api/questionnaire-campaigns/:campaignId/open`
+- `POST /api/questionnaire-campaigns/:campaignId/close`
+- `POST /api/questionnaire-campaigns/:campaignId/cancel`
+- `GET /api/questionnaire-campaigns/:campaignId/alerts`
+- `GET /api/questionnaire-campaigns/:campaignId/results/:studentId`
+- `GET /api/me/questionnaire-assignments`
+- `POST /api/questionnaire-participants/:participantId/attempts`
+- `PUT /api/questionnaire-attempts/:attemptId/answers`
+- `POST /api/questionnaire-attempts/:attemptId/submit`
+- `POST /api/questionnaire-attempts/:attemptId/help`
+- `POST /api/questionnaire-alerts/:alertId/acknowledge`
+- `POST /api/questionnaire-alerts/:alertId/resolve`
+- `POST /api/questionnaire-alerts/:alertId/transfer`
+- `GET /api/notifications`
+- `POST /api/notifications/:notificationId/read`
+
+Superficies:
+
+- Profesional: `/questionnaires.html`
+- Alumno: `/questionnaire.html`
+- Familia y profesional: `/notifications.html`
+- Familia: `/consents.html`
+
+Prueba funcional local:
+
+- `/questionnaire.html?preview=9-12`
+- `/questionnaire.html?preview=13-16`
+- No necesita sesión, campaña, consentimiento, PostgreSQL ni clave de cifrado.
+- Las respuestas permanecen únicamente en la pestaña: no se guardan, puntúan ni generan alertas.
+- Está habilitada por defecto solo fuera de producción y puede desactivarse con `QUESTIONNAIRE_PREVIEW_ENABLED=false`.
+
+Reglas operativas del piloto:
+
+- La edad se calcula el día de apertura de la sesión: 9–12 usa la versión infantil, 13–16 la adolescente y cualquier otra edad queda no elegible.
+- «Pedir ayuda» conserva las respuestas confirmadas, bloquea el intento y crea una alerta idempotente. Si la aplicación no confirma la entrega, el alumno recibe un mensaje tranquilo, puede volver a pedir ayuda y se le orienta para acercarse al profesional presente.
+- Las alertas automáticas se notifican solo al profesional. La familia recibe únicamente el aviso mínimo de una petición manual, sin respuestas, puntuación ni interpretación.
+- El profesional confirma recepción, registra la actuación y resuelve o transfiere la alerta. Cada lectura de resultados y actuación queda auditada.
+- Las notificaciones se consultan cada cinco segundos con la aplicación abierta y persisten para el siguiente acceso; no constituyen un canal urgente fuera de la aplicación.
+- Centro y administrador ven estado operativo, pero no tienen acceso ordinario a respuestas ni resultados clínicos.
+
 ## Notas de seguridad
 
 - Las contrasenas se guardan con hash.
@@ -160,9 +237,26 @@ Contrasenha demo:
 - Los alumnos y familias no pueden enumerar perfiles ajenos de su centro o grupo.
 - El registro publico no permite autoasignarse a un centro o grupo.
 - El login usa limitacion de peticiones.
+- El limitador de login solo se omite con `NODE_ENV=test`.
 - Si se supera el limite de login, la respuesta incluye el tiempo estimado para reintentar.
-- Este prototipo no usa datos reales de menores.
-- El modulo de consentimientos usa datos demo y texto legal provisional pendiente de validacion profesional.
+- El piloto está desactivado por defecto y no debe usar datos reales de menores.
+- Alumno y familia no reciben puntuaciones ni interpretaciones.
+- Cada lectura profesional de resultados y cada actuación sobre alertas queda auditada.
+
+## Pruebas
+
+```bash
+npm test
+```
+
+La prueba de migraciones PostgreSQL se ejecuta únicamente con una base exclusiva:
+
+```powershell
+$env:QUESTIONNAIRE_TEST_DATABASE_URL = 'postgresql://.../unicornio_test'
+npm test
+```
+
+`QUESTIONNAIRE_TEST_DATABASE_URL` debe ser distinta de `DATABASE_URL`.
 
 ## Estructura de carpetas
 
@@ -173,10 +267,9 @@ proyecto-unicornio/
   docs/
 ```
 
-## Proximos pasos
+## Condiciones previas a uso real
 
-- Migrar progresivamente la persistencia `jsonb` inicial a tablas relacionales por modulo.
-- Crear cuestionarios.
-- Ampliar el modulo de consentimientos con persistencia real y versionado legal completo.
-- Anadir resultados y alertas.
-- Endurecer privacidad y auditoria.
+- Aprobación clínica y de propiedad intelectual de las versiones transcritas.
+- Protocolo de actuación del centro y responsables formados.
+- Evaluación de impacto, minimización y transparencia conforme al RGPD.
+- Claves persistentes gestionadas fuera del repositorio y copias de seguridad verificadas.

@@ -6,7 +6,8 @@
   "main": "server/app.js",
   "scripts": {
     "dev": "node --watch server/app.js",
-    "start": "node server/app.js"
+    "start": "node server/app.js",
+    "test": "node --test --test-isolation=none --test-concurrency=1"
   },
   "engines": {
     "node": ">=18"

@@ -373,16 +373,17 @@ function assertConsentCandidate(studentId, familyUserId, legalTextVersionId) {
   return { student, familyUser, legalTextVersion };
 }
 
-function getExistingConsentForTuple(studentId, familyUserId, centerId, legalTextVersionId) {
+function getExistingConsentForTuple(studentId, familyUserId, centerId, legalTextVersionId, campaignId = null) {
   return getConsentCollection().find((consent) => (
     consent.studentId === String(studentId)
     && consent.familyUserId === String(familyUserId)
     && consent.centerId === String(centerId)
     && consent.legalTextVersionId === String(legalTextVersionId)
+    && String(consent.campaignId || '') === String(campaignId || '')
   )) || null;
 }
 
-function createConsentRequest(data, currentUser) {
+function createConsentRequest(data, currentUser, { allowProfessionalCampaign = false } = {}) {
   const studentId = String(data.studentId || '').trim();
   const familyUserId = String(data.familyUserId || '').trim();
   const legalTextVersionId = String(data.legalTextVersionId || '').trim();
@@ -392,7 +393,12 @@ function createConsentRequest(data, currentUser) {
     throw new AppError('El estudiante no existe o no es valido.', 404, null, 'NOT_FOUND');
   }
 
-  if (!canManageConsentRequest(currentUser, studentId, data.centerId || student.schoolId || null)) {
+  const professionalCampaignAllowed = (
+    allowProfessionalCampaign
+    && String(currentUser?.role || '').toUpperCase() === 'PROFESSIONAL'
+    && data.campaignId
+  );
+  if (!professionalCampaignAllowed && !canManageConsentRequest(currentUser, studentId, data.centerId || student.schoolId || null)) {
     throw new AppError('No tienes permiso para crear esta solicitud de consentimiento.', 403, null, 'FORBIDDEN');
   }
 
@@ -411,8 +417,18 @@ function createConsentRequest(data, currentUser) {
     throw new AppError('No tienes permiso para crear solicitudes en este centro.', 403, null, 'FORBIDDEN');
   }
 
-  const existingConsent = getExistingConsentForTuple(student.id, familyUser.id, centerId, legalTextVersion.id);
+  const campaignId = data.campaignId ? String(data.campaignId) : null;
+  const existingConsent = getExistingConsentForTuple(
+    student.id,
+    familyUser.id,
+    centerId,
+    legalTextVersion.id,
+    campaignId,
+  );
   if (existingConsent && [CONSENT_STATUSES.PENDING, CONSENT_STATUSES.ACCEPTED].includes(existingConsent.status)) {
+    if (campaignId) {
+      return buildConsentSummary(existingConsent);
+    }
     throw new AppError('Ya existe un consentimiento activo o pendiente para este estudiante y esta version.', 409, null, 'CONFLICT');
   }
 
@@ -423,6 +439,7 @@ function createConsentRequest(data, currentUser) {
     familyUserId: familyUser.id,
     centerId,
     legalTextVersionId: legalTextVersion.id,
+    campaignId,
     status: CONSENT_STATUSES.PENDING,
     requestedByUserId: currentUser.id,
     acceptedAt: null,
@@ -449,6 +466,7 @@ function createConsentRequest(data, currentUser) {
       familyUserId: familyUser.id,
       centerId,
       legalTextVersionId: legalTextVersion.id,
+      campaignId,
     },
     createdAt: now,
   });
@@ -499,6 +517,9 @@ function filterConsents(consents, filters = {}) {
     if (filters.legalTextVersionId && consent.legalTextVersionId !== String(filters.legalTextVersionId)) {
       return false;
     }
+    if (filters.campaignId && String(consent.campaignId || '') !== String(filters.campaignId)) {
+      return false;
+    }
     return true;
   });
 }
@@ -543,6 +564,9 @@ function acceptConsent(consentId, currentUser) {
 
   assertFamilyActionPermission(consent, currentUser);
 
+  if (consent.status === CONSENT_STATUSES.ACCEPTED) {
+    return buildConsentSummary(consent);
+  }
   if (consent.status !== CONSENT_STATUSES.PENDING) {
     throw new AppError('Solo se puede aceptar un consentimiento pendiente.', 409, null, 'CONFLICT');
   }
@@ -597,6 +621,9 @@ function rejectConsent(consentId, currentUser) {
 
   assertFamilyActionPermission(consent, currentUser);
 
+  if (consent.status === CONSENT_STATUSES.REJECTED) {
+    return buildConsentSummary(consent);
+  }
   if (consent.status !== CONSENT_STATUSES.PENDING) {
     throw new AppError('Solo se puede rechazar un consentimiento pendiente.', 409, null, 'CONFLICT');
   }
@@ -651,6 +678,9 @@ function revokeConsent(consentId, reason, currentUser) {
 
   assertFamilyActionPermission(consent, currentUser);
 
+  if (consent.status === CONSENT_STATUSES.REVOKED) {
+    return buildConsentSummary(consent);
+  }
   if (consent.status !== CONSENT_STATUSES.ACCEPTED) {
     throw new AppError('Solo se puede revocar un consentimiento aceptado.', 409, null, 'CONFLICT');
   }

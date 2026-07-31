@@ -7,10 +7,15 @@ const { createDemoGroups } = require('../data/demoGroups');
 const { createDemoLegalTextVersions } = require('../data/demoLegalTextVersions');
 const { createDemoConsents, createDemoConsentAuditLogs } = require('../data/demoConsents');
 const { env } = require('./env');
+const { runMigrations } = require('../migrations');
 const {
   createDemoUserCenterAssignments,
   createDemoUserGroupAssignments,
 } = require('../data/demoAssignments');
+const {
+  getMaximumPrefixedSequence,
+  repairLegalTextVersions,
+} = require('../utils/collection-integrity');
 
 const collectionNames = [
   'users',
@@ -114,6 +119,234 @@ async function loadFromPostgres() {
   });
 }
 
+async function repairLegacyAssignmentCollections() {
+  const groupAssignments = state.userGroupAssignments || [];
+  const invalidGroupAssignments = groupAssignments.filter(
+    (assignment) => assignment.centerId && !assignment.groupId,
+  );
+  if (invalidGroupAssignments.length === 0) {
+    return;
+  }
+
+  const centerAssignments = state.userCenterAssignments || [];
+  invalidGroupAssignments.forEach((legacy) => {
+    const existing = centerAssignments.find(
+      (assignment) => assignment.userId === legacy.userId
+        && assignment.centerId === legacy.centerId,
+    );
+    if (!existing) {
+      centerAssignments.push({
+        ...legacy,
+        id: legacy.id,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+  });
+  state.userCenterAssignments = centerAssignments;
+  state.userGroupAssignments = groupAssignments.filter(
+    (assignment) => !(assignment.centerId && !assignment.groupId),
+  );
+
+  const client = await pool.connect();
+  try {
+    await client.query('begin');
+    for (const name of ['userCenterAssignments', 'userGroupAssignments']) {
+      await client.query(
+        `update unicornio_collections
+         set data = $2::jsonb, updated_at = now()
+         where name = $1`,
+        [name, JSON.stringify(state[name])],
+      );
+    }
+    await client.query('commit');
+  } catch (error) {
+    await client.query('rollback');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function repairLegalTextVersionCollection() {
+  const repair = repairLegalTextVersions(state.legalTextVersions || []);
+  const collectionChanged = repair.removed.length > 0;
+  const maximumSequence = getMaximumPrefixedSequence(repair.items, 'legal-text');
+  const sequenceChanged = maximumSequence > Number(sequences.legalTextVersions || 0);
+  let consentsChanged = false;
+
+  if (collectionChanged) {
+    state.legalTextVersions = repair.items;
+  }
+
+  if (repair.idReplacements.size > 0) {
+    state.consents = (state.consents || []).map((consent) => {
+      const replacementId = repair.idReplacements.get(consent.legalTextVersionId);
+      if (!replacementId) return consent;
+
+      consentsChanged = true;
+      return {
+        ...consent,
+        legalTextVersionId: replacementId,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+  }
+
+  if (sequenceChanged) {
+    sequences.legalTextVersions = maximumSequence;
+  }
+
+  if (!collectionChanged && !consentsChanged && !sequenceChanged) {
+    return;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('begin');
+
+    if (collectionChanged) {
+      await client.query(
+        `update unicornio_collections
+         set data = $2::jsonb, updated_at = now()
+         where name = $1`,
+        ['legalTextVersions', JSON.stringify(state.legalTextVersions)],
+      );
+    }
+
+    if (consentsChanged) {
+      await client.query(
+        `update unicornio_collections
+         set data = $2::jsonb, updated_at = now()
+         where name = $1`,
+        ['consents', JSON.stringify(state.consents)],
+      );
+    }
+
+    if (sequenceChanged) {
+      await client.query(
+        `insert into unicornio_sequences (name, value, updated_at)
+         values ('legalTextVersions', $1, now())
+         on conflict (name)
+         do update set value = excluded.value, updated_at = now()`,
+        [sequences.legalTextVersions],
+      );
+    }
+
+    await client.query('commit');
+  } catch (error) {
+    await client.query('rollback');
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  if (repair.removed.length > 0) {
+    console.warn(`Se repararon ${repair.removed.length} versiones legales duplicadas antes de sincronizar PostgreSQL.`);
+  }
+}
+
+async function replaceConsentMirrorCollection(name, executor = pool) {
+  if (name === 'legalTextVersions') {
+    await executor.query('delete from unicornio_legal_text_versions');
+    for (const item of state.legalTextVersions || []) {
+      await executor.query(
+        `insert into unicornio_legal_text_versions (
+          id, version, title, content, is_active, effective_from, effective_to, created_at, updated_at
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        on conflict (id) do update set
+          version = excluded.version,
+          title = excluded.title,
+          content = excluded.content,
+          is_active = excluded.is_active,
+          effective_from = excluded.effective_from,
+          effective_to = excluded.effective_to,
+          created_at = excluded.created_at,
+          updated_at = excluded.updated_at`,
+        [
+          item.id,
+          item.version,
+          item.title,
+          item.content,
+          Boolean(item.isActive),
+          item.effectiveFrom || null,
+          item.effectiveTo || null,
+          item.createdAt,
+          item.updatedAt,
+        ],
+      );
+    }
+  }
+
+  if (name === 'consents') {
+    await executor.query('delete from unicornio_consent_records');
+    for (const item of state.consents || []) {
+      await executor.query(
+        `insert into unicornio_consent_records (
+          id, student_id, family_user_id, center_id, legal_text_version_id, campaign_id,
+          status, requested_by_user_id, accepted_at, rejected_at, revoked_at, expires_at,
+          revocation_reason, created_at, updated_at
+        ) values (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+        )`,
+        [
+          item.id,
+          item.studentId,
+          item.familyUserId,
+          item.centerId,
+          item.legalTextVersionId,
+          item.campaignId || null,
+          item.status,
+          item.requestedByUserId,
+          item.acceptedAt || null,
+          item.rejectedAt || null,
+          item.revokedAt || null,
+          item.expiresAt || null,
+          item.revocationReason || null,
+          item.createdAt,
+          item.updatedAt,
+        ],
+      );
+    }
+  }
+
+  if (name === 'consentAuditLogs') {
+    await executor.query('delete from unicornio_consent_audit_logs');
+    for (const item of state.consentAuditLogs || []) {
+      await executor.query(
+        `insert into unicornio_consent_audit_logs (
+          id, consent_id, action, performed_by_user_id, previous_status, new_status, metadata, created_at
+        ) values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)`,
+        [
+          item.id,
+          item.consentId || null,
+          item.action,
+          item.performedByUserId || null,
+          item.previousStatus || null,
+          item.newStatus || null,
+          JSON.stringify(item.metadata || null),
+          item.createdAt,
+        ],
+      );
+    }
+  }
+}
+
+async function syncConsentMirrors() {
+  const client = await pool.connect();
+  try {
+    await client.query('begin');
+    await replaceConsentMirrorCollection('legalTextVersions', client);
+    await replaceConsentMirrorCollection('consents', client);
+    await replaceConsentMirrorCollection('consentAuditLogs', client);
+    await client.query('commit');
+  } catch (error) {
+    await client.query('rollback');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 function hydrateState(snapshot) {
   const collections = snapshot?.collections;
   if (collections && typeof collections === 'object') {
@@ -182,13 +415,26 @@ function persistCollection(name) {
     return enqueueWrite(persistLocalSnapshot, `el almacenamiento local tras cambiar ${name}`);
   }
 
-  return enqueueWrite(() => pool.query(
-    `insert into unicornio_collections (name, data, updated_at)
-     values ($1, $2::jsonb, now())
-     on conflict (name)
-     do update set data = excluded.data, updated_at = now()`,
-    [name, JSON.stringify(state[name] || [])],
-  ), `la coleccion ${name}`);
+  return enqueueWrite(async () => {
+    const client = await pool.connect();
+    try {
+      await client.query('begin');
+      await client.query(
+        `insert into unicornio_collections (name, data, updated_at)
+         values ($1, $2::jsonb, now())
+         on conflict (name)
+         do update set data = excluded.data, updated_at = now()`,
+        [name, JSON.stringify(state[name] || [])],
+      );
+      await replaceConsentMirrorCollection(name, client);
+      await client.query('commit');
+    } catch (error) {
+      await client.query('rollback');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }, `la coleccion ${name}`);
 }
 
 function persistSequence(name) {
@@ -226,6 +472,10 @@ const database = {
     await ensureSchema();
     await seedIfNeeded();
     await loadFromPostgres();
+    await repairLegacyAssignmentCollections();
+    await repairLegalTextVersionCollection();
+    await runMigrations(pool);
+    await syncConsentMirrors();
     persistenceMode = 'postgres';
     persistenceReady = true;
     console.log('Proyecto Unicornio conectado a PostgreSQL.');
@@ -256,6 +506,36 @@ const database = {
       const error = persistenceError;
       persistenceError = null;
       throw error;
+    }
+  },
+  isPostgres() {
+    return persistenceMode === 'postgres';
+  },
+  getPersistenceMode() {
+    return persistenceMode;
+  },
+  async query(text, params = []) {
+    if (!pool || persistenceMode !== 'postgres') {
+      throw new Error('Esta operacion requiere PostgreSQL.');
+    }
+    return pool.query(text, params);
+  },
+  async transaction(callback) {
+    if (!pool || persistenceMode !== 'postgres') {
+      throw new Error('Esta operacion requiere PostgreSQL.');
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('begin');
+      const result = await callback(client);
+      await client.query('commit');
+      return result;
+    } catch (error) {
+      await client.query('rollback');
+      throw error;
+    } finally {
+      client.release();
     }
   },
   nextUserId() {

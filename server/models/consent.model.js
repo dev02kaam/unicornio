@@ -5,6 +5,7 @@ function createConsentModel(input) {
     familyUserId: input.familyUserId,
     centerId: input.centerId,
     legalTextVersionId: input.legalTextVersionId,
+    campaignId: input.campaignId ?? null,
     status: input.status,
     requestedByUserId: input.requestedByUserId,
     acceptedAt: input.acceptedAt ?? null,

@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Piloto de cuestionarios | Proyecto Unicornio</title>
+    <meta name="theme-color" content="#0F1833" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/companions/favicon-64.png" />
+    <link rel="apple-touch-icon" href="/assets/companions/favicon-192.png" />
+    <link rel="stylesheet" href="/css/styles.css" />
+    <link rel="stylesheet" href="/css/galaxy.css" />
+    <link rel="stylesheet" href="/css/cosmos.css" />
+    <link rel="stylesheet" href="/css/questionnaires.css" />
+    <script src="/js/api.js"></script>
+    <script src="/js/ui.js" defer></script>
+    <script src="/js/cosmos.js" defer></script>
+    <script src="/js/companion.js" defer></script>
+    <script src="/js/questionnaires.js" defer></script>
+  </head>
+  <body class="questionnaire-app auth-pending">
+    <!--
+      Impeccable design contract
+      Context: professional, school and admin control surface for a supervised Spanish pilot.
+      Brand: existing Unicornio navy/violet cosmos; calm, educational, non-clinical.
+      Reuse: styles.css + galaxy.css + cosmos.css tokens, buttons, badges and status language.
+      Divergence: an operational three-zone workspace is necessary for live supervision.
+      Layout: campaign rail, central session orbit/timeline, persistent alert rail; linear on mobile.
+      Aesthetic: “Constelación serena”; clear hierarchy, restrained surfaces, minimal shadow.
+      Responsive: >=1080 three zones; 720–1079 two zones; <720 single column and sticky actions.
+      Accessibility: AA contrast, 44px targets, focus visible, semantic progress/status, reduced motion.
+      Seed: be775961.
+    -->
+    <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
+
+    <main id="main-content" class="shell dashboard-shell questionnaire-shell">
+      <section class="dashboard-hero card questionnaire-page-hero">
+        <a class="app-brand-lockup" href="/dashboard.html" aria-label="Proyecto Unicornio, volver al dashboard">
+          <img src="/assets/brand/logo_proyecto_unicornio_horizontal_limpio.png" alt="Proyecto Unicornio — Escuchar antes. Cuidar mejor." />
+        </a>
+        <div class="hero-copy">
+          <span class="badge">Área profesional · <strong id="account-name">Profesional</strong></span>
+          <h1>Cuestionarios</h1>
+          <p class="dashboard-subtitle">Prepara campañas, supervisa sesiones y revisa alertas dentro del mismo espacio de Proyecto Unicornio.</p>
+          <nav class="action-row dashboard-links icon-navigation" aria-label="Navegación del piloto">
+            <a class="button secondary" href="/dashboard.html">Inicio</a>
+            <a class="button secondary" aria-current="page" href="/questionnaires.html">Cuestionarios</a>
+            <a class="button secondary" href="/consents.html">Consentimientos</a>
+            <a class="button secondary" href="/notifications.html">Notificaciones <span id="notification-count" class="nav-count" hidden>0</span></a>
+            <button id="logout-button" class="button secondary compact-button" type="button">Salir</button>
+          </nav>
+        </div>
+        <a class="account-trigger" href="/dashboard.html" aria-label="Volver al dashboard">
+          <span class="avatar-badge avatar-large" aria-hidden="true">
+            <svg class="avatar-icon" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="8" r="3.25" fill="currentColor" />
+              <path d="M5.5 19.25C6.18 15.87 8.37 14 12 14C15.63 14 17.82 15.87 18.5 19.25" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+            </svg>
+          </span>
+        </a>
+      </section>
+
+      <section id="pilot-disabled" class="pilot-gate card" hidden>
+        <span class="eyebrow">Piloto protegido</span>
+        <h1>Los cuestionarios están desactivados</h1>
+        <p id="pilot-disabled-message">Este entorno no admite todavía sesiones con datos reales.</p>
+        <p>Para una prueba supervisada, configura PostgreSQL, la clave de cifrado y <code>QUESTIONNAIRE_PILOT_ENABLED=true</code>.</p>
+        <div class="preview-launcher" aria-labelledby="preview-launcher-title">
+          <div>
+            <span class="eyebrow">Sin configuración</span>
+            <h2 id="preview-launcher-title">Abrir una prueba funcional</h2>
+            <p>Podrás recorrer todas las preguntas. Las respuestas solo vivirán en esta pestaña y no se crearán resultados ni alertas.</p>
+          </div>
+          <div class="action-row">
+            <a class="button primary" href="/questionnaire.html?preview=9-12">Probar 9–12 años</a>
+            <a class="button secondary" href="/questionnaire.html?preview=13-16">Probar 13–16 años</a>
+          </div>
+        </div>
+        <a class="button secondary" href="/dashboard.html">Volver al dashboard</a>
+      </section>
+
+      <div id="professional-surface" class="pilot-workspace dashboard-workspace" hidden>
+        <aside class="campaign-rail" aria-labelledby="campaigns-title">
+          <div class="rail-heading">
+            <div>
+              <span class="eyebrow">Planificación</span>
+              <h1 id="campaigns-title">Campañas</h1>
+            </div>
+            <button id="new-campaign-button" class="icon-action" type="button" aria-label="Crear campaña">+</button>
+          </div>
+          <div id="campaign-list" class="campaign-list" aria-live="polite"></div>
+          <p id="campaign-list-empty" class="empty-copy" hidden>Aún no hay campañas. Crea la primera para un grupo asignado.</p>
+        </aside>
+
+        <section class="session-stage" aria-labelledby="session-title">
+          <div id="session-empty" class="session-empty">
+            <span class="eyebrow">Piloto experimental</span>
+            <h2 id="session-title">Prepara una sesión supervisada</h2>
+            <p>Selecciona una campaña o crea una nueva. Los alumnos solo podrán entrar tras la aceptación familiar y cuando abras la sesión.</p>
+          </div>
+
+          <div id="session-monitor" hidden>
+            <div class="session-heading">
+              <div>
+                <span id="campaign-status" class="state-badge">Borrador</span>
+                <h2 id="campaign-title">Sesión supervisada</h2>
+                <p id="campaign-meta" class="muted-line"></p>
+              </div>
+              <div id="campaign-actions" class="action-row session-actions"></div>
+            </div>
+
+            <ol id="campaign-timeline" class="campaign-timeline" aria-label="Progreso de la campaña">
+              <li data-stage="CONSENT_PENDING"><span>1</span><strong>Consentimientos</strong></li>
+              <li data-stage="READY"><span>2</span><strong>Preparada</strong></li>
+              <li data-stage="LIVE"><span>3</span><strong>Sesión en directo</strong></li>
+              <li data-stage="CLOSED"><span>4</span><strong>Revisión</strong></li>
+            </ol>
+
+            <div class="orbit-summary" aria-labelledby="orbit-title">
+              <div class="orbit-summary__center">
+                <span id="orbit-kicker">Participantes</span>
+                <strong id="orbit-total">0</strong>
+                <span id="orbit-title">en esta campaña</span>
+              </div>
+              <dl id="session-counts" class="session-counts"></dl>
+            </div>
+
+            <section class="participant-section" aria-labelledby="participants-title">
+              <div class="section-heading">
+                <div>
+                  <span class="eyebrow">Estado individual</span>
+                  <h3 id="participants-title">Participantes</h3>
+                </div>
+                <span id="last-refresh" class="refresh-note"></span>
+              </div>
+              <div id="participant-list" class="participant-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <aside class="alert-rail" aria-labelledby="alerts-title">
+          <div class="rail-heading">
+            <div>
+              <span class="eyebrow">Supervisión</span>
+              <h2 id="alerts-title">Alertas</h2>
+            </div>
+            <span id="alert-count" class="alert-count">0</span>
+          </div>
+          <p class="alert-rail__notice">Las reglas automáticas priorizan una revisión humana; no son un diagnóstico.</p>
+          <div id="alert-list" class="alert-list"></div>
+          <p id="alert-announcer" class="sr-only" role="status" aria-live="polite"></p>
+          <p id="alert-list-empty" class="empty-copy">No hay alertas en esta campaña.</p>
+        </aside>
+      </div>
+
+      <section id="operations-surface" class="operations-surface card" hidden>
+        <header class="operations-heading">
+          <div>
+            <span class="eyebrow">Estado operativo</span>
+            <h1>Campañas del piloto</h1>
+            <p>Esta vista muestra actividad y estados. El centro y la administración no tienen acceso ordinario a respuestas ni resultados.</p>
+          </div>
+        </header>
+        <div id="operations-list" class="operations-list"></div>
+      </section>
+    </main>
+
+    <dialog id="campaign-dialog" class="pilot-dialog" aria-labelledby="campaign-dialog-title">
+      <form id="campaign-form" method="dialog">
+        <div class="dialog-heading">
+          <div>
+            <span class="eyebrow">Nueva campaña</span>
+            <h2 id="campaign-dialog-title">Prepara el grupo</h2>
+          </div>
+          <button class="icon-action" type="button" data-close-dialog aria-label="Cerrar">×</button>
+        </div>
+        <label>
+          Título de la campaña
+          <input id="campaign-name-input" name="title" maxlength="120" required value="Sesión de estado de ánimo" />
+        </label>
+        <label>
+          Grupo asignado
+          <select id="campaign-group-select" name="groupId" required></select>
+        </label>
+        <label>
+          Fecha prevista
+          <input id="campaign-date-input" name="plannedFor" type="datetime-local" required />
+        </label>
+        <p class="form-note">Al crearla seguirá en borrador. El envío de consentimientos se realiza en el siguiente paso.</p>
+        <div id="campaign-form-status" class="inline-status" role="status" aria-live="polite"></div>
+        <div class="action-row">
+          <button class="button primary" type="submit">Crear campaña</button>
+          <button class="button secondary" type="button" data-close-dialog>Cancelar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="result-dialog" class="pilot-dialog result-dialog" aria-labelledby="result-dialog-title">
+      <div class="dialog-heading">
+        <div>
+          <span class="eyebrow">Revisión profesional</span>
+          <h2 id="result-dialog-title">Resultado individual</h2>
+        </div>
+        <button class="icon-action" type="button" data-close-dialog aria-label="Cerrar">×</button>
+      </div>
+      <div id="result-content"></div>
+    </dialog>
+
+    <dialog id="alert-action-dialog" class="pilot-dialog" aria-labelledby="alert-action-title">
+      <form id="alert-action-form" method="dialog">
+        <div class="dialog-heading">
+          <div>
+            <span class="eyebrow">Trazabilidad</span>
+            <h2 id="alert-action-title">Registrar actuación</h2>
+          </div>
+          <button class="icon-action" type="button" data-close-dialog aria-label="Cerrar">×</button>
+        </div>
+        <input id="alert-action-id" type="hidden" />
+        <input id="alert-action-kind" type="hidden" />
+        <label>
+          Actuación y siguiente paso
+          <textarea id="alert-action-note" rows="5" maxlength="1000" required></textarea>
+        </label>
+        <p id="alert-action-help" class="form-note"></p>
+        <div id="alert-action-status" class="inline-status" role="status" aria-live="polite"></div>
+        <div class="action-row">
+          <button id="alert-action-submit" class="button primary" type="submit">Guardar</button>
+          <button class="button secondary" type="button" data-close-dialog>Cancelar</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>

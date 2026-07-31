@@ -17,6 +17,7 @@ const {
 const { database } = require('../config/database');
 const { sendSuccess } = require('../utils/response');
 const { AppError } = require('../utils/errors');
+const { syncParticipantFromConsent } = require('../services/questionnaires.service');
 
 function listConsentsController(req, res, next) {
   try {
@@ -50,6 +51,7 @@ async function acceptConsentController(req, res, next) {
   try {
     const consent = acceptConsent(req.params.id, req.user);
     await database.flush();
+    await syncParticipantFromConsent(consent);
     return sendSuccess(res, { consent }, 'Consentimiento aceptado correctamente.');
   } catch (error) {
     return next(error);
@@ -60,6 +62,7 @@ async function rejectConsentController(req, res, next) {
   try {
     const consent = rejectConsent(req.params.id, req.user);
     await database.flush();
+    await syncParticipantFromConsent(consent);
     return sendSuccess(res, { consent }, 'Consentimiento rechazado correctamente.');
   } catch (error) {
     return next(error);
@@ -70,6 +73,7 @@ async function revokeConsentController(req, res, next) {
   try {
     const consent = revokeConsent(req.params.id, req.body?.reason, req.user);
     await database.flush();
+    await syncParticipantFromConsent(consent);
     return sendSuccess(res, { consent }, 'Consentimiento revocado correctamente.');
   } catch (error) {
     return next(error);
@@ -80,6 +84,7 @@ async function expireConsentController(req, res, next) {
   try {
     const consent = expireConsent(req.params.id, req.user);
     await database.flush();
+    await syncParticipantFromConsent(consent);
     return sendSuccess(res, { consent }, 'Consentimiento marcado como caducado.');
   } catch (error) {
     return next(error);

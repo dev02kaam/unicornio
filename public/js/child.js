@@ -11,6 +11,9 @@ const childSummaryName = document.getElementById('child-summary-name');
 const childSummaryNote = document.getElementById('child-summary-note');
 const childStatusBanner = document.getElementById('child-status-banner');
 const childProfileNote = document.getElementById('child-profile-note');
+const childProfileTitle = document.getElementById('child-profile-title');
+const childContextTitle = document.getElementById('child-context-title');
+const childConsentsTitle = document.getElementById('child-consents-title');
 const childName = document.getElementById('child-name');
 const childEmail = document.getElementById('child-email');
 const childStatus = document.getElementById('child-status');
@@ -161,13 +164,33 @@ function buildConsentSummary(consents, studentId) {
   };
 }
 
-function renderConsents(consentSummary) {
+function renderConsents(consentSummary, role) {
+  const isStudent = String(role || '').toUpperCase() === 'STUDENT';
   if (childConsentsCount) {
-    childConsentsCount.textContent = `${consentSummary.total} ${consentSummary.total === 1 ? 'consentimiento' : 'consentimientos'}`;
+    const label = isStudent
+      ? (consentSummary.total === 1 ? 'permiso' : 'permisos')
+      : (consentSummary.total === 1 ? 'consentimiento' : 'consentimientos');
+    childConsentsCount.textContent = `${consentSummary.total} ${label}`;
   }
   if (childConsentsPending) childConsentsPending.textContent = String(consentSummary.pending);
   if (childConsentsAccepted) childConsentsAccepted.textContent = String(consentSummary.accepted);
   if (childConsentsOther) childConsentsOther.textContent = String(consentSummary.rejected + consentSummary.revoked + consentSummary.expired);
+
+  if (isStudent) {
+    const cards = document.querySelectorAll('.child-consent-summary .dashboard-quickcard');
+    const copy = [
+      ['Esperando respuesta', 'Tu familia todavía tiene que revisar estas solicitudes.'],
+      ['Todo listo', 'Permisos que ya están preparados.'],
+      ['Otros', 'Permisos que cambiaron o ya no están activos.'],
+    ];
+    cards.forEach((card, index) => {
+      if (!copy[index]) return;
+      const label = card.querySelector('.quickcard-label');
+      const description = card.querySelector('.quickcard-email');
+      if (label) label.textContent = copy[index][0];
+      if (description) description.textContent = copy[index][1];
+    });
+  }
 }
 
 function renderTeacher(teacher, group) {
@@ -250,9 +273,13 @@ function renderAssignments(assignments, context, role) {
   }
 
   if (centerAssignments.length || groupAssignments.length) {
-    childContextNote.textContent = `${centerAssignments.length} centro(s) y ${groupAssignments.length} grupo(s) asociados.`;
+    childContextNote.textContent = String(role || '').toUpperCase() === 'STUDENT'
+      ? 'Este es tu cole y tu clase ahora mismo.'
+      : `${centerAssignments.length} centro(s) y ${groupAssignments.length} grupo(s) asociados.`;
   } else {
-    childContextNote.textContent = 'No hay centros ni grupos asociados en este momento.';
+    childContextNote.textContent = String(role || '').toUpperCase() === 'STUDENT'
+      ? 'Todavía no aparece tu cole o tu clase. Una persona adulta del centro puede ayudarte.'
+      : 'No hay centros ni grupos asociados en este momento.';
   }
 }
 
@@ -295,16 +322,39 @@ async function loadProfile() {
   window.UnicornioCompanion?.setAgeContext(targetStudent);
 
   if (childRoleBadge) {
-    childRoleBadge.textContent = getRoleLabel(role);
+    childRoleBadge.textContent = role === 'STUDENT' ? 'Tu espacio' : getRoleLabel(role);
   }
   if (childTitle) {
-    childTitle.textContent = role === 'FAMILY' ? 'Mi hijo/a' : 'Mi perfil';
+    childTitle.textContent = role === 'FAMILY' ? 'Mi hijo/a' : 'Sobre mí';
   }
-  document.title = `${role === 'FAMILY' ? 'Mi hijo/a' : 'Mi perfil'} | Proyecto Unicornio`;
+  document.title = `${role === 'FAMILY' ? 'Mi hijo/a' : 'Sobre mí'} | Proyecto Unicornio`;
   if (childHeroCopy) {
     childHeroCopy.textContent = role === 'FAMILY'
       ? 'Consulta el perfil completo de tu hijo/a, su centro, su grupo y los consentimientos relacionados.'
-      : 'Consulta tu perfil completo, tu centro, tu grupo y los consentimientos relacionados.';
+      : 'Tu cole, tu clase y tus permisos reunidos. Fácil de encontrar cuando lo necesites.';
+  }
+
+  if (role === 'STUDENT') {
+    if (childProfileTitle) childProfileTitle.textContent = 'Mis datos';
+    if (childContextTitle) childContextTitle.textContent = 'Mi cole y mi clase';
+    if (childConsentsTitle) childConsentsTitle.textContent = 'Mis permisos';
+    const summaryLabel = childSummaryName?.previousElementSibling;
+    if (summaryLabel) summaryLabel.textContent = 'Tu resumen';
+    if (childName?.previousElementSibling) childName.previousElementSibling.textContent = 'Mi nombre';
+    if (childEmail?.previousElementSibling) childEmail.previousElementSibling.textContent = 'Mi email';
+    if (childStatus?.previousElementSibling) childStatus.previousElementSibling.textContent = 'Mi cuenta';
+    if (childRole?.previousElementSibling) childRole.previousElementSibling.textContent = 'Soy';
+    if (childBirthDate?.previousElementSibling) childBirthDate.previousElementSibling.textContent = 'Mi cumpleaños';
+    if (childAge?.previousElementSibling) childAge.previousElementSibling.textContent = 'Mi edad';
+    if (childAgeRange?.previousElementSibling) childAgeRange.previousElementSibling.textContent = 'Mi etapa';
+    const sectionBadges = document.querySelectorAll('.org-panel > .section-header .badge');
+    if (sectionBadges[0]) sectionBadges[0].textContent = 'Sobre ti';
+    if (sectionBadges[1]) sectionBadges[1].textContent = 'Tu día a día';
+    const consentBadge = childConsentsTitle?.previousElementSibling;
+    if (consentBadge) consentBadge.textContent = 'Lo importante';
+
+    const consentAction = document.querySelector('.child-consent-summary + .action-row .button');
+    if (consentAction) consentAction.textContent = 'Ver mis permisos';
   }
 
   if (profileNameElement) profileNameElement.textContent = currentUser.name || '-';
@@ -321,7 +371,7 @@ async function loadProfile() {
   if (childProfileNote) {
     childProfileNote.textContent = role === 'FAMILY'
       ? 'Todos los datos visibles aquí pertenecen al alumno vinculado.'
-      : 'Aquí ves tu información y tu contexto académico.';
+      : 'Estos son tus datos. Si algo no encaja, cuéntaselo a una persona adulta de confianza.';
   }
 
   if (childName) childName.textContent = targetStudent?.name || '-';
@@ -349,12 +399,18 @@ async function loadProfile() {
 
   const consentSummary = buildConsentSummary(consentsResponse.data.consents || [], targetStudent.id);
   renderAssignments(assignmentsResponse.data, context, role);
-  renderConsents(consentSummary);
+  renderConsents(consentSummary, role);
 
   if (childSummaryNote) {
-    const pendingLabel = consentSummary.pending === 1 ? '1 consentimiento pendiente' : `${consentSummary.pending} consentimientos pendientes`;
-    const acceptedLabel = consentSummary.accepted === 1 ? '1 aceptado' : `${consentSummary.accepted} aceptados`;
-    childSummaryNote.textContent = `${pendingLabel} y ${acceptedLabel}.`;
+    if (role === 'STUDENT') {
+      childSummaryNote.textContent = consentSummary.pending > 0
+        ? `${consentSummary.pending === 1 ? 'Hay un permiso' : `Hay ${consentSummary.pending} permisos`} esperando respuesta de tu familia.`
+        : `Todo tranquilo: ${consentSummary.accepted === 1 ? 'tienes un permiso listo' : `tienes ${consentSummary.accepted} permisos listos`}.`;
+    } else {
+      const pendingLabel = consentSummary.pending === 1 ? '1 consentimiento pendiente' : `${consentSummary.pending} consentimientos pendientes`;
+      const acceptedLabel = consentSummary.accepted === 1 ? '1 aceptado' : `${consentSummary.accepted} aceptados`;
+      childSummaryNote.textContent = `${pendingLabel} y ${acceptedLabel}.`;
+    }
   }
 
   return { currentUser, targetStudent };

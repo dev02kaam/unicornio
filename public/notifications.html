@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Notificaciones | Proyecto Unicornio</title>
+    <meta name="theme-color" content="#0F1833" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/companions/favicon-64.png" />
+    <link rel="apple-touch-icon" href="/assets/companions/favicon-192.png" />
+    <link rel="stylesheet" href="/css/styles.css" />
+    <link rel="stylesheet" href="/css/galaxy.css" />
+    <link rel="stylesheet" href="/css/cosmos.css" />
+    <link rel="stylesheet" href="/css/questionnaires.css" />
+    <script src="/js/api.js"></script>
+    <script src="/js/ui.js" defer></script>
+    <script src="/js/cosmos.js" defer></script>
+    <script src="/js/companion.js" defer></script>
+    <script src="/js/notifications.js" defer></script>
+  </head>
+  <body class="questionnaire-app auth-pending">
+    <!--
+      Impeccable design contract
+      Context: persistent in-app notifications for professionals and families.
+      Brand: existing calm Unicornio surfaces and navy/violet hierarchy.
+      Reuse: established tokens, badges, buttons and list row language.
+      Divergence: notifications are rows with dividers, not a card grid, to reduce cognitive load.
+      Layout: compact header, narrow readable feed, unread state and contextual action.
+      Aesthetic: “Constelación serena”; quiet by default, urgent only when the message requires it.
+      Responsive: one fluid column, full-width actions on small screens.
+      Accessibility: new-item announcer, non-live refresh time, semantic time, visible unread text, keyboard actions.
+      Seed: be775961.
+    -->
+    <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
+
+    <main id="main-content" class="shell dashboard-shell notification-shell">
+      <section class="dashboard-hero card questionnaire-page-hero">
+        <a class="app-brand-lockup" href="/dashboard.html" aria-label="Proyecto Unicornio, volver al dashboard">
+          <img src="/assets/brand/logo_proyecto_unicornio_horizontal_limpio.png" alt="Proyecto Unicornio — Escuchar antes. Cuidar mejor." />
+        </a>
+        <div class="hero-copy">
+          <span class="badge">Avisos dentro de la aplicación</span>
+          <h1>Notificaciones</h1>
+          <p id="notification-scope-copy" class="dashboard-subtitle">Los avisos quedan guardados para tu siguiente acceso.</p>
+          <nav class="action-row dashboard-links icon-navigation" aria-label="Navegación">
+            <a class="button secondary" href="/dashboard.html">Inicio</a>
+            <a id="notification-consents-link" class="button secondary" href="/consents.html">Consentimientos</a>
+            <a class="button secondary" aria-current="page" href="/notifications.html">Notificaciones</a>
+            <button id="notifications-logout-button" class="button secondary compact-button" type="button">Salir</button>
+          </nav>
+        </div>
+        <a class="account-trigger" href="/dashboard.html" aria-label="Volver al dashboard">
+          <span class="avatar-badge avatar-large" aria-hidden="true">
+            <svg class="avatar-icon" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="8" r="3.25" fill="currentColor" />
+              <path d="M5.5 19.25C6.18 15.87 8.37 14 12 14C15.63 14 17.82 15.87 18.5 19.25" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+            </svg>
+          </span>
+        </a>
+      </section>
+
+      <div class="notification-heading">
+        <span class="eyebrow">Bandeja persistente</span>
+        <span id="notification-poll-status" class="refresh-note"></span>
+      </div>
+
+      <section id="notification-gate" class="pilot-gate card" hidden>
+        <h2>Las notificaciones del piloto están desactivadas</h2>
+        <p id="notification-gate-message"></p>
+      </section>
+
+      <section id="notification-feed" class="notification-feed card" aria-labelledby="notification-feed-title" hidden>
+        <h2 id="notification-feed-title" class="sr-only">Listado de notificaciones</h2>
+        <p id="notification-announcer" class="sr-only" role="status" aria-live="polite"></p>
+        <div id="notification-list"></div>
+        <p id="notification-empty" class="empty-copy" hidden>No tienes notificaciones del piloto.</p>
+      </section>
+    </main>
+  </body>
+</html>

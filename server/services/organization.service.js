@@ -17,6 +17,7 @@ const {
 } = require('../utils/constants');
 const {
   isAdmin,
+  isSchool,
   findAcademicYearById,
   findCenterById,
   findGroupById,
@@ -277,6 +278,7 @@ function createCenter(data, user) {
   const type = normalizeEnumValue(data.type, Object.values(CENTER_TYPES), 'tipo de centro', null);
   const academicYearId = resolveAcademicYearId(data.academicYearId);
   const city = normalizeOptionalText(data.city);
+  const questionnaireSupportContact = normalizeOptionalText(data.questionnaireSupportContact);
 
   if (!name) {
     throw new AppError('El nombre del centro es obligatorio.', 400);
@@ -294,6 +296,7 @@ function createCenter(data, user) {
     type,
     academicYearId,
     city,
+    questionnaireSupportContact,
     isActive: true,
     createdAt: now,
     updatedAt: now,
@@ -356,6 +359,10 @@ function updateCenter(centerId, data, user) {
 
   if (data.city !== undefined) {
     center.city = normalizeOptionalText(data.city);
+  }
+
+  if (data.questionnaireSupportContact !== undefined) {
+    center.questionnaireSupportContact = normalizeOptionalText(data.questionnaireSupportContact);
   }
 
   center.updatedAt = new Date().toISOString();
@@ -541,11 +548,15 @@ function normalizeGroupAssignmentRole(role, user) {
   }
 }
 
+function canManageMembership(user, centerId) {
+  return isAdmin(user) || (isSchool(user) && hasCenterAccess(user, centerId));
+}
+
 function assignUserToCenter(centerId, userId, data, actorUser) {
   const center = assertCenterExists(centerId);
   const user = assertUserExists(userId);
 
-  if (!canManageCenter(actorUser, center.id) && !isAdmin(actorUser)) {
+  if (!canManageMembership(actorUser, center.id)) {
     throw new AppError('No autorizado para asignar usuarios a este centro.', 403);
   }
 
@@ -606,7 +617,7 @@ function removeUserFromCenter(centerId, userId, actorUser) {
   const center = assertCenterExists(centerId);
   const user = assertUserExists(userId);
 
-  if (!canManageCenter(actorUser, center.id) && !isAdmin(actorUser)) {
+  if (!canManageMembership(actorUser, center.id)) {
     throw new AppError('No autorizado para quitar usuarios de este centro.', 403);
   }
 
@@ -676,12 +687,14 @@ function assignUserToGroup(groupId, userId, data, actorUser) {
   const group = assertGroupExists(groupId);
   const user = assertUserExists(userId);
 
-  if (!isSchool(actorUser)) {
+  if (!canManageMembership(actorUser, group.centerId)) {
     throw new AppError('Solo el centro puede asignar usuarios a grupos.', 403);
   }
 
-  if (String(user.role || '').toUpperCase() === 'FAMILY') {
-    throw new AppError('Las familias no se asignan directamente a grupos.', 400);
+  const targetRole = String(user.role || '').toUpperCase();
+  const assignableRoles = new Set(['STUDENT', 'TEACHER', 'PROFESSIONAL']);
+  if (!assignableRoles.has(targetRole)) {
+    throw new AppError('Solo se pueden vincular alumnos, profesores o profesionales a un grupo.', 400);
   }
 
   const center = assertCenterExists(group.centerId);
@@ -690,10 +703,6 @@ function assignUserToGroup(groupId, userId, data, actorUser) {
   const now = new Date().toISOString();
   const assignments = database.getCollection('userGroupAssignments') || [];
   const existing = assignments.find((assignment) => assignment.userId === user.id && assignment.groupId === group.id);
-
-  if (!hasCenterAccess(actorUser, center.id) && !isAdmin(actorUser)) {
-    throw new AppError('No autorizado para usar este centro.', 403);
-  }
 
   if (existing && existing.isActive) {
     throw new AppError('El usuario ya esta asignado a este grupo.', 409);
@@ -745,11 +754,11 @@ function removeUserFromGroup(groupId, userId, actorUser) {
   const group = assertGroupExists(groupId);
   const user = assertUserExists(userId);
 
-  if (!isSchool(actorUser)) {
+  if (!canManageMembership(actorUser, group.centerId)) {
     throw new AppError('Solo el centro puede quitar usuarios de grupos.', 403);
   }
 
-  if (!hasCenterAccess(actorUser, group.centerId)) {
+  if (!hasCenterAccess(actorUser, group.centerId) && !isAdmin(actorUser)) {
     throw new AppError('No autorizado para gestionar este grupo.', 403);
   }
 

@@ -19,7 +19,7 @@ function getTokenPayload(token) {
   }
 }
 
-function getTokenSubject(token) {
+function getTokenSubject(token = getToken()) {
   return getTokenPayload(token)?.sub || null;
 }
 

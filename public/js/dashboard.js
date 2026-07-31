@@ -188,6 +188,11 @@ function renderDashboardQuickActions(role) {
     return;
   }
 
+  if (typeof window.renderRoleNavigation === 'function') {
+    window.renderRoleNavigation(dashboardLinks, normalizedRole);
+    return;
+  }
+
   const actions = [];
 
   if (normalizedRole === 'ADMIN') {
@@ -195,6 +200,7 @@ function renderDashboardQuickActions(role) {
       { label: 'Usuarios', href: '/users.html', icon: 'users' },
       { label: 'Centros', href: '/centers.html', icon: 'school' },
       { label: 'Grupos', href: '/groups.html', icon: 'groups' },
+      { label: 'Piloto', href: '/questionnaires.html', icon: 'consent' },
       { label: 'Consentimientos', href: '/consents.html', icon: 'consent' },
       { label: 'Texto legal', href: '/legal.html', icon: 'legal' },
     );
@@ -202,19 +208,25 @@ function renderDashboardQuickActions(role) {
     actions.push(
       { label: 'Mi centro', href: '/centers.html', icon: 'school' },
       { label: 'Grupos', href: '/groups.html', icon: 'groups' },
+      ...(normalizedRole === 'SCHOOL' ? [{ label: 'Piloto', href: '/questionnaires.html', icon: 'consent' }] : []),
       { label: 'Consentimientos', href: '/consents.html', icon: 'consent' },
     );
   } else if (normalizedRole === 'PROFESSIONAL') {
-    actions.push({ label: 'Consentimientos', href: '/consents.html', icon: 'consent' });
+    actions.push(
+      { label: 'Cuestionarios', href: '/questionnaires.html', icon: 'consent' },
+      { label: 'Consentimientos', href: '/consents.html', icon: 'consent' },
+      { label: 'Notificaciones', href: '/notifications.html', icon: 'profile' },
+    );
   } else if (normalizedRole === 'FAMILY') {
     actions.push(
       { label: 'Mi hijo/a', href: '/child.html', icon: 'child' },
       { label: 'Consentimientos', href: '/consents.html', icon: 'consent' },
+      { label: 'Notificaciones', href: '/notifications.html', icon: 'profile' },
     );
   } else if (normalizedRole === 'STUDENT') {
     actions.push(
+      { label: 'Cuestionarios', href: '/questionnaire.html', icon: 'consent' },
       { label: 'Mi perfil', href: '/child.html', icon: 'profile' },
-      { label: 'Consentimientos', href: '/consents.html', icon: 'consent' },
     );
   }
 
@@ -484,9 +496,392 @@ function getDashboardConsentBreakdown(summary) {
   ];
 }
 
-function renderDashboardWorkspace({ badge, title, intro, metrics, priority, actions, consentSummary }) {
+let activeConsentMeterPhysics = null;
+
+class ConsentMeterPhysics {
+  constructor(element) {
+    this.element = element;
+    this.canvas = element.querySelector('.consent-meter__physics');
+    this.context = this.canvas?.getContext('2d') || null;
+    this.level = Math.min(100, Math.max(0, Number(element.dataset.consentLevel) || 0));
+    this.targetSurface = 1 - (this.level / 100);
+    this.surface = 1.08;
+    this.surfaceVelocity = 0;
+    this.pointCount = 52;
+    this.waveOffsets = new Float32Array(this.pointCount);
+    this.waveVelocities = new Float32Array(this.pointCount);
+    this.nextWaveVelocities = new Float32Array(this.pointCount);
+    this.width = 0;
+    this.height = 0;
+    this.lastFrameAt = 0;
+    this.nextRippleAt = 0;
+    this.rippleDirection = 1;
+    this.pointerRippleDirection = 1;
+    this.lastPointerRippleAt = 0;
+    this.frameRequest = 0;
+    this.isVisible = true;
+    this.isDestroyed = false;
+    this.motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    this.prefersReducedMotion = this.motionQuery.matches;
+
+    this.onMotionPreferenceChange = (event) => {
+      this.prefersReducedMotion = event.matches;
+      this.surface = this.targetSurface;
+      this.surfaceVelocity = 0;
+      this.waveOffsets.fill(0);
+      this.waveVelocities.fill(0);
+      this.lastFrameAt = 0;
+      this.draw();
+      this.syncAnimation();
+    };
+
+    this.onVisibilityChange = () => {
+      this.lastFrameAt = 0;
+      this.syncAnimation();
+    };
+
+    this.onPointerMove = (event) => {
+      this.handlePointerMove(event);
+    };
+
+    this.resizeObserver = new ResizeObserver(() => this.resize());
+    this.intersectionObserver = new IntersectionObserver(([entry]) => {
+      this.isVisible = Boolean(entry?.isIntersecting);
+      this.lastFrameAt = 0;
+      this.syncAnimation();
+    }, { threshold: 0.01 });
+
+    if (typeof this.motionQuery.addEventListener === 'function') {
+      this.motionQuery.addEventListener('change', this.onMotionPreferenceChange);
+    } else {
+      this.motionQuery.addListener(this.onMotionPreferenceChange);
+    }
+
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    this.element.addEventListener('pointermove', this.onPointerMove, { passive: true });
+    this.resizeObserver.observe(this.element);
+    this.intersectionObserver.observe(this.element);
+    this.resize();
+
+    if (this.prefersReducedMotion) {
+      this.surface = this.targetSurface;
+      this.draw();
+    } else {
+      this.syncAnimation();
+    }
+  }
+
+  resize() {
+    if (!this.canvas || !this.context || this.isDestroyed) return;
+
+    const bounds = this.element.getBoundingClientRect();
+    const width = Math.max(1, bounds.width);
+    const height = Math.max(1, bounds.height);
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+
+    this.width = width;
+    this.height = height;
+    this.canvas.width = Math.round(width * pixelRatio);
+    this.canvas.height = Math.round(height * pixelRatio);
+    this.context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    this.draw();
+  }
+
+  getMoonGeometry() {
+    const outerRadius = Math.max(0.5, (Math.min(this.width, this.height) / 2) - 2);
+    const centerX = this.width / 2;
+    const centerY = this.height / 2;
+
+    return {
+      outerRadius,
+      centerX,
+      centerY,
+      cutoutRadius: outerRadius * 0.76,
+      cutoutX: centerX + (outerRadius * 0.28),
+      cutoutY: centerY - (outerRadius * 0.18),
+      openingX: centerX + (outerRadius * 0.8),
+      openingY: centerY - (outerRadius * 0.35),
+      openingRadiusX: outerRadius * 0.66,
+      openingRadiusY: outerRadius * 0.92,
+    };
+  }
+
+  isPointInWater(x, y) {
+    if (!this.width || !this.height) return false;
+
+    const geometry = this.getMoonGeometry();
+    const outerDistance = ((x - geometry.centerX) ** 2) + ((y - geometry.centerY) ** 2);
+    const cutoutDistance = ((x - geometry.cutoutX) ** 2) + ((y - geometry.cutoutY) ** 2);
+    const openingDistance = (
+      (((x - geometry.openingX) / geometry.openingRadiusX) ** 2)
+      + (((y - geometry.openingY) / geometry.openingRadiusY) ** 2)
+    );
+    const pointIndex = Math.max(0, Math.min(
+      this.pointCount - 1,
+      Math.round((x / this.width) * (this.pointCount - 1)),
+    ));
+    const waterSurface = (this.surface * this.height) + this.waveOffsets[pointIndex];
+
+    return (
+      outerDistance <= geometry.outerRadius ** 2
+      && cutoutDistance >= geometry.cutoutRadius ** 2
+      && openingDistance >= 1
+      && y >= waterSurface
+    );
+  }
+
+  addWaveImpulse(pointIndex, intensity) {
+    for (let distance = -2; distance <= 2; distance += 1) {
+      const point = pointIndex + distance;
+      if (point < 0 || point >= this.pointCount) continue;
+
+      const falloff = 1 - (Math.abs(distance) / 3);
+      this.waveVelocities[point] += intensity * falloff;
+    }
+  }
+
+  handlePointerMove(event) {
+    if (this.prefersReducedMotion || (event.pointerType && event.pointerType !== 'mouse')) return;
+
+    const now = window.performance.now();
+    if (now - this.lastPointerRippleAt < 70) return;
+
+    const bounds = this.element.getBoundingClientRect();
+    const x = event.clientX - bounds.left;
+    const y = event.clientY - bounds.top;
+    if (!this.isPointInWater(x, y)) return;
+
+    const pointIndex = Math.max(0, Math.min(
+      this.pointCount - 1,
+      Math.round((x / this.width) * (this.pointCount - 1)),
+    ));
+    const scale = Math.min(this.width, this.height) / 120;
+    const verticalMovement = Math.max(-1, Math.min(1, Number(event.movementY || 0) / 5));
+    const direction = Math.abs(verticalMovement) > 0.12
+      ? Math.sign(verticalMovement)
+      : this.pointerRippleDirection;
+    const intensity = (10 + (Math.abs(verticalMovement) * 7)) * direction * scale;
+
+    this.addWaveImpulse(pointIndex, intensity);
+    this.pointerRippleDirection *= -1;
+    this.lastPointerRippleAt = now;
+    this.syncAnimation();
+  }
+
+  syncAnimation() {
+    const shouldAnimate = (
+      !this.isDestroyed
+      && !this.prefersReducedMotion
+      && this.isVisible
+      && !document.hidden
+      && this.element.isConnected
+    );
+
+    if (shouldAnimate && !this.frameRequest) {
+      this.frameRequest = window.requestAnimationFrame((time) => this.animate(time));
+    } else if (!shouldAnimate && this.frameRequest) {
+      window.cancelAnimationFrame(this.frameRequest);
+      this.frameRequest = 0;
+    }
+  }
+
+  animate(time) {
+    this.frameRequest = 0;
+    if (this.isDestroyed || !this.element.isConnected) {
+      this.destroy();
+      return;
+    }
+
+    const elapsed = this.lastFrameAt ? Math.min((time - this.lastFrameAt) / 1000, 0.032) : 0;
+    this.lastFrameAt = time;
+
+    if (elapsed > 0) {
+      this.stepSurface(elapsed);
+      this.stepWaves(elapsed, time);
+    }
+
+    this.draw();
+    this.syncAnimation();
+  }
+
+  stepSurface(elapsed) {
+    const displacement = this.targetSurface - this.surface;
+    const springAcceleration = displacement * 7.2;
+
+    this.surfaceVelocity += springAcceleration * elapsed;
+    this.surfaceVelocity *= Math.exp(-3.8 * elapsed);
+    this.surface += this.surfaceVelocity * elapsed;
+
+    if (Math.abs(displacement) < 0.0008 && Math.abs(this.surfaceVelocity) < 0.0015) {
+      this.surface = this.targetSurface;
+      this.surfaceVelocity = 0;
+    }
+  }
+
+  stepWaves(elapsed, time) {
+    const scale = Math.min(this.width, this.height) / 120;
+    const waveSpring = 24;
+    const waveSpread = 95;
+    const waveDamping = 2.6;
+
+    for (let index = 0; index < this.pointCount; index += 1) {
+      const left = this.waveOffsets[Math.max(0, index - 1)];
+      const right = this.waveOffsets[Math.min(this.pointCount - 1, index + 1)];
+      const neighborPull = left + right - (2 * this.waveOffsets[index]);
+      const acceleration = (
+        (-waveSpring * this.waveOffsets[index])
+        + (waveSpread * neighborPull)
+        - (waveDamping * this.waveVelocities[index])
+      );
+
+      this.nextWaveVelocities[index] = this.waveVelocities[index] + (acceleration * elapsed);
+    }
+
+    for (let index = 0; index < this.pointCount; index += 1) {
+      const maximumVelocity = 58 * scale;
+      this.waveVelocities[index] = Math.max(
+        -maximumVelocity,
+        Math.min(maximumVelocity, this.nextWaveVelocities[index]),
+      );
+      this.waveOffsets[index] += this.waveVelocities[index] * elapsed;
+      this.waveOffsets[index] = Math.max(-2.4 * scale, Math.min(2.4 * scale, this.waveOffsets[index]));
+    }
+
+    if (time >= this.nextRippleAt) {
+      const rippleIndex = this.rippleDirection > 0
+        ? Math.round(this.pointCount * 0.08)
+        : Math.round(this.pointCount * 0.22);
+      this.addWaveImpulse(rippleIndex, this.rippleDirection * 34 * scale);
+      this.rippleDirection *= -1;
+      this.nextRippleAt = time + 1600;
+    }
+
+    if (Math.abs(this.surfaceVelocity) > 0.035) {
+      const sloshIndex = this.surfaceVelocity < 0
+        ? Math.round(this.pointCount * 0.18)
+        : Math.round(this.pointCount * 0.08);
+      this.waveVelocities[sloshIndex] += this.surfaceVelocity * 0.75 * scale;
+    }
+  }
+
+  draw() {
+    if (!this.context || !this.width || !this.height) return;
+
+    const context = this.context;
+    const {
+      outerRadius,
+      centerX,
+      centerY,
+      cutoutRadius,
+      cutoutX,
+      cutoutY,
+      openingX,
+      openingY,
+      openingRadiusX,
+      openingRadiusY,
+    } = this.getMoonGeometry();
+    const surfaceY = this.surface * this.height;
+
+    context.clearRect(0, 0, this.width, this.height);
+    context.save();
+    context.beginPath();
+    context.arc(centerX, centerY, outerRadius, 0, Math.PI * 2);
+    context.arc(cutoutX, cutoutY, cutoutRadius, 0, Math.PI * 2);
+    context.clip('evenodd');
+    context.fillStyle = '#d2c3ff';
+    context.fillRect(0, 0, this.width, this.height);
+
+    context.beginPath();
+    context.moveTo(0, this.height);
+    context.lineTo(0, surfaceY + this.waveOffsets[0]);
+
+    for (let index = 1; index < this.pointCount; index += 1) {
+      const x = (index / (this.pointCount - 1)) * this.width;
+      context.lineTo(x, surfaceY + this.waveOffsets[index]);
+    }
+
+    context.lineTo(this.width, this.height);
+    context.closePath();
+
+    const water = context.createLinearGradient(0, surfaceY, 0, this.height);
+    water.addColorStop(0, '#9d82ff');
+    water.addColorStop(0.42, '#8963f5');
+    water.addColorStop(1, '#7650e9');
+    context.fillStyle = water;
+    context.fill();
+
+    context.beginPath();
+    context.moveTo(0, surfaceY + this.waveOffsets[0]);
+    for (let index = 1; index < this.pointCount; index += 1) {
+      const x = (index / (this.pointCount - 1)) * this.width;
+      context.lineTo(x, surfaceY + this.waveOffsets[index]);
+    }
+    context.strokeStyle = 'rgba(230, 222, 255, 0.82)';
+    context.lineWidth = Math.max(1, outerRadius / 58);
+    context.stroke();
+    context.restore();
+
+    context.save();
+    context.beginPath();
+    context.arc(centerX, centerY, outerRadius, 0, Math.PI * 2);
+    context.arc(cutoutX, cutoutY, cutoutRadius, 0, Math.PI * 2);
+    context.clip('evenodd');
+    context.strokeStyle = 'rgba(89, 67, 183, 0.14)';
+    context.lineWidth = 1.5;
+    context.beginPath();
+    context.arc(centerX, centerY, outerRadius - 0.5, 0, Math.PI * 2);
+    context.stroke();
+    context.beginPath();
+    context.arc(cutoutX, cutoutY, cutoutRadius, 0, Math.PI * 2);
+    context.stroke();
+    context.restore();
+
+    context.save();
+    context.globalCompositeOperation = 'destination-out';
+    context.beginPath();
+    context.ellipse(
+      openingX,
+      openingY,
+      openingRadiusX,
+      openingRadiusY,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    context.fill();
+    context.restore();
+  }
+
+  destroy() {
+    if (this.isDestroyed) return;
+
+    this.isDestroyed = true;
+    if (this.frameRequest) {
+      window.cancelAnimationFrame(this.frameRequest);
+      this.frameRequest = 0;
+    }
+    this.resizeObserver.disconnect();
+    this.intersectionObserver.disconnect();
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
+    this.element.removeEventListener('pointermove', this.onPointerMove);
+
+    if (typeof this.motionQuery.removeEventListener === 'function') {
+      this.motionQuery.removeEventListener('change', this.onMotionPreferenceChange);
+    } else {
+      this.motionQuery.removeListener(this.onMotionPreferenceChange);
+    }
+  }
+}
+
+function initializeConsentMeterPhysics(element) {
+  activeConsentMeterPhysics?.destroy();
+  activeConsentMeterPhysics = element ? new ConsentMeterPhysics(element) : null;
+}
+
+function renderDashboardWorkspace({ badge, title, intro, metrics, priority, actions, consentSummary, audience = 'adult' }) {
   if (!relationshipPanel || !relationshipPanelBody) return;
 
+  const isStudent = audience === 'student';
   const coverage = getConsentCoverage(consentSummary);
   const breakdown = getDashboardConsentBreakdown(consentSummary);
   const total = Number(consentSummary?.total || 0);
@@ -496,27 +891,41 @@ function renderDashboardWorkspace({ badge, title, intro, metrics, priority, acti
     ? `${coverage}% con consentimiento aceptado`
     : 'Sin consentimientos pendientes de seguimiento';
   const priorityTone = pending > 0 ? 'is-actionable' : 'is-clear';
+  const commandLabel = isStudent ? 'Tu mapa de hoy' : 'Pulso de consentimientos';
+  const commandGuide = isStudent
+    ? 'Aquí tienes lo importante, sin líos. Si algo necesita atención, te lo enseñamos primero.'
+    : 'Información disponible en tu ámbito de acceso. Revisa primero lo que necesita una decisión.';
+  const meterShortLabel = isStudent ? 'listos' : 'aceptados';
+  const metricLabel = isStudent ? 'Tus datos principales' : 'Indicadores principales';
+  const chartCaption = isStudent ? 'Así va todo' : 'Distribución actual';
+  const chartTitle = isStudent ? 'Cómo van tus permisos' : 'Estado de consentimientos';
+  const priorityLabel = pending > 0
+    ? (isStudent ? 'Hay algo por revisar' : 'Prioridad de hoy')
+    : (isStudent ? 'Todo tranquilo' : 'Todo al día');
+  const routesLabel = isStudent ? 'Atajos de tu espacio' : 'Accesos del área';
 
   if (relationshipPanelBadge) relationshipPanelBadge.textContent = badge;
   if (relationshipPanelTitle) relationshipPanelTitle.textContent = title;
+  relationshipPanel.dataset.audience = audience;
 
   relationshipPanelBody.innerHTML = `
     <div class="dashboard-workspace">
       <section class="dashboard-command" aria-labelledby="dashboard-command-title">
         <div class="dashboard-command__copy">
-          <p class="dashboard-command__eyebrow">Pulso de consentimientos</p>
+          <p class="dashboard-command__eyebrow">${commandLabel}</p>
           <h3 id="dashboard-command-title">${escapeDashboardMarkup(intro)}</h3>
-          <p>Información disponible en tu ámbito de acceso. Revisa primero lo que necesita una decisión.</p>
+          <p>${commandGuide}</p>
         </div>
-        <div class="consent-meter" role="img" aria-label="${escapeDashboardMarkup(meterLabel)}" style="--consent-progress: ${coverage}%">
+        <div class="consent-meter" role="img" aria-label="${escapeDashboardMarkup(meterLabel)}" data-consent-level="${coverage}">
+          <canvas class="consent-meter__physics" aria-hidden="true"></canvas>
           <div class="consent-meter__content">
             <span class="consent-meter__value">${coverage}%</span>
-            <span class="consent-meter__label">aceptados</span>
+            <span class="consent-meter__label">${meterShortLabel}</span>
           </div>
         </div>
       </section>
 
-      <div class="dashboard-metric-rail" aria-label="Indicadores principales">
+      <div class="dashboard-metric-rail" aria-label="${metricLabel}">
         ${metrics.map((metric) => `
           <div class="dashboard-metric">
             <span>${escapeDashboardMarkup(metric.label)}</span>
@@ -529,8 +938,8 @@ function renderDashboardWorkspace({ badge, title, intro, metrics, priority, acti
         <section class="dashboard-chart" aria-labelledby="dashboard-chart-title">
           <div class="dashboard-section-heading">
             <div>
-              <span>Distribución actual</span>
-              <h3 id="dashboard-chart-title">Estado de consentimientos</h3>
+              <span>${chartCaption}</span>
+              <h3 id="dashboard-chart-title">${chartTitle}</h3>
             </div>
             <strong>${total}</strong>
           </div>
@@ -547,7 +956,7 @@ function renderDashboardWorkspace({ badge, title, intro, metrics, priority, acti
         <aside class="dashboard-priority ${priorityTone}" aria-labelledby="dashboard-priority-title">
           <span class="dashboard-priority__signal" aria-hidden="true"></span>
           <div>
-            <span class="dashboard-priority__label">${pending > 0 ? 'Prioridad de hoy' : 'Todo al día'}</span>
+            <span class="dashboard-priority__label">${priorityLabel}</span>
             <h3 id="dashboard-priority-title">${escapeDashboardMarkup(priority.title)}</h3>
             <p>${escapeDashboardMarkup(priority.description)}</p>
             <a class="button ${pending > 0 ? 'primary' : 'secondary'}" href="${escapeDashboardMarkup(priority.href)}">${escapeDashboardMarkup(priority.action)}</a>
@@ -555,7 +964,7 @@ function renderDashboardWorkspace({ badge, title, intro, metrics, priority, acti
         </aside>
       </div>
 
-      <nav class="dashboard-routes" aria-label="Accesos del área">
+      <nav class="dashboard-routes" aria-label="${routesLabel}">
         ${actions.map((action) => `
           <a href="${escapeDashboardMarkup(action.href)}">
             ${getAppIcon(action.icon, 'dashboard-routes__icon')}
@@ -567,8 +976,9 @@ function renderDashboardWorkspace({ badge, title, intro, metrics, priority, acti
     </div>
   `;
 
-  refreshAppIcons(relationshipPanelBody);
   setPanelVisible(relationshipPanel, true, 'block');
+  initializeConsentMeterPhysics(relationshipPanelBody.querySelector('.consent-meter'));
+  refreshAppIcons(relationshipPanelBody);
 }
 
 function getDashboardRelationshipContext(role, context, consentSummary = null) {
@@ -743,6 +1153,19 @@ function renderRoleDashboardSummary(role, context, assignments, options = {}) {
       href: '/consents.html',
       action: 'Ver consentimientos',
     };
+  const studentPriority = pending
+    ? {
+      title: `${pending === 1 ? 'Hay un permiso' : `Hay ${pending} permisos`} esperando respuesta`,
+      description: 'Tu familia puede revisarlo. Tú puedes ver aquí cómo va.',
+      href: '/consents.html',
+      action: 'Ver qué falta',
+    }
+    : {
+      title: 'Todo está en orden ✦',
+      description: 'Ahora mismo no tienes que hacer nada. Puedes seguir a tu ritmo.',
+      href: '/consents.html',
+      action: 'Ver mis permisos',
+    };
 
   const viewByRole = {
     ADMIN: {
@@ -824,20 +1247,21 @@ function renderRoleDashboardSummary(role, context, assignments, options = {}) {
       ],
     },
     STUDENT: {
-      badge: 'Alumno',
-      title: 'Mi espacio',
-      intro: group ? `Tu contexto actual: ${group.name}.` : 'Tu información está reunida aquí.',
+      badge: 'Para ti',
+      title: 'Tu mapa de hoy',
+      intro: group ? `¡Listo! Estás en ${group.name}.` : 'Todo lo tuyo está reunido aquí.',
       metrics: [
-        { label: 'Centro', value: center?.code || '—' },
-        { label: 'Grupo', value: group?.name || '—' },
-        { label: 'Activos', value: consentSummary.accepted || 0 },
+        { label: 'Mi cole', value: center?.code || '—' },
+        { label: 'Mi clase', value: group?.name || '—' },
+        { label: 'Listos', value: consentSummary.accepted || 0 },
       ],
-      priority: defaultPriority,
+      priority: studentPriority,
       actions: [
-        { label: 'Mi perfil', description: 'Datos y vínculos', href: '/child.html', icon: 'profile' },
-        { label: 'Consentimientos', description: 'Mi estado actual', href: '/consents.html', icon: 'consent' },
-        { label: 'Grupos', description: 'Mi grupo escolar', href: '/groups.html', icon: 'groups' },
+        { label: 'Sobre mí', description: 'Mis datos y mi cole', href: '/child.html', icon: 'profile' },
+        { label: 'Mis permisos', description: 'Qué está listo y qué no', href: '/consents.html', icon: 'consent' },
+        { label: 'Mi grupo', description: 'Mi clase y mis profes', href: '/groups.html', icon: 'groups' },
       ],
+      audience: 'student',
     },
   };
 
@@ -1130,15 +1554,18 @@ async function loadProfile() {
     renderDashboardQuickActions(role);
     const heroCenter = summaryOptions.center || assignments?.centers?.[0]?.center || context?.center || null;
     if (dashboardWelcome) {
-      dashboardWelcome.textContent = `Hola, ${String(currentUser.name || '').split(' ')[0] || 'de nuevo'}`;
+      const firstName = String(currentUser.name || '').split(' ')[0] || 'de nuevo';
+      dashboardWelcome.textContent = role === 'STUDENT' ? `¡Hola, ${firstName}!` : `Hola, ${firstName}`;
     }
     if (dashboardRoleLabel) {
-      dashboardRoleLabel.textContent = roleLabels[role] || 'Área privada';
+      dashboardRoleLabel.textContent = role === 'STUDENT' ? 'Tu espacio' : (roleLabels[role] || 'Área privada');
     }
     if (dashboardSubtitle) {
-      dashboardSubtitle.textContent = heroCenter
-        ? `${heroCenter.name} · consulta el estado y gestiona tus tareas desde aquí.`
-        : 'Consulta tu información y gestiona tus tareas desde aquí.';
+      dashboardSubtitle.textContent = role === 'STUDENT'
+        ? 'Tu cole, tu clase y lo importante de hoy, todo en el mismo sitio.'
+        : (heroCenter
+          ? `${heroCenter.name} · consulta el estado y gestiona tus tareas desde aquí.`
+          : 'Consulta tu información y gestiona tus tareas desde aquí.');
     }
 
     if (role === 'ADMIN') {

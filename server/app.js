@@ -13,6 +13,11 @@ const { groupsRouter } = require('./routes/groups.routes');
 const { assignmentsRouter } = require('./routes/assignments.routes');
 const { consentsRouter } = require('./routes/consents.routes');
 const { deletionImpactRouter } = require('./routes/deletion-impact.routes');
+const {
+  questionnairePreviewRouter,
+  questionnairesRouter,
+} = require('./routes/questionnaires.routes');
+const { initializeQuestionnaireModule } = require('./services/questionnaires.service');
 const { notFoundMiddleware, errorMiddleware } = require('./middlewares/error.middleware');
 
 const app = express();
@@ -27,6 +32,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.use('/api/health', healthRouter);
+app.use('/api', questionnairePreviewRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/centers', centersRouter);
@@ -34,6 +40,7 @@ app.use('/api/groups', groupsRouter);
 app.use('/api', assignmentsRouter);
 app.use('/api', consentsRouter);
 app.use('/api', deletionImpactRouter);
+app.use('/api', questionnairesRouter);
 
 app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
@@ -45,6 +52,7 @@ app.use(errorMiddleware);
 async function startServer() {
   try {
     await database.initialize();
+    await initializeQuestionnaireModule();
     app.listen(env.port, () => {
       console.log(`Proyecto Unicornio escuchando en http://localhost:${env.port}`);
     });

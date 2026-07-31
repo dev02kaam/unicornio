@@ -514,6 +514,7 @@ function openEditCenter(centerId) {
   centerForm.elements.name.value = center.name || '';
   centerForm.elements.code.value = center.code || '';
   centerForm.elements.type.value = center.type || '';
+  centerForm.elements.questionnaireSupportContact.value = center.questionnaireSupportContact || '';
   const startYear = String(center.academicYear?.label || '').match(/^\d{4}/)?.[0];
   if (startYear) centerAcademicYearPicker?.setValue(startYear);
   centerCityCombobox?.setValue(center.city || '');
@@ -582,6 +583,7 @@ centerForm?.addEventListener('submit', async (event) => {
     type: formData.get('type') || undefined,
     academicYearId: formData.get('academicYearId') || undefined,
     city: formData.get('city') || undefined,
+    questionnaireSupportContact: formData.get('questionnaireSupportContact') || undefined,
   };
 
   if (!centerId) {

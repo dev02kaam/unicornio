@@ -1,6 +1,7 @@
 (() => {
   const ASSET_ROOT = '/assets/companions';
   const PENDING_PREFERENCE_KEY = 'unicornio_companion_preference';
+  const COMPANION_SAVE_TIMEOUT_MS = 8000;
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
   const characters = {
@@ -11,6 +12,69 @@
     senior: {
       MASCULINE: { id: 'orion', name: 'Orion' },
       FEMININE: { id: 'sol', name: 'Sol' },
+    },
+  };
+
+  const loginPreviewCharacters = [
+    characters.junior.FEMININE,
+    characters.junior.MASCULINE,
+    characters.senior.FEMININE,
+    characters.senior.MASCULINE,
+  ];
+
+  const loginPreviewIdentity = {
+    luna: {
+      descriptor: 'calma lunar',
+      icon: `
+        <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+          <circle cx="24" cy="24" r="20" fill="#30265f" />
+          <path d="M30.6 10.5a14.8 14.8 0 1 0 7.1 24.2 13 13 0 1 1-7.1-24.2Z" fill="#fff2bd" />
+          <circle cx="35.2" cy="14.4" r="1.7" fill="#9fe3d5" />
+          <circle cx="39.1" cy="22.2" r="1.1" fill="#ff9bc7" />
+        </svg>
+      `,
+    },
+    nico: {
+      descriptor: 'estrella viajera',
+      icon: `
+        <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+          <path d="m29.4 8.2 2.5 7.1 7.4 1-5.8 4.7 1.7 7.3-6.3-4-6.4 3.9 1.8-7.2-5.8-4.8 7.5-1Z" fill="#fff1a8" />
+          <path d="M20.5 26.5 8.8 38.2M25.1 30 17 38.1M17 22.6l-7.8 7.8" fill="none" stroke="#d9f7ff" stroke-linecap="round" stroke-width="3" />
+          <circle cx="37.5" cy="34.5" r="2" fill="#ff9bc7" />
+        </svg>
+      `,
+    },
+    sol: {
+      descriptor: 'luz valiente',
+      icon: `
+        <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+          <g fill="none" stroke="#9b581e" stroke-linecap="round" stroke-width="2.6">
+            <path d="M24 3.5v6M24 38.5v6M3.5 24h6M38.5 24h6M9.5 9.5l4.2 4.2M34.3 34.3l4.2 4.2M38.5 9.5l-4.2 4.2M13.7 34.3l-4.2 4.2" />
+          </g>
+          <circle cx="24" cy="24" r="11.5" fill="#ffc95d" />
+          <circle cx="20" cy="20" r="3.2" fill="#ffe8a9" opacity=".82" />
+        </svg>
+      `,
+    },
+    orion: {
+      descriptor: 'mapa del cielo',
+      icon: `
+        <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+          <g fill="none" stroke="#a9d7ff" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6">
+            <path d="m12 10 8.5 8.5 10-4 5.5 9-9 6.5-7-3.5-8 11.5" />
+            <path d="m20.5 18.5-.5 8 7-2 3.5-10.5" />
+          </g>
+          <g fill="#fff2bd">
+            <circle cx="12" cy="10" r="2.5" />
+            <circle cx="20.5" cy="18.5" r="2.1" />
+            <circle cx="30.5" cy="14" r="2.7" />
+            <circle cx="36" cy="23" r="2" />
+            <circle cx="27" cy="30" r="2.5" />
+            <circle cx="20" cy="26.5" r="2" />
+            <circle cx="12" cy="38" r="2.3" />
+          </g>
+        </svg>
+      `,
     },
   };
 
@@ -77,12 +141,126 @@
     return characters[runtime.ageBand][runtime.gender];
   }
 
-  function getExpressionAsset(expression = stateMeta[runtime.state]?.expression || 'smile', character = getCharacter()) {
-    return `${ASSET_ROOT}/${character.id}/${expression}.png`;
+  function getAvatarAsset(character = getCharacter()) {
+    return `${ASSET_ROOT}/${character.id}/avatar-v2.png`;
   }
 
   function getFullAsset(character = getCharacter()) {
     return `${ASSET_ROOT}/${character.id}/full.png`;
+  }
+
+  function getLoginFullAsset(character = getCharacter()) {
+    return `${ASSET_ROOT}/${character.id}/login-full-v3.png`;
+  }
+
+  function createLoginPreviewPickerMarkup(selectedId = 'luna') {
+    const choices = loginPreviewCharacters.map((character) => {
+      const identity = loginPreviewIdentity[character.id];
+      return `
+        <button
+          class="login-character-choice"
+          type="button"
+          data-login-companion="${character.id}"
+          aria-label="Ver a ${character.name}, ${identity.descriptor}"
+          aria-pressed="${character.id === selectedId}"
+        >
+          <span class="login-character-choice__symbol" aria-hidden="true">${identity.icon}</span>
+          <span class="login-character-choice__label">
+            <strong class="login-character-choice__name">${character.name}</strong>
+            <small class="login-character-choice__trait">${identity.descriptor}</small>
+          </span>
+        </button>
+      `;
+    }).join('');
+
+    return `
+      <div class="login-character-picker" role="group" aria-label="Previsualiza los cuatro compañeros">
+        <span class="login-character-picker__prompt">¿Quién te acompaña hoy?</span>
+        <div class="login-character-picker__sky">
+          <svg class="login-character-picker__orbit" viewBox="0 0 420 76" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+            <path d="M42 43 C 83 16, 128 15, 167 37 S 252 66, 292 38 S 357 16, 396 34" />
+          </svg>
+          ${choices}
+        </div>
+      </div>
+      <p class="sr-only" data-login-preview-live aria-live="polite">Luna seleccionada para previsualización.</p>
+    `;
+  }
+
+  const loginAssetCache = new Map();
+
+  function preloadLoginFullAsset(character) {
+    const src = getLoginFullAsset(character);
+    if (loginAssetCache.has(src)) return loginAssetCache.get(src);
+
+    const preload = new Image();
+    preload.decoding = 'async';
+    const ready = new Promise((resolve) => {
+      preload.addEventListener('load', () => resolve(src), { once: true });
+      preload.addEventListener('error', () => resolve(null), { once: true });
+    });
+    loginAssetCache.set(src, ready);
+    preload.src = src;
+    return ready;
+  }
+
+  function createLoginPreviewSparkBurst(button) {
+    if (reducedMotion.matches) return;
+
+    const offsets = [
+      [-34, -28],
+      [-12, -38],
+      [18, -36],
+      [36, -15],
+      [33, 18],
+      [12, 34],
+      [-20, 32],
+      [-38, 10],
+    ];
+    const burst = document.createElement('span');
+    burst.className = 'login-preview-spark-burst';
+    burst.setAttribute('aria-hidden', 'true');
+    burst.innerHTML = offsets.map(([x, y], index) => `
+      <i style="--spark-x:${x}px;--spark-y:${y}px;--spark-delay:${index * 24}ms">✦</i>
+    `).join('');
+    button.append(burst);
+    window.setTimeout(() => burst.remove(), 680);
+  }
+
+  function bindLoginPreviewPicker(stage) {
+    const previewImage = stage.querySelector('[data-companion-full]');
+    const liveRegion = stage.querySelector('[data-login-preview-live]');
+    let previewRequestId = 0;
+
+    stage.querySelectorAll('[data-login-companion]').forEach((button) => {
+      const character = loginPreviewCharacters.find(({ id }) => id === button.dataset.loginCompanion);
+      if (!character) return;
+
+      const warmAsset = () => preloadLoginFullAsset(character);
+      button.addEventListener('pointerenter', warmAsset, { once: true });
+      button.addEventListener('focus', warmAsset, { once: true });
+      button.addEventListener('click', async () => {
+        if (button.getAttribute('aria-pressed') === 'true') return;
+
+        stage.querySelectorAll('[data-login-companion]').forEach((choice) => {
+          choice.setAttribute('aria-pressed', String(choice === button));
+        });
+        stage.dataset.loginTheme = character.id;
+
+        const nextAsset = getLoginFullAsset(character);
+        if (previewImage.getAttribute('src') !== nextAsset) {
+          const requestId = ++previewRequestId;
+          const loadedAsset = await preloadLoginFullAsset(character);
+          if (requestId !== previewRequestId || !loadedAsset) return;
+          previewImage.setAttribute('src', loadedAsset);
+        }
+
+        createLoginPreviewSparkBurst(button);
+        if (liveRegion) {
+          liveRegion.textContent = `${character.name} seleccionado para previsualización.`;
+        }
+      });
+    });
   }
 
   function createPickerMarkup(context = 'panel') {
@@ -91,11 +269,11 @@
     return `
       <div class="companion-picker" data-companion-picker="${context}" role="group" aria-label="Elige tu unicornio">
         <button class="companion-choice" type="button" data-companion-choice="MASCULINE" aria-pressed="false">
-          <img src="${getExpressionAsset('smile', masculine)}" alt="" />
+          <img src="${getAvatarAsset(masculine)}" alt="" />
           <span><strong>${masculine.name}</strong><small>Unicornio</small></span>
         </button>
         <button class="companion-choice" type="button" data-companion-choice="FEMININE" aria-pressed="false">
-          <img src="${getExpressionAsset('smile', feminine)}" alt="" />
+          <img src="${getAvatarAsset(feminine)}" alt="" />
           <span><strong>${feminine.name}</strong><small>Unicornia</small></span>
         </button>
       </div>
@@ -118,7 +296,7 @@
         <span class="companion-orbit companion-orbit--one" aria-hidden="true"></span>
         <span class="companion-orbit companion-orbit--two" aria-hidden="true"></span>
         <span class="companion-face">
-          <img data-companion-image src="${getExpressionAsset()}" alt="" />
+          <img data-companion-image src="${getAvatarAsset()}" alt="" />
         </span>
         <span class="companion-state-dot" aria-hidden="true"></span>
       </button>
@@ -196,7 +374,7 @@
       ? '/dashboard.html'
       : '/login.html';
     link.setAttribute('aria-label', 'Proyecto Unicornio, ir al inicio');
-    link.innerHTML = '<img src="/assets/companions/brand-lockup.png" alt="Proyecto Unicornio" />';
+    link.innerHTML = '<img src="/assets/brand/logo_proyecto_unicornio_horizontal_limpio.png" alt="Proyecto Unicornio — Escuchar antes. Cuidar mejor." />';
     hero.prepend(link);
   }
 
@@ -215,19 +393,17 @@
 
     const visual = document.createElement('div');
     visual.className = 'login-character-stage';
-    visual.setAttribute('aria-hidden', 'true');
     visual.innerHTML = `
-      <span class="login-constellation login-constellation--one"></span>
-      <span class="login-constellation login-constellation--two"></span>
-      <img data-companion-full src="${getFullAsset()}" alt="" />
-      <div class="login-stage-message"><span>Escuchar antes.</span><strong>Cuidar mejor.</strong></div>
+      ${createLoginPreviewPickerMarkup()}
+      <img data-companion-full src="${getLoginFullAsset()}" alt="" />
     `;
     card.append(formColumn, visual);
+    bindLoginPreviewPicker(visual);
   }
 
   function installProfilePicker() {
     if (!runtime.user) return;
-    document.querySelectorAll('.preferences-card').forEach((card) => {
+    document.querySelectorAll('#profile-modal .preferences-card').forEach((card) => {
       if (card.querySelector('[data-profile-companion-picker]')) return;
       const section = document.createElement('section');
       section.className = 'profile-companion-picker';
@@ -238,6 +414,7 @@
           <small>La edad se adapta automáticamente.</small>
         </div>
         ${createPickerMarkup('profile')}
+        <p class="companion-save-note" data-companion-save-note role="status" aria-live="polite"></p>
       `;
       card.append(section);
     });
@@ -245,10 +422,15 @@
 
   function filterRoleNavigation(role) {
     const permissions = {
+      '/dashboard.html': ['ADMIN', 'SCHOOL', 'TEACHER', 'PROFESSIONAL', 'FAMILY', 'STUDENT'],
       '/users.html': ['ADMIN'],
       '/centers.html': ['ADMIN', 'SCHOOL', 'TEACHER', 'PROFESSIONAL'],
       '/groups.html': ['ADMIN', 'SCHOOL', 'TEACHER', 'PROFESSIONAL', 'STUDENT'],
+      '/questionnaires.html': ['ADMIN', 'SCHOOL', 'PROFESSIONAL'],
+      '/questionnaire.html': ['STUDENT'],
       '/consents.html': ['ADMIN', 'SCHOOL', 'TEACHER', 'PROFESSIONAL', 'FAMILY', 'STUDENT'],
+      '/notifications.html': ['PROFESSIONAL', 'FAMILY'],
+      '/child.html': ['FAMILY', 'STUDENT'],
       '/legal.html': ['ADMIN'],
     };
     const normalizedRole = String(role || '').toUpperCase();
@@ -260,17 +442,14 @@
 
   function preloadCurrentCharacter() {
     const character = getCharacter();
-    ['smile', 'listening', 'thinking', 'calm', 'celebrating', 'surprised'].forEach((expression) => {
-      const image = new Image();
-      image.src = getExpressionAsset(expression, character);
-    });
+    const image = new Image();
+    image.src = getAvatarAsset(character);
   }
 
   function syncCharacter() {
     runtime.ageBand = resolveAgeBand();
     const character = getCharacter();
-    const meta = stateMeta[runtime.state] || stateMeta.idle;
-    const asset = getExpressionAsset(meta.expression, character);
+    const asset = getAvatarAsset(character);
 
     document.documentElement.dataset.companion = character.id;
     document.documentElement.dataset.companionAge = runtime.ageBand;
@@ -280,7 +459,12 @@
       if (image.getAttribute('src') !== asset) image.setAttribute('src', asset);
     });
     document.querySelectorAll('[data-companion-full]').forEach((image) => {
-      image.setAttribute('src', getFullAsset(character));
+      image.setAttribute(
+        'src',
+        window.location.pathname === '/login.html'
+          ? getLoginFullAsset(character)
+          : getFullAsset(character),
+      );
     });
     document.querySelectorAll('[data-companion-name]').forEach((node) => {
       node.textContent = character.name;
@@ -299,16 +483,29 @@
   }
 
   function syncPickers() {
+    document.querySelectorAll('[data-companion-picker]').forEach((picker) => {
+      picker.setAttribute('aria-busy', String(runtime.saveBusy));
+    });
+
     document.querySelectorAll('[data-companion-choice]').forEach((button) => {
       const gender = button.dataset.companionChoice;
       const character = characters[runtime.ageBand][gender];
       const image = button.querySelector('img');
       const name = button.querySelector('strong');
-      if (image) image.src = getExpressionAsset('smile', character);
+      if (image) image.src = getAvatarAsset(character);
       if (name) name.textContent = character.name;
       button.setAttribute('aria-pressed', String(gender === runtime.gender));
       button.classList.toggle('is-selected', gender === runtime.gender);
+      button.classList.toggle('is-saving', runtime.saveBusy && gender === runtime.gender);
       button.disabled = runtime.saveBusy;
+    });
+  }
+
+  function setSaveMessage(message, state = '') {
+    document.querySelectorAll('[data-companion-save-note]').forEach((note) => {
+      note.textContent = message;
+      if (state) note.dataset.state = state;
+      else delete note.dataset.state;
     });
   }
 
@@ -343,38 +540,50 @@
 
   async function saveGender(gender, { silent = false } = {}) {
     if (!['MASCULINE', 'FEMININE'].includes(gender) || runtime.saveBusy) return;
+    if (gender === runtime.gender) {
+      setSaveMessage(`${getCharacter().name} ya está seleccionado.`, 'success');
+      return;
+    }
+
     const previous = runtime.gender;
     runtime.gender = gender;
     runtime.saveBusy = true;
     syncCharacter();
     syncPickers();
-
-    const saveNote = document.querySelector('[data-companion-save-note]');
-    if (saveNote) saveNote.textContent = 'Guardando tu elección…';
+    setSaveMessage('Guardando tu elección…', 'saving');
 
     if (typeof getToken !== 'function' || !getToken()) {
       localStorage.setItem(PENDING_PREFERENCE_KEY, gender);
       runtime.saveBusy = false;
       syncPickers();
-      if (saveNote) saveNote.textContent = 'Lo recordaré cuando inicies sesión.';
+      setSaveMessage('Lo recordaré cuando inicies sesión.', 'success');
       if (!silent) setState('success', { message: `¡Genial! ${getCharacter().name} te esperará aquí.`, announce: true });
       return;
     }
 
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), COMPANION_SAVE_TIMEOUT_MS);
     try {
       const response = await apiRequest('/users/me/companion', {
         method: 'PATCH',
         body: JSON.stringify({ unicornGender: gender }),
+        signal: controller.signal,
       });
       runtime.user = { ...runtime.user, ...response.data.user };
       localStorage.removeItem(PENDING_PREFERENCE_KEY);
-      if (saveNote) saveNote.textContent = 'Elección guardada.';
+      setSaveMessage('Elección guardada.', 'success');
       if (!silent) setState('success', { message: `¡Hecho! ${getCharacter().name} se queda contigo.`, announce: true });
-    } catch (_error) {
+    } catch (error) {
       runtime.gender = previous;
-      if (saveNote) saveNote.textContent = 'No se pudo guardar. Inténtalo de nuevo.';
+      setSaveMessage(
+        error?.name === 'AbortError'
+          ? 'El guardado está tardando demasiado. Inténtalo de nuevo.'
+          : 'No se pudo guardar. Inténtalo de nuevo.',
+        'error',
+      );
       setState('reassuring', { message: 'No he podido guardar el cambio. Podemos probar otra vez.', announce: true });
     } finally {
+      window.clearTimeout(timeoutId);
       runtime.saveBusy = false;
       syncCharacter();
       syncPickers();

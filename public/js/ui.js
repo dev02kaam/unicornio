@@ -170,6 +170,8 @@ const appIconPaths = {
   search: '<circle cx="11" cy="11" r="6"/><path d="m20 20-4-4"/>',
   check: '<path d="m5 12 4 4L19 6"/>',
   family: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.9-8.6a5.5 5.5 0 0 0-.1-7.8Z"/>',
+  questionnaire: '<path d="M7 3h10a2 2 0 0 1 2 2v16H5V5a2 2 0 0 1 2-2Z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+  notifications: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z"/><path d="M10 21h4"/>',
   sparkle: '<path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3ZM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z"/>',
   warning: '<circle cx="12" cy="12" r="9"/><path d="M12 7v6"/><path d="M12 17h.01" stroke-width="2.8"/>',
 };
@@ -189,6 +191,8 @@ function getAppIconName(value = '') {
   if (label.includes('legal') || label.includes('versi')) return 'legal';
   if (label.includes('hijo') || label.includes('alumno') || label.includes('estudiante')) return 'child';
   if (label.includes('familia')) return 'family';
+  if (label.includes('cuestionario') || label.includes('piloto')) return 'questionnaire';
+  if (label.includes('notificaci') || label.includes('aviso')) return 'notifications';
   if (label.includes('perfil') || label.includes('cuenta')) return 'profile';
   if (label.includes('dashboard') || label.includes('inicio')) return 'dashboard';
   if (label.includes('crear') || label.includes('añadir') || label.includes('nuevo')) return 'plus';
@@ -246,44 +250,99 @@ window.refreshAppIcons = refreshAppIcons;
 
 refreshAppIcons();
 
-function ensureModuleNavigation() {
-  const navigationRows = Array.from(document.querySelectorAll('.dashboard-links'))
-    .filter((row) => row.id !== 'dashboard-links');
-  if (!navigationRows.length) {
+const roleNavigationItems = {
+  ADMIN: [
+    { label: 'Inicio', href: '/dashboard.html', icon: 'dashboard' },
+    { label: 'Usuarios', href: '/users.html', icon: 'users' },
+    { label: 'Centros', href: '/centers.html', icon: 'school' },
+    { label: 'Grupos', href: '/groups.html', icon: 'groups' },
+    { label: 'Cuestionarios', href: '/questionnaires.html', icon: 'questionnaire' },
+    { label: 'Consentimientos', href: '/consents.html', icon: 'consent' },
+    { label: 'Texto legal', href: '/legal.html', icon: 'legal' },
+  ],
+  SCHOOL: [
+    { label: 'Inicio', href: '/dashboard.html', icon: 'dashboard' },
+    { label: 'Mi centro', href: '/centers.html', icon: 'school' },
+    { label: 'Grupos', href: '/groups.html', icon: 'groups' },
+    { label: 'Cuestionarios', href: '/questionnaires.html', icon: 'questionnaire' },
+    { label: 'Consentimientos', href: '/consents.html', icon: 'consent' },
+  ],
+  TEACHER: [
+    { label: 'Inicio', href: '/dashboard.html', icon: 'dashboard' },
+    { label: 'Mi centro', href: '/centers.html', icon: 'school' },
+    { label: 'Grupos', href: '/groups.html', icon: 'groups' },
+    { label: 'Consentimientos', href: '/consents.html', icon: 'consent' },
+  ],
+  PROFESSIONAL: [
+    { label: 'Inicio', href: '/dashboard.html', icon: 'dashboard' },
+    { label: 'Mi centro', href: '/centers.html', icon: 'school' },
+    { label: 'Grupos', href: '/groups.html', icon: 'groups' },
+    { label: 'Cuestionarios', href: '/questionnaires.html', icon: 'questionnaire' },
+    { label: 'Consentimientos', href: '/consents.html', icon: 'consent' },
+    { label: 'Notificaciones', href: '/notifications.html', icon: 'notifications' },
+  ],
+  FAMILY: [
+    { label: 'Inicio', href: '/dashboard.html', icon: 'dashboard' },
+    { label: 'Mi hijo/a', href: '/child.html', icon: 'child' },
+    { label: 'Consentimientos', href: '/consents.html', icon: 'consent' },
+    { label: 'Notificaciones', href: '/notifications.html', icon: 'notifications' },
+  ],
+  STUDENT: [
+    { label: 'Inicio', href: '/dashboard.html', icon: 'dashboard' },
+    { label: 'Cuestionarios', href: '/questionnaire.html', icon: 'questionnaire' },
+    { label: 'Mi perfil', href: '/child.html', icon: 'profile' },
+    { label: 'Mi grupo', href: '/groups.html', icon: 'groups' },
+    { label: 'Mis permisos', href: '/consents.html', icon: 'consent' },
+  ],
+};
+
+function normalizeNavigationPath(pathname) {
+  const path = String(pathname || '/dashboard.html').split(/[?#]/, 1)[0];
+  return path === '/' ? '/dashboard.html' : path.replace(/\/+$/, '');
+}
+
+function renderRoleNavigation(container, role = '') {
+  if (!container) {
     return;
   }
 
-  const modules = [
-    { label: 'Usuarios', href: '/users.html', icon: 'users', roles: ['ADMIN'] },
-    { label: 'Centros', href: '/centers.html', icon: 'school', roles: ['ADMIN', 'SCHOOL', 'TEACHER', 'PROFESSIONAL'] },
-    { label: 'Grupos', href: '/groups.html', icon: 'groups', roles: ['ADMIN', 'SCHOOL', 'TEACHER', 'PROFESSIONAL', 'STUDENT'] },
-    { label: 'Consentimientos', href: '/consents.html', icon: 'consent', roles: ['ADMIN', 'SCHOOL', 'TEACHER', 'PROFESSIONAL', 'FAMILY', 'STUDENT'] },
-    { label: 'Texto legal', href: '/legal.html', icon: 'legal', roles: ['ADMIN'] },
-  ];
-  const currentPath = window.location.pathname;
-  const currentRole = typeof getTokenRole === 'function' ? String(getTokenRole() || '').toUpperCase() : '';
+  const normalizedRole = String(role || (typeof getTokenRole === 'function' ? getTokenRole() : '') || '').toUpperCase();
+  const items = roleNavigationItems[normalizedRole];
+  if (!items) {
+    return;
+  }
 
-  navigationRows.forEach((existingLinks) => {
-    const existingHrefs = new Set(Array.from(existingLinks.querySelectorAll('a[href]')).map((link) => link.getAttribute('href')));
-    modules
-      .filter((module) => (
-        module.href !== currentPath
-        && !existingHrefs.has(module.href)
-        && (!currentRole || module.roles.includes(currentRole))
-      ))
-      .forEach((module) => {
-        const link = document.createElement('a');
-        link.className = 'button secondary';
-        link.href = module.href;
-        link.dataset.moduleLink = module.href;
-        link.setAttribute('aria-label', module.label);
-        link.innerHTML = `${getAppIcon(module.icon)}<span>${escapeHtml(module.label)}</span>`;
-        existingLinks.append(link);
-      });
+  const currentPath = normalizeNavigationPath(window.location.pathname);
+  const fragment = document.createDocumentFragment();
+
+  items.forEach((item) => {
+    const link = document.createElement('a');
+    link.className = 'button secondary app-navigation__link';
+    link.href = item.href;
+    link.dataset.moduleLink = item.href;
+    link.setAttribute('aria-label', item.label);
+    link.innerHTML = `${getAppIcon(item.icon)}<span class="button-label">${escapeHtml(item.label)}</span>`;
+
+    if (normalizeNavigationPath(item.href) === currentPath) {
+      link.setAttribute('aria-current', 'page');
+    }
+    if (item.href === '/notifications.html') {
+      link.innerHTML += '<span id="notification-count" class="nav-count" hidden>0</span>';
+    }
+    if (item.href === '/consents.html' && currentPath === '/notifications.html') {
+      link.id = 'notification-consents-link';
+    }
+    fragment.append(link);
   });
+
+  container.replaceChildren(fragment);
+  container.classList.add('app-navigation', 'icon-navigation');
+  container.setAttribute('role', 'navigation');
+  container.setAttribute('aria-label', 'Navegación principal');
 }
 
-ensureModuleNavigation();
+window.renderRoleNavigation = renderRoleNavigation;
+document.querySelectorAll('.dashboard-links').forEach((container) => renderRoleNavigation(container));
 
 const rememberSessionControl = document.querySelector('[data-remember-session]');
 if (rememberSessionControl && typeof shouldRememberSession === 'function') {

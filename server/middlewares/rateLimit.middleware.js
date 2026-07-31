@@ -1,8 +1,10 @@
 const rateLimit = require('express-rate-limit');
+const { env } = require('../config/env');
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
+  skip: () => env.nodeEnv === 'test',
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {
