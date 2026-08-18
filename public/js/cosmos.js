@@ -17,9 +17,8 @@
       document.title = 'Mi grupo | Proyecto Unicornio';
       setText('.org-hero .hero-copy > .badge', 'Tu clase');
       setText('.org-hero .hero-copy > h1', 'Mi grupo');
-      setText('.org-hero .hero-copy > p', 'Aquí puedes ver tu clase y las personas que te acompañan en el cole.');
-      setText('.org-panel .section-header h2', 'Encuentra tu grupo');
-      setText('.org-panel .section-header p', 'Busca por nombre si quieres llegar más rápido.');
+      setText('.org-hero .hero-copy > p', 'Aquí puedes ver únicamente el grupo al que perteneces.');
+      setText('#student-group-panel .section-header h2', 'Mi grupo');
     }
 
     if (path === '/consents.html') {
@@ -278,6 +277,10 @@
     start();
   }
 
-  installRoleMode();
+  if (typeof sessionReady !== 'undefined') {
+    sessionReady.then(installRoleMode).catch(() => installRoleMode());
+  } else {
+    installRoleMode();
+  }
   installConstellation();
 })();

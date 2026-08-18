@@ -1,6 +1,5 @@
 const { database } = require('../config/database');
 const { AppError } = require('../utils/errors');
-const { sanitizeUser } = require('../models/user.model');
 const {
   createConsentModel,
   createLegalTextVersionModel,
@@ -336,10 +335,6 @@ function activateLegalTextVersion(versionId, currentUser) {
 
 function deactivateLegalTextVersion(versionId, currentUser) {
   return updateLegalTextVersionState(versionId, false, currentUser);
-}
-
-function getActiveLegalTextVersionForConsent() {
-  return getActiveLegalTextVersion();
 }
 
 function assertConsentCandidate(studentId, familyUserId, legalTextVersionId) {
@@ -862,10 +857,6 @@ function getConsentStatusValue(studentId, currentUser) {
     consent: buildConsentSummary(latestConsent),
     ...validity,
   };
-}
-
-function getConsentsByStudentFamily(studentId, familyUserId) {
-  return getConsentCollection().filter((consent) => consent.studentId === String(studentId) && consent.familyUserId === String(familyUserId));
 }
 
 function getConsentById(consentId, currentUser) {

@@ -2,9 +2,10 @@ const {
   getAllUsers,
   findUserById,
   updateUser,
-  updateUnicornGender,
+  updateOwnCompanion,
   deleteUser,
   createUser,
+  updateOwnProfile,
 } = require('../services/users.service');
 const { database } = require('../config/database');
 const { sanitizeUser } = require('../models/user.model');
@@ -21,7 +22,7 @@ function listUsersController(_req, res, next) {
 
 async function createUserController(req, res, next) {
   try {
-    const user = createUser(req.body);
+    const user = await createUser(req.body);
     await database.flush();
     return sendSuccess(res, { user }, 'Usuario creado correctamente.', 201);
   } catch (error) {
@@ -37,7 +38,7 @@ function getUserByIdController(req, res, next) {
     }
 
     if (req.user.role !== 'ADMIN' && req.user.id !== user.id) {
-      throw new AppError('No autorizado para ver este usuario.', 403);
+      throw new AppError('Usuario no encontrado.', 404);
     }
 
     return sendSuccess(res, { user: sanitizeUser(user) }, 'Usuario encontrado.');
@@ -46,15 +47,24 @@ function getUserByIdController(req, res, next) {
   }
 }
 
+async function updateOwnProfileController(req, res, next) {
+  try {
+    const user = await updateOwnProfile(req.user, req.auth, req.body);
+    await database.flush();
+    req.log?.info({ event: 'OWN_PROFILE_UPDATED', userId: req.user.id }, 'own profile updated');
+    return sendSuccess(res, { user }, 'Perfil actualizado correctamente.');
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function updateUserController(req, res, next) {
   try {
-    const canUpdateRole = req.user.role === 'ADMIN';
-
-    if (req.user.role !== 'ADMIN' && req.user.id !== String(req.params.id)) {
+    if (req.user.role !== 'ADMIN') {
       throw new AppError('No autorizado para modificar este usuario.', 403);
     }
 
-    const user = updateUser(req.params.id, req.body, { canUpdateRole });
+    const user = await updateUser(req.params.id, req.body, { canUpdateRole: true });
     await database.flush();
     return sendSuccess(res, { user }, 'Usuario actualizado correctamente.');
   } catch (error) {
@@ -78,7 +88,7 @@ async function deleteUserController(req, res, next) {
 
 async function updateOwnCompanionController(req, res, next) {
   try {
-    const user = updateUnicornGender(req.user.id, req.body.unicornGender);
+    const user = await updateOwnCompanion(req.user, req.auth, req.body.unicornGender);
     await database.flush();
     return sendSuccess(res, { user }, 'Compañero actualizado correctamente.');
   } catch (error) {
@@ -92,5 +102,6 @@ module.exports = {
   getUserByIdController,
   updateUserController,
   updateOwnCompanionController,
+  updateOwnProfileController,
   deleteUserController,
 };

@@ -89,6 +89,47 @@ body::after {
   visibility: hidden;
 }
 
+.auth-pending .companion-widget {
+  visibility: hidden;
+}
+
+.app-loading-status {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-companion) + 1);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 72% 24%, rgba(255, 182, 214, 0.14), transparent 28%),
+    radial-gradient(circle at 24% 76%, rgba(126, 214, 193, 0.13), transparent 30%),
+    var(--canvas);
+}
+
+.app-loading-status__panel {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  width: min(320px, 82vw);
+  color: var(--muted);
+  font-weight: 700;
+  text-align: center;
+}
+
+.app-loading-status__panel img {
+  display: block;
+  width: min(260px, 72vw);
+  height: auto;
+}
+
+.app-loading-status__panel::after {
+  width: min(180px, 52vw);
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--galaxy), var(--aurora), var(--mint));
+  content: "";
+}
+
 h1,
 h2,
 h3,
@@ -228,18 +269,25 @@ p {
 
 .avatar-badge.has-companion-avatar,
 .avatar-large.has-companion-avatar {
+  position: relative;
   overflow: hidden;
   border: 0;
   border-radius: 50%;
-  background: var(--warm);
+  background: var(--night);
+  contain: paint;
 }
 
-.has-companion-avatar img {
+.has-companion-avatar img,
+.has-companion-avatar video {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: center;
+}
+
+.has-companion-avatar video {
+  pointer-events: none;
 }
 
 .badge,
@@ -658,18 +706,71 @@ html[data-user-role] .companion-widget[data-state="idle"] .companion-speech {
   height: 100%;
   overflow: hidden;
   border-radius: 50%;
-  background: var(--warm);
+  background: var(--companion-media-background, var(--warm));
   transform: translateZ(16px);
 }
 
-.companion-face img {
+.companion-face img,
+.companion-face video {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: center;
-  animation: companion-breathe 4.8s ease-in-out infinite;
-  transition: filter 180ms ease-out;
+  pointer-events: none;
+  transition: opacity 180ms ease-out, filter 180ms ease-out;
+}
+
+.companion-face video {
+  opacity: 1;
+  transform:
+    translate(var(--companion-loop-x, 0%), var(--companion-loop-y, 0%))
+    scale(var(--companion-loop-scale, 1));
+}
+
+.companion-face img {
+  clip-path: inset(
+    var(--companion-expression-clip-top, 0%)
+    var(--companion-expression-clip-right, 0%)
+    var(--companion-expression-clip-bottom, 0%)
+    var(--companion-expression-clip-left, 0%)
+  );
+  opacity: 0;
+  transform:
+    translate(var(--companion-expression-x, 0%), var(--companion-expression-y, 0%))
+    scale(var(--companion-expression-scale, 1));
+  transform-origin: center top;
+}
+
+html[data-companion="sol"] .companion-face img {
+  --companion-expression-clip-bottom: 9%;
+}
+
+html[data-companion="luna"] .companion-face img[data-companion-expression-state="smile"],
+html[data-companion="orion"] .companion-face img[data-companion-expression-state="smile"] {
+  --companion-expression-clip-top: 6%;
+}
+
+html[data-companion="luna"] .companion-face img[data-companion-expression-state="thinking"] {
+  --companion-expression-clip-left: 7%;
+}
+
+.companion-widget:not([data-state="idle"]) .companion-face video {
+  opacity: 0;
+}
+
+.companion-widget:not([data-state="idle"]) .companion-face img {
+  opacity: 1;
+}
+
+.companion-widget.is-expression-loading .companion-face video {
+  opacity: 1;
+}
+
+.companion-widget.is-expression-loading .companion-face img {
+  opacity: 0;
 }
 
 .companion-orbit {
@@ -869,18 +970,62 @@ body:has(.login-experience) {
     var(--canvas);
 }
 
-.login-character-stage > img {
+.login-character-stage > .login-character-poster,
+.login-character-stage > .login-character-presentation,
+.login-character-stage > .login-character-presentation-final {
   position: absolute;
-  right: -2%;
-  bottom: -5%;
+  right: 0;
+  bottom: -4%;
   width: auto;
-  height: 102%;
+  height: 100%;
   object-fit: contain;
   object-position: bottom right;
+  pointer-events: none;
+  transition: opacity 180ms ease-out;
+}
+
+.login-character-stage > .login-character-poster {
   mix-blend-mode: multiply;
   -webkit-mask-image: radial-gradient(ellipse 62% 73% at 64% 53%, #000 57%, transparent 96%);
   mask-image: radial-gradient(ellipse 62% 73% at 64% 53%, #000 57%, transparent 96%);
-  transition: opacity 180ms ease-out;
+  opacity: 1;
+}
+
+.login-character-stage > .login-character-presentation {
+  z-index: 1;
+  opacity: 0;
+  filter: drop-shadow(0 7px 5px rgba(15, 24, 51, 0.14));
+}
+
+.login-character-stage > .login-character-presentation-final {
+  z-index: 2;
+  opacity: 0;
+  filter: drop-shadow(0 7px 5px rgba(15, 24, 51, 0.14));
+}
+
+.login-character-stage.is-presentation-ready > .login-character-poster {
+  opacity: 0;
+}
+
+.login-character-stage.is-presentation-ready > .login-character-presentation {
+  opacity: 1;
+}
+
+.login-character-stage.is-presentation-settling > .login-character-presentation-final,
+.login-character-stage.is-presentation-complete > .login-character-presentation-final {
+  opacity: 1;
+}
+
+.login-character-stage.has-presentation-final.is-presentation-settling > .login-character-presentation,
+.login-character-stage.has-presentation-final.is-presentation-complete > .login-character-presentation {
+  opacity: 0;
+  transition: none;
+  visibility: hidden;
+}
+
+.login-character-stage.has-presentation-final.is-presentation-settling > .login-character-presentation-final,
+.login-character-stage.has-presentation-final.is-presentation-complete > .login-character-presentation-final {
+  transition: none;
 }
 
 .login-constellation {
@@ -950,9 +1095,11 @@ html[data-user-role="STUDENT"] .child-profile-grid .profile-chip:nth-child(n + 9
     min-height: 340px;
   }
 
-  .login-character-stage > img {
-    right: 4%;
-    height: 118%;
+  .login-character-stage > .login-character-poster,
+  .login-character-stage > .login-character-presentation,
+  .login-character-stage > .login-character-presentation-final {
+    right: 3%;
+    height: 116%;
   }
 
   .login-form-column h1 {
@@ -1109,6 +1256,9 @@ html[data-user-role="STUDENT"] .child-profile-grid .profile-chip:nth-child(n + 9
   .companion-orbit,
   .companion-face,
   .companion-face img,
+  .companion-face video,
+  .login-character-presentation,
+  .login-character-presentation-final,
   .companion-spark-burst i,
   .status-banner:not([hidden]),
   .error:not([hidden]),
@@ -1119,6 +1269,20 @@ html[data-user-role="STUDENT"] .child-profile-grid .profile-chip:nth-child(n + 9
 
   .companion-spark-burst {
     display: none;
+  }
+
+  .companion-face video,
+  .login-character-presentation,
+  .login-character-presentation-final {
+    display: none;
+  }
+
+  .companion-widget[data-state="idle"] .companion-face img {
+    opacity: 1;
+  }
+
+  .login-character-stage > .login-character-poster {
+    opacity: 1;
   }
 }
 

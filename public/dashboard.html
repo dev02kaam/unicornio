@@ -22,6 +22,28 @@
           <div id="dashboard-links" class="action-row dashboard-links icon-navigation"></div>
         </div>
 
+        <aside id="student-welcome-card" class="student-welcome-card" aria-label="Personaje de bienvenida" hidden>
+          <div class="student-welcome-card__media">
+            <video
+              id="student-welcome-video"
+              playsinline
+              preload="metadata"
+              poster="/assets/companions/nico/student-welcome-transparent.webp"
+              aria-label="Saludo de bienvenida del personaje Unicornio"
+              aria-describedby="student-welcome-description"
+            >
+              <source src="/assets/companions/nico/student-welcome-transparent.webm" type="video/webm" />
+              <source src="/assets/companions/nico/student-welcome.mp4" type="video/mp4" />
+              Tu navegador no puede reproducir este vídeo.
+            </video>
+            <button id="student-welcome-play" class="student-welcome-card__play" type="button">
+              <span aria-hidden="true">🔊</span>
+              <span id="student-welcome-play-label">Toca para escucharme</span>
+            </button>
+          </div>
+          <p id="student-welcome-description" class="sr-only">Vídeo de bienvenida con audio para el primer acceso del alumno.</p>
+        </aside>
+
         <button id="profile-button" class="account-trigger" type="button" aria-label="Abrir perfil">
           <span class="avatar-badge avatar-large" aria-hidden="true">
             <svg class="avatar-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

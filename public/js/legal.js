@@ -319,10 +319,12 @@ legalActivationModal?.addEventListener('click', (event) => {
 });
 
 (async function init() {
+  await sessionReady;
   if (!ensureAuth()) {
     return;
   }
 
+  let redirecting = false;
   try {
     const meResponse = await apiRequest('/auth/me');
     currentUser = meResponse.data.user;
@@ -334,6 +336,7 @@ legalActivationModal?.addEventListener('click', (event) => {
     }
 
     if (String(currentUser.role || '').toUpperCase() !== 'ADMIN') {
+      redirecting = true;
       window.location.replace('/dashboard.html');
       return;
     }
@@ -345,6 +348,8 @@ legalActivationModal?.addEventListener('click', (event) => {
     await loadLegalVersions();
   } catch (error) {
     showBanner(error.message || 'No se pudieron cargar las versiones legales.', 'error');
+  } finally {
+    if (!redirecting && getToken()) window.UnicornioAppLoading?.markPageReady();
   }
 })();
 

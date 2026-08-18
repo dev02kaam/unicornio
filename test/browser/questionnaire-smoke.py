@@ -1,6 +1,5 @@
 import os
 import time
-import json
 from pathlib import Path
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
@@ -13,20 +12,19 @@ CAMPAIGN_TITLE = f"Prueba supervisada {int(time.time())}"
 
 
 def login(page, email):
+    csrf_response = page.request.get(f"{BASE_URL}/api/auth/csrf")
+    assert csrf_response.ok, csrf_response.text()
+    csrf_token = csrf_response.json()["data"]["csrfToken"]
     response = page.request.post(
         f"{BASE_URL}/api/auth/login",
         data={"email": email, "password": "Demo1234!"},
+        headers={
+            "Origin": BASE_URL,
+            "Sec-Fetch-Site": "same-origin",
+            "X-CSRF-Token": csrf_token,
+        },
     )
     assert response.ok, response.text()
-    token = response.json()["data"]["token"]
-    page.context.add_init_script(
-        script=f"""
-          if (location.origin === {json.dumps(BASE_URL)}) {{
-            localStorage.setItem('unicornio_token', {json.dumps(token)});
-            sessionStorage.removeItem('unicornio_token');
-          }}
-        """
-    )
 
 
 def open_browser(playwright):
@@ -86,6 +84,7 @@ def main():
                   const gate = document.querySelector('#pilot-disabled');
                   const paths = [
                     '/questionnaire-campaigns',
+                    '/questionnaire-definitions',
                     '/users/6/assignments',
                     '/users/6',
                   ];
@@ -121,10 +120,12 @@ def main():
         professional_page.locator("#new-campaign-button").click()
         professional_page.locator("#campaign-name-input").fill(CAMPAIGN_TITLE)
         professional_page.locator("#campaign-group-select").select_option("group-1")
+        professional_page.locator(
+            '#questionnaire-catalog input[value="depressive-mood"]'
+        ).check()
         professional_page.locator('#campaign-form button[type="submit"]').click()
         professional_page.locator("#campaign-title").filter(has_text=CAMPAIGN_TITLE).wait_for()
 
-        professional_page.locator('[data-campaign-action="consents"]').click()
         professional_page.locator(".participant-row").filter(
             has_text="Alumno Unicornio"
         ).wait_for(timeout=15_000)
@@ -153,7 +154,7 @@ def main():
         family_page.goto(f"{BASE_URL}/notifications.html", wait_until="networkidle")
         family_page.locator("#notification-feed").wait_for(state="visible")
 
-        student_context = browser.new_context(viewport={"width": 390, "height": 844})
+        student_context = browser.new_context(viewport={"width": 1024, "height": 768})
         student_page = student_context.new_page()
         student_page.on("pageerror", lambda error: browser_errors.append(f"student: {error}"))
         login(student_page, "alumno@unicornio.local")
@@ -162,6 +163,10 @@ def main():
         assignment.wait_for(timeout=15_000)
         assignment.locator("[data-start-participant]").click()
         student_page.locator("#runner-view").wait_for(state="visible")
+        student_page.locator("#question-companion-video").wait_for(state="visible")
+        assert student_page.locator(".question-workspace").evaluate(
+            "element => getComputedStyle(element).gridTemplateColumns.split(' ').length >= 2"
+        )
         student_page.locator('.answer-choice input[value="SOMETIMES"]').check()
         student_page.locator("#runner-save-status").filter(has_text="Respuesta guardada").wait_for(
             timeout=15_000

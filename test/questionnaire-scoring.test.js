@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { depressiveMoodVersions } = require('../server/data/questionnaires/depressiveMood');
+const { questionnaireVersions } = require('../server/data/questionnaires/catalog');
 const {
   evaluateQuestionnaire,
   getBand,
@@ -17,7 +17,9 @@ function answersForTotal(definition, total) {
 }
 
 test('cada versión cubre todas las puntuaciones entre 0 y 60 sin huecos', () => {
-  depressiveMoodVersions.forEach((definition) => {
+  questionnaireVersions
+    .filter((definition) => definition.questions.length === 20 && !definition.scoringRules.reverseQuestionNumbers)
+    .forEach((definition) => {
     assert.equal(definition.questions.length, 20);
     assert.equal(definition.scoringRules.minimum, 0);
     assert.equal(definition.scoringRules.maximum, 60);
@@ -29,11 +31,11 @@ test('cada versión cubre todas las puntuaciones entre 0 y 60 sin huecos', () =>
       assert.equal(evaluation.totalScore, total);
       assert.equal(evaluation.band.key, band.key);
     }
-  });
+    });
 });
 
 test('no permite evaluar si falta una respuesta', () => {
-  const definition = depressiveMoodVersions[0];
+  const definition = questionnaireVersions.find((item) => item.id === 'depressive-mood-9-12-v1');
   const incomplete = answersForTotal(definition, 12).slice(0, 19);
   assert.throws(
     () => evaluateQuestionnaire(definition, incomplete),
@@ -42,7 +44,7 @@ test('no permite evaluar si falta una respuesta', () => {
 });
 
 test('activa los centinelas infantiles solo desde A menudo', () => {
-  const definition = depressiveMoodVersions[0];
+  const definition = questionnaireVersions.find((item) => item.id === 'depressive-mood-9-12-v1');
   const answers = answersForTotal(definition, 0);
   answers[0].value = 'OFTEN';
   const evaluation = evaluateQuestionnaire(definition, answers);
@@ -55,7 +57,7 @@ test('activa los centinelas infantiles solo desde A menudo', () => {
 });
 
 test('el ítem 18 adolescente en Siempre tiene prioridad roja', () => {
-  const definition = depressiveMoodVersions[1];
+  const definition = questionnaireVersions.find((item) => item.id === 'depressive-mood-13-16-v1');
   const answers = answersForTotal(definition, 0);
   answers[17].value = 'ALWAYS';
   const evaluation = evaluateQuestionnaire(definition, answers);
@@ -66,3 +68,29 @@ test('el ítem 18 adolescente en Siempre tiene prioridad roja', () => {
   assert.equal(evaluation.pendingClinicalRules.length, 1);
 });
 
+test('invierte los ítems protectores del autoconcepto sin alterar el valor original', () => {
+  const definition = questionnaireVersions.find((item) => item.id === 'self-concept-9-12-v1');
+  const answers = definition.questions.map((question) => ({
+    questionNumber: question.number,
+    value: 'ALWAYS',
+  }));
+  const evaluation = evaluateQuestionnaire(definition, answers);
+  const reversed = evaluation.answers.filter((answer) => (
+    definition.scoringRules.reverseQuestionNumbers.includes(answer.questionNumber)
+  ));
+  assert.ok(reversed.length > 0);
+  assert.ok(reversed.every((answer) => answer.rawPoints === 3 && answer.points === 0));
+});
+
+test('el acoso usa la subescala de riesgo más alta para la banda orientativa', () => {
+  const definition = questionnaireVersions.find((item) => item.id === 'bullying-cyberbullying-9-12-v1');
+  const answers = definition.questions.map((question) => ({
+    questionNumber: question.number,
+    value: question.number <= 8 || question.number >= 38 ? 'ALWAYS' : 'NEVER',
+  }));
+  const evaluation = evaluateQuestionnaire(definition, answers);
+  assert.equal(evaluation.totalScore, 24);
+  assert.equal(evaluation.bandScore, 24);
+  assert.equal(evaluation.subscales.find((item) => item.key === 'PRESENT_VICTIMIZATION').score, 24);
+  assert.ok(evaluation.band);
+});

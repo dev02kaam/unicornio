@@ -38,6 +38,27 @@ function isStudent(user) {
   return String(user?.role || '').toUpperCase() === 'STUDENT';
 }
 
+function hasActiveCenterAssignment(userId, centerId) {
+  return (database.getCollection('userCenterAssignments') || []).some((assignment) => (
+    assignment.isActive
+    && assignment.userId === String(userId)
+    && assignment.centerId === String(centerId)
+  ));
+}
+
+function sharesActiveGroup(userId, studentId) {
+  const assignments = database.getCollection('userGroupAssignments') || [];
+  const userGroupIds = new Set(assignments
+    .filter((assignment) => assignment.isActive && assignment.userId === String(userId))
+    .map((assignment) => assignment.groupId));
+
+  return assignments.some((assignment) => (
+    assignment.isActive
+    && assignment.userId === String(studentId)
+    && userGroupIds.has(assignment.groupId)
+  ));
+}
+
 function canViewConsent(user, consent) {
   if (!user || !consent) {
     return false;
@@ -55,16 +76,12 @@ function canViewConsent(user, consent) {
     return true;
   }
 
-  const centerId = String(consent.centerId || '');
-  const role = String(user?.role || '').toUpperCase();
-  if (
-    centerId
-    && (
-      ((role === 'SCHOOL' || role === 'TEACHER' || role === 'PROFESSIONAL') && String(user.schoolId || '') === centerId)
-      || user.id === consent.requestedByUserId
-    )
-  ) {
-    return true;
+  if (isSchool(user)) {
+    return hasActiveCenterAssignment(user.id, consent.centerId);
+  }
+
+  if (['TEACHER', 'PROFESSIONAL'].includes(String(user.role || '').toUpperCase())) {
+    return sharesActiveGroup(user.id, consent.studentId);
   }
 
   return false;
@@ -80,7 +97,7 @@ function canManageConsentRequest(user, studentId, centerId) {
   }
 
   if (isSchool(user)) {
-    return String(user.schoolId || '') === String(centerId);
+    return hasActiveCenterAssignment(user.id, centerId);
   }
 
   return false;
@@ -116,8 +133,16 @@ function canViewStudentConsentStatus(user, studentId) {
     return true;
   }
 
-  if ((isSchool(user) || isProfessional(user)) && String(user.schoolId || '') === String(student.schoolId || '')) {
-    return true;
+  if (isSchool(user)) {
+    return (database.getCollection('userCenterAssignments') || []).some((assignment) => (
+      assignment.isActive
+      && assignment.userId === student.id
+      && hasActiveCenterAssignment(user.id, assignment.centerId)
+    ));
+  }
+
+  if (isProfessional(user)) {
+    return sharesActiveGroup(user.id, student.id);
   }
 
   return false;

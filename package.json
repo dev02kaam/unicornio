@@ -7,19 +7,41 @@
   "scripts": {
     "dev": "node --watch server/app.js",
     "start": "node server/app.js",
-    "test": "node --test --test-isolation=none --test-concurrency=1"
+    "migrate": "node scripts/migrate.js",
+    "seed:demo": "node scripts/seed-demo.js",
+    "retention": "node scripts/run-retention.js",
+    "rotate:data-key": "node scripts/rotate-data-key.js",
+    "lint": "eslint .",
+    "test": "node --require ./scripts/bootstrap.js --test --test-isolation=none --test-concurrency=1",
+    "test:e2e": "playwright test",
+    "verify": "npm run lint && npm test && npm audit --audit-level=high"
   },
   "engines": {
-    "node": ">=18"
+    "node": "24.x"
   },
   "dependencies": {
+    "argon2": "^0.45.1",
     "bcryptjs": "^2.4.3",
+    "connect-pg-simple": "^10.0.0",
     "cors": "^2.8.5",
+    "csrf-sync": "^4.2.1",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
-    "helmet": "^8.1.0",
-    "jsonwebtoken": "^9.0.2",
-    "pg": "^8.22.0"
+    "express-session": "^1.19.0",
+    "helmet": "^8.3.0",
+    "openid-client": "^6.8.4",
+    "pg": "^8.22.0",
+    "pino": "^10.3.1",
+    "pino-http": "^11.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.62.1",
+    "eslint": "^10.8.0",
+    "eslint-plugin-security": "^4.0.1",
+    "globals": "^17.9.0",
+    "supertest": "^7.2.2"
   }
 }

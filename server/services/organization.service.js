@@ -1,5 +1,6 @@
 const { AppError } = require('../utils/errors');
 const { database } = require('../config/database');
+const { env } = require('../config/env');
 const { sanitizeUser } = require('../models/user.model');
 const { createCenterModel } = require('../models/center.model');
 const { createGroupModel } = require('../models/group.model');
@@ -21,6 +22,7 @@ const {
   findAcademicYearById,
   findCenterById,
   findGroupById,
+  findPrimaryGroupIdForUser,
   getCenterGroups,
   getCenterUsers,
   getGroupUsers,
@@ -36,15 +38,6 @@ const {
 
 function normalizeText(value) {
   return typeof value === 'string' ? value.trim() : '';
-}
-
-function normalizeEmailLocalPart(value) {
-  return normalizeText(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '.')
-    .replace(/^\.+|\.+$/g, '')
-    .replace(/\.+/g, '.')
-    || 'centro';
 }
 
 function normalizeOptionalText(value) {
@@ -211,6 +204,18 @@ function buildGroupSummary(group) {
   };
 }
 
+function buildGroupSummaryForUser(group, user) {
+  const summary = buildGroupSummary(group);
+  if (String(user?.role || '').toUpperCase() !== 'STUDENT') {
+    return summary;
+  }
+
+  return {
+    id: summary.id,
+    name: summary.name,
+  };
+}
+
 function listAcademicYears() {
   return (database.getCollection('academicYears') || []).map((academicYear) => buildAcademicYearSummary(academicYear));
 }
@@ -268,7 +273,7 @@ function getCenterDetails(centerId, user = null) {
   return buildCenterSummary(center);
 }
 
-function createCenter(data, user) {
+async function createCenter(data, user) {
   if (!isAdmin(user)) {
     throw new AppError('No autorizado para crear centros.', 403);
   }
@@ -279,6 +284,18 @@ function createCenter(data, user) {
   const academicYearId = resolveAcademicYearId(data.academicYearId);
   const city = normalizeOptionalText(data.city);
   const questionnaireSupportContact = normalizeOptionalText(data.questionnaireSupportContact);
+  const linkedUserName = normalizeText(data.userName);
+  const linkedUserEmail = normalizeText(data.userEmail);
+  const linkedUserPassword = normalizeText(data.userPassword);
+  const hasAnyLinkedCredential = Boolean(linkedUserName || linkedUserEmail || linkedUserPassword);
+
+  if (hasAnyLinkedCredential && !(linkedUserName && linkedUserEmail && linkedUserPassword)) {
+    throw new AppError('Nombre, email y contrasena son obligatorios para crear una cuenta vinculada.', 400);
+  }
+
+  if (env.appProfile === 'production' && hasAnyLinkedCredential) {
+    throw new AppError('Las cuentas de centro se provisionan mediante OIDC o invitacion.', 400);
+  }
 
   if (!name) {
     throw new AppError('El nombre del centro es obligatorio.', 400);
@@ -305,17 +322,24 @@ function createCenter(data, user) {
   centers.push(center);
   database.setCollection('centers', centers);
 
+  if (!hasAnyLinkedCredential) {
+    return {
+      center: buildCenterSummary(center),
+      linkedUser: null,
+    };
+  }
+
   const linkedUserData = {
-    name: normalizeText(data.userName) || center.name,
-    email: normalizeText(data.userEmail) || `${normalizeEmailLocalPart(code || center.code || center.name)}@unicornio.local`,
-    password: normalizeText(data.userPassword) || 'Demo1234!',
+    name: linkedUserName,
+    email: linkedUserEmail,
+    password: linkedUserPassword,
     role: 'SCHOOL',
     schoolId: center.id,
     allowSchoolCreation: true,
   };
 
   try {
-    const linkedUser = createUser(linkedUserData);
+    const linkedUser = await createUser(linkedUserData);
     return {
       center: buildCenterSummary(center),
       linkedUser,
@@ -388,11 +412,13 @@ function listGroupsForCenter(centerId, user) {
   }
 
   const groups = getCenterGroups(center.id).filter((group) => group.isActive);
-  if (String(user?.role || '').toUpperCase() === 'FAMILY') {
-    return groups.filter((group) => hasGroupAccess(user, group.id)).map(buildGroupSummary);
+  if (['FAMILY', 'STUDENT'].includes(String(user?.role || '').toUpperCase())) {
+    return groups
+      .filter((group) => hasGroupAccess(user, group.id))
+      .map((group) => buildGroupSummaryForUser(group, user));
   }
 
-  return groups.map(buildGroupSummary);
+  return groups.map((group) => buildGroupSummaryForUser(group, user));
 }
 
 function listGroupsForUser(user) {
@@ -403,7 +429,12 @@ function listGroupsForUser(user) {
 
   return groups
     .filter((group) => group.isActive && hasGroupAccess(user, group.id))
-    .map(buildGroupSummary);
+    .filter((group) => {
+      if (String(user?.role || '').toUpperCase() !== 'STUDENT') return true;
+      const primaryGroupId = findPrimaryGroupIdForUser(user.id) || user.groupId;
+      return String(group.id) === String(primaryGroupId || '');
+    })
+    .map((group) => buildGroupSummaryForUser(group, user));
 }
 
 function getGroupDetails(groupId, user = null) {
@@ -412,7 +443,7 @@ function getGroupDetails(groupId, user = null) {
     throw new AppError('No autorizado para ver este grupo.', 403);
   }
 
-  return buildGroupSummary(group);
+  return buildGroupSummaryForUser(group, user);
 }
 
 function createGroup(centerId, data, user) {

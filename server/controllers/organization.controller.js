@@ -40,9 +40,9 @@ function listCentersController(req, res, next) {
 
 async function createCenterController(req, res, next) {
   try {
-    const result = createCenter(req.body, req.user);
+    const result = await createCenter(req.body, req.user);
     await database.flush();
-    return sendSuccess(res, result, 'Centro y cuenta vinculada creados correctamente.', 201);
+    return sendSuccess(res, result, 'Centro creado correctamente.', 201);
   } catch (error) {
     return next(error);
   }

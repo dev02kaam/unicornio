@@ -1,5 +1,4 @@
-const fs = require('fs/promises');
-const path = require('path');
+const { AsyncLocalStorage } = require('node:async_hooks');
 const { createDemoUsers } = require('../data/demoUsers');
 const { createDemoAcademicYears } = require('../data/demoAcademicYears');
 const { createDemoCenters } = require('../data/demoCenters');
@@ -7,7 +6,6 @@ const { createDemoGroups } = require('../data/demoGroups');
 const { createDemoLegalTextVersions } = require('../data/demoLegalTextVersions');
 const { createDemoConsents, createDemoConsentAuditLogs } = require('../data/demoConsents');
 const { env } = require('./env');
-const { runMigrations } = require('../migrations');
 const {
   createDemoUserCenterAssignments,
   createDemoUserGroupAssignments,
@@ -29,7 +27,7 @@ const collectionNames = [
   'userGroupAssignments',
 ];
 
-function createInitialState() {
+function createDemoState() {
   return {
     users: createDemoUsers(),
     academicYears: createDemoAcademicYears(),
@@ -43,7 +41,7 @@ function createInitialState() {
   };
 }
 
-function createInitialSequences() {
+function createDemoSequences() {
   return {
     users: 15,
     academicYears: 1,
@@ -53,22 +51,43 @@ function createInitialSequences() {
     consents: 5,
     consentAuditLogs: 11,
     userCenterAssignments: 10,
-    userGroupAssignments: 6,
+    userGroupAssignments: 8,
   };
 }
 
-const state = createInitialState();
-const sequences = createInitialSequences();
+function createRuntimeState() {
+  return Object.fromEntries(collectionNames.map((name) => [name, []]));
+}
+
+function createRuntimeSequences() {
+  return Object.fromEntries(collectionNames.map((name) => [name, 0]));
+}
+
+const state = createRuntimeState();
+const sequences = createRuntimeSequences();
 
 let pool = null;
 let persistenceReady = false;
 let writeQueue = Promise.resolve();
 let persistenceError = null;
 let persistenceMode = 'none';
-let localDataFile = null;
+const rlsContext = new AsyncLocalStorage();
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-async function ensureSchema() {
-  await pool.query(`
+function getMissingMigrationIds(expectedMigrationIds, appliedRows) {
+  const appliedIds = new Set((appliedRows || []).map((row) => String(row.id)));
+  return (expectedMigrationIds || []).filter((id) => !appliedIds.has(String(id)));
+}
+
+async function setLocalRequestIdentity(client, userId) {
+  const identity = String(userId || '');
+  const isUuid = UUID_PATTERN.test(identity);
+  await client.query("select set_config('app.user_id', $1, true)", [isUuid ? identity : '']);
+  await client.query("select set_config('app.legacy_user_id', $1, true)", [isUuid ? '' : identity]);
+}
+
+async function ensureSchema(executor = pool) {
+  await executor.query(`
     create table if not exists unicornio_collections (
       name text primary key,
       data jsonb not null,
@@ -76,7 +95,7 @@ async function ensureSchema() {
     )
   `);
 
-  await pool.query(`
+  await executor.query(`
     create table if not exists unicornio_sequences (
       name text primary key,
       value bigint not null,
@@ -85,22 +104,159 @@ async function ensureSchema() {
   `);
 }
 
-async function seedIfNeeded() {
+async function seedDemoCollections(executor) {
+  const demoState = createDemoState();
+  const demoSequences = createDemoSequences();
+
   for (const name of collectionNames) {
-    await pool.query(
+    await executor.query(
       `insert into unicornio_collections (name, data)
        values ($1, $2::jsonb)
-       on conflict (name) do nothing`,
-      [name, JSON.stringify(state[name] || [])],
+       on conflict (name)
+       do update set data = excluded.data, updated_at = now()`,
+      [name, JSON.stringify(demoState[name] || [])],
     );
   }
 
-  for (const [name, value] of Object.entries(sequences)) {
-    await pool.query(
+  for (const [name, value] of Object.entries(demoSequences)) {
+    await executor.query(
       `insert into unicornio_sequences (name, value)
        values ($1, $2)
-       on conflict (name) do nothing`,
+       on conflict (name)
+       do update set value = excluded.value, updated_at = now()`,
       [name, value],
+    );
+  }
+}
+
+function mapDemoAssignmentRole(role) {
+  const roles = {
+    RESPONSABLE_CENTRO: 'CENTER_MANAGER',
+    PROFESOR: 'TEACHER',
+    PROFESSIONAL: 'PROFESSIONAL',
+    ALUMNO: 'STUDENT',
+  };
+  return roles[role] || null;
+}
+
+async function seedDemoRelational(executor) {
+  const demoState = createDemoState();
+
+  for (const item of demoState.academicYears) {
+    await executor.query(
+      `insert into unicornio_academic_years (legacy_id, name, starts_on, ends_on, status)
+       values ($1, $2, $3, $4, $5)
+       on conflict (legacy_id) where legacy_id is not null do update set
+         name = excluded.name, starts_on = excluded.starts_on,
+         ends_on = excluded.ends_on, status = excluded.status`,
+      [item.id, item.label, item.startDate, item.endDate, item.isActive ? 'ACTIVE' : 'CLOSED'],
+    );
+  }
+
+  for (const item of demoState.users) {
+    await executor.query(
+      `insert into unicornio_users (
+         legacy_id, email, name, password_hash, role, status, birth_date, age_range,
+         unicorn_gender, created_at, updated_at
+       ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       on conflict (legacy_id) do update set
+         email = excluded.email, name = excluded.name, password_hash = excluded.password_hash,
+         role = excluded.role, status = excluded.status, birth_date = excluded.birth_date,
+         age_range = excluded.age_range, updated_at = excluded.updated_at`,
+      [
+        item.id, item.email, item.name, item.passwordHash, item.role,
+        item.isActive ? 'ACTIVE' : 'DISABLED', item.birthDate || null, item.ageRange || null,
+        item.unicornGender || null, item.createdAt, item.updatedAt,
+      ],
+    );
+  }
+
+  for (const item of demoState.centers) {
+    await executor.query(
+      `insert into unicornio_centers (
+         legacy_id, academic_year_id, name, code, type, city, support_contact,
+         status, created_at, updated_at
+       ) values (
+         $1, (select id from unicornio_academic_years where legacy_id = $2),
+         $3, $4, 'OTHER', $5, $6, $7, $8, $9
+       ) on conflict (legacy_id) do update set
+         academic_year_id = excluded.academic_year_id, name = excluded.name,
+         code = excluded.code, city = excluded.city, support_contact = excluded.support_contact,
+         status = excluded.status, updated_at = excluded.updated_at`,
+      [
+        item.id, item.academicYearId, item.name, item.code, item.city,
+        item.questionnaireSupportContact || null, item.isActive ? 'ACTIVE' : 'INACTIVE',
+        item.createdAt, item.updatedAt,
+      ],
+    );
+  }
+
+  for (const item of demoState.groups) {
+    await executor.query(
+      `insert into unicornio_groups (
+         legacy_id, center_id, academic_year_id, name, code, stage, course, shift,
+         status, created_at, updated_at
+       ) values (
+         $1, (select id from unicornio_centers where legacy_id = $2),
+         (select id from unicornio_academic_years where legacy_id = $3),
+         $4, $5, $6, $7, $8, $9, $10, $11
+       ) on conflict (legacy_id) do update set
+         center_id = excluded.center_id, academic_year_id = excluded.academic_year_id,
+         name = excluded.name, code = excluded.code, stage = excluded.stage,
+         course = excluded.course, shift = excluded.shift, status = excluded.status,
+         updated_at = excluded.updated_at`,
+      [
+        item.id, item.centerId, item.academicYearId, item.name, item.code,
+        item.stage, item.course, item.shift, item.isActive ? 'ACTIVE' : 'INACTIVE',
+        item.createdAt, item.updatedAt,
+      ],
+    );
+  }
+
+  for (const item of demoState.userCenterAssignments) {
+    const role = mapDemoAssignmentRole(item.role);
+    if (!role) continue;
+    await executor.query(
+      `insert into unicornio_center_assignments (user_id, center_id, role, is_primary)
+       select u.id, c.id, $3, $4
+       from unicornio_users u cross join unicornio_centers c
+       where u.legacy_id = $1 and c.legacy_id = $2
+         and not exists (
+           select 1 from unicornio_center_assignments a
+           where a.user_id = u.id and a.center_id = c.id and a.role = $3 and a.active_until is null
+         )`,
+      [item.userId, item.centerId, role, Boolean(item.isPrimary)],
+    );
+  }
+
+  for (const item of demoState.userGroupAssignments) {
+    const role = mapDemoAssignmentRole(item.role);
+    if (!role) continue;
+    await executor.query(
+      `insert into unicornio_group_assignments (user_id, group_id, role, is_primary)
+       select u.id, g.id, $3, $4
+       from unicornio_users u cross join unicornio_groups g
+       where u.legacy_id = $1 and g.legacy_id = $2
+         and not exists (
+           select 1 from unicornio_group_assignments a
+           where a.user_id = u.id and a.group_id = g.id and a.role = $3 and a.active_until is null
+         )`,
+      [item.userId, item.groupId, role, Boolean(item.isPrimary)],
+    );
+  }
+
+  for (const item of demoState.users.filter((user) => user.role === 'FAMILY' && user.linkedStudentId)) {
+    await executor.query(
+      `insert into unicornio_family_links (family_user_id, student_user_id, relationship)
+       select family.id, student.id, 'DEMO'
+       from unicornio_users family cross join unicornio_users student
+       where family.legacy_id = $1 and student.legacy_id = $2
+         and not exists (
+           select 1 from unicornio_family_links link
+           where link.family_user_id = family.id and link.student_user_id = student.id
+             and link.active_until is null
+         )`,
+      [item.id, item.linkedStudentId],
     );
   }
 }
@@ -251,12 +407,14 @@ async function replaceConsentMirrorCollection(name, executor = pool) {
     for (const item of state.legalTextVersions || []) {
       await executor.query(
         `insert into unicornio_legal_text_versions (
-          id, version, title, content, is_active, effective_from, effective_to, created_at, updated_at
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          id, version, title, content, content_hash, is_active,
+          effective_from, effective_to, created_at, updated_at
+        ) values ($1, $2, $3, $4, encode(digest($4, 'sha256'), 'hex'), $5, $6, $7, $8, $9)
         on conflict (id) do update set
           version = excluded.version,
           title = excluded.title,
           content = excluded.content,
+          content_hash = excluded.content_hash,
           is_active = excluded.is_active,
           effective_from = excluded.effective_from,
           effective_to = excluded.effective_to,
@@ -347,53 +505,6 @@ async function syncConsentMirrors() {
   }
 }
 
-function hydrateState(snapshot) {
-  const collections = snapshot?.collections;
-  if (collections && typeof collections === 'object') {
-    collectionNames.forEach((name) => {
-      if (Array.isArray(collections[name])) {
-        state[name] = collections[name];
-      }
-    });
-  }
-
-  const savedSequences = snapshot?.sequences;
-  if (savedSequences && typeof savedSequences === 'object') {
-    Object.entries(savedSequences).forEach(([name, value]) => {
-      if (Number.isFinite(Number(value))) {
-        sequences[name] = Number(value);
-      }
-    });
-  }
-}
-
-async function loadFromLocalFile() {
-  try {
-    const contents = await fs.readFile(localDataFile, 'utf8');
-    hydrateState(JSON.parse(contents));
-  } catch (error) {
-    if (error.code !== 'ENOENT') {
-      throw new Error(`No se pudo cargar el almacenamiento local: ${error.message}`);
-    }
-  }
-}
-
-function buildLocalSnapshot() {
-  return {
-    version: 1,
-    collections: Object.fromEntries(collectionNames.map((name) => [name, state[name] || []])),
-    sequences,
-  };
-}
-
-async function persistLocalSnapshot() {
-  const directory = path.dirname(localDataFile);
-  const temporaryFile = `${localDataFile}.tmp`;
-  await fs.mkdir(directory, { recursive: true });
-  await fs.writeFile(temporaryFile, JSON.stringify(buildLocalSnapshot(), null, 2), 'utf8');
-  await fs.rename(temporaryFile, localDataFile);
-}
-
 function enqueueWrite(task, label) {
   if (!persistenceReady) {
     return Promise.resolve();
@@ -411,10 +522,6 @@ function enqueueWrite(task, label) {
 }
 
 function persistCollection(name) {
-  if (persistenceMode === 'local') {
-    return enqueueWrite(persistLocalSnapshot, `el almacenamiento local tras cambiar ${name}`);
-  }
-
   return enqueueWrite(async () => {
     const client = await pool.connect();
     try {
@@ -438,10 +545,6 @@ function persistCollection(name) {
 }
 
 function persistSequence(name) {
-  if (persistenceMode === 'local') {
-    return enqueueWrite(persistLocalSnapshot, `el almacenamiento local tras actualizar la secuencia ${name}`);
-  }
-
   return enqueueWrite(() => pool.query(
     `insert into unicornio_sequences (name, value, updated_at)
      values ($1, $2, now())
@@ -455,28 +558,36 @@ const database = {
   state,
   async initialize() {
     if (!env.databaseUrl) {
-      localDataFile = path.resolve(process.cwd(), env.dataFile);
-      await loadFromLocalFile();
-      persistenceMode = 'local';
-      persistenceReady = true;
-      console.log(`Proyecto Unicornio usando almacenamiento local en ${localDataFile}.`);
-      return;
+      throw new Error('DATABASE_URL es obligatorio. La demo tambien requiere PostgreSQL dedicado.');
     }
 
     const { Pool } = require('pg');
+    const ssl = env.databaseSslMode === 'disable'
+      ? false
+      : {
+        rejectUnauthorized: env.databaseSslMode === 'verify-full',
+        ...(env.databaseCa ? { ca: env.databaseCa.replace(/\\n/g, '\n') } : {}),
+      };
+
     pool = new Pool({
       connectionString: env.databaseUrl,
-      ssl: env.databaseSsl ? { rejectUnauthorized: false } : false,
+      ssl,
+      max: env.databasePoolMax,
+      connectionTimeoutMillis: env.databaseConnectionTimeoutMs,
+      idleTimeoutMillis: env.databaseIdleTimeoutMs,
+      statement_timeout: env.databaseStatementTimeoutMs,
+      idle_in_transaction_session_timeout: env.databaseIdleTransactionTimeoutMs,
     });
 
-    await ensureSchema();
-    await seedIfNeeded();
-    await loadFromPostgres();
-    await repairLegacyAssignmentCollections();
-    await repairLegalTextVersionCollection();
-    await runMigrations(pool);
-    await syncConsentMirrors();
     persistenceMode = 'postgres';
+    const { expectedMigrationIds } = require('../migrations');
+    await this.checkReadiness(expectedMigrationIds);
+    if (env.appProfile === 'demo') {
+      await loadFromPostgres();
+      await repairLegacyAssignmentCollections();
+      await repairLegalTextVersionCollection();
+      await syncConsentMirrors();
+    }
     persistenceReady = true;
     console.log('Proyecto Unicornio conectado a PostgreSQL.');
   },
@@ -514,11 +625,65 @@ const database = {
   getPersistenceMode() {
     return persistenceMode;
   },
+  getPool() {
+    return pool;
+  },
+  async checkReadiness(expectedMigrationIds = []) {
+    if (!pool || persistenceMode !== 'postgres') {
+      throw new Error('PostgreSQL no inicializado.');
+    }
+    await pool.query('select 1');
+    let applied;
+    try {
+      applied = await pool.query(
+        'select id from unicornio_migrations where id = any($1::text[])',
+        [expectedMigrationIds],
+      );
+    } catch (error) {
+      if (error?.code === '42P01') {
+        throw new Error('El esquema PostgreSQL no esta inicializado. Ejecuta npm run migrate con MIGRATION_DATABASE_URL.');
+      }
+      throw error;
+    }
+    const missingMigrationIds = getMissingMigrationIds(expectedMigrationIds, applied.rows);
+    if (missingMigrationIds.length > 0) {
+      throw new Error(
+        `El esquema PostgreSQL no tiene la version esperada. Faltan: ${missingMigrationIds.join(', ')}. `
+        + 'Ejecuta npm run migrate con MIGRATION_DATABASE_URL.',
+      );
+    }
+    return true;
+  },
+  loadTestFixtures(snapshot, sequenceSnapshot) {
+    if (env.nodeEnv !== 'test') {
+      throw new Error('Las fixtures solo se pueden cargar con NODE_ENV=test.');
+    }
+
+    collectionNames.forEach((name) => {
+      state[name] = structuredClone(snapshot[name] || []);
+      sequences[name] = Number(sequenceSnapshot[name] || 0);
+    });
+  },
   async query(text, params = []) {
     if (!pool || persistenceMode !== 'postgres') {
       throw new Error('Esta operacion requiere PostgreSQL.');
     }
-    return pool.query(text, params);
+    const userId = rlsContext.getStore()?.userId;
+    if (!userId) return pool.query(text, params);
+
+    const client = await pool.connect();
+    try {
+      await client.query('begin');
+      await setLocalRequestIdentity(client, userId);
+      const result = await client.query(text, params);
+      await client.query('commit');
+      return result;
+    } catch (error) {
+      await client.query('rollback');
+      throw error;
+    } finally {
+      client.release();
+    }
   },
   async transaction(callback) {
     if (!pool || persistenceMode !== 'postgres') {
@@ -528,6 +693,8 @@ const database = {
     const client = await pool.connect();
     try {
       await client.query('begin');
+      const userId = rlsContext.getStore()?.userId;
+      if (userId) await setLocalRequestIdentity(client, userId);
       const result = await callback(client);
       await client.query('commit');
       return result;
@@ -537,6 +704,10 @@ const database = {
     } finally {
       client.release();
     }
+  },
+  runAsUser(userId, callback) {
+    if (!userId) throw new Error('El contexto RLS requiere una identidad.');
+    return rlsContext.run({ userId: String(userId) }, callback);
   },
   nextUserId() {
     sequences.users += 1;
@@ -554,4 +725,14 @@ const database = {
   },
 };
 
-module.exports = { database };
+module.exports = {
+  database,
+  createRuntimeState,
+  createRuntimeSequences,
+  createDemoState,
+  createDemoSequences,
+  ensureSchema,
+  seedDemoCollections,
+  seedDemoRelational,
+  getMissingMigrationIds,
+};

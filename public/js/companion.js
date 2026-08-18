@@ -2,6 +2,11 @@
   const ASSET_ROOT = '/assets/companions';
   const PENDING_PREFERENCE_KEY = 'unicornio_companion_preference';
   const COMPANION_SAVE_TIMEOUT_MS = 8000;
+  const LOGIN_PRESENTATION_LOADER_MIN_MS = 520;
+  const LOGIN_PRESENTATION_FINAL_ASSETS = {
+    sol: `${ASSET_ROOT}/sol/login-presentation-final.webp`,
+    orion: `${ASSET_ROOT}/orion/login-presentation-final.webp`,
+  };
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
   const characters = {
@@ -145,12 +150,100 @@
     return `${ASSET_ROOT}/${character.id}/avatar-v2.png`;
   }
 
+  function getProfileLoopAsset(character = getCharacter()) {
+    return `${ASSET_ROOT}/${character.id}/profile-loop-transparent.webm`;
+  }
+
+  function getProfileLoopPosterAsset(character = getCharacter()) {
+    return `${ASSET_ROOT}/${character.id}/profile-loop-poster.webp`;
+  }
+
+  function getExpressionAsset(character = getCharacter(), state = runtime.state) {
+    const expression = (stateMeta[state] || stateMeta.idle).expression;
+    return `${ASSET_ROOT}/${character.id}/${expression}.png`;
+  }
+
   function getFullAsset(character = getCharacter()) {
     return `${ASSET_ROOT}/${character.id}/full.png`;
   }
 
   function getLoginFullAsset(character = getCharacter()) {
     return `${ASSET_ROOT}/${character.id}/login-full-v3.png`;
+  }
+
+  function getLoginPresentationAsset(character = getCharacter()) {
+    return `${ASSET_ROOT}/${character.id}/login-presentation-transparent.webm`;
+  }
+
+  function getLoginPresentationFinalAsset(character = getCharacter()) {
+    return LOGIN_PRESENTATION_FINAL_ASSETS[character.id] || '';
+  }
+
+  function createLoginPresentationAudioMarkup() {
+    return `
+      <button
+        class="login-presentation-audio"
+        type="button"
+        data-login-presentation-audio
+        aria-label="Escuchar la presentación de Luna"
+        aria-pressed="false"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path class="login-presentation-audio__speaker" d="M4 10v4h3.2l4.1 3.2V6.8L7.2 10H4Z" />
+          <path class="login-presentation-audio__waves" d="M14.3 9.1a4 4 0 0 1 0 5.8M16.8 6.8a7.2 7.2 0 0 1 0 10.4" />
+          <path class="login-presentation-audio__muted" d="m15.2 9.2 4.6 4.6m0-4.6-4.6 4.6" />
+        </svg>
+        <span data-login-audio-label>Escuchar presentación</span>
+      </button>
+    `;
+  }
+
+  function createLoginPresentationLoaderMarkup(character = loginPreviewCharacters[0]) {
+    return `
+      <div
+        class="login-presentation-loader"
+        data-login-presentation-loader
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        aria-hidden="true"
+      >
+        <span class="login-presentation-loader__orbit" aria-hidden="true">
+          <i></i><i></i><i></i>
+        </span>
+        <span data-login-presentation-loader-label>Preparando a ${character.name}&hellip;</span>
+      </div>
+    `;
+  }
+
+  function createLoginPresentationMarkup(character = getCharacter()) {
+    return `
+      <img
+        class="login-character-poster"
+        data-companion-presentation-poster
+        src="${getLoginFullAsset(character)}"
+        alt=""
+      />
+      <video
+        class="login-character-presentation"
+        data-companion-presentation
+        src="${getLoginPresentationAsset(character)}"
+        poster="${getLoginFullAsset(character)}"
+        autoplay
+        muted
+        playsinline
+        preload="metadata"
+        aria-hidden="true"
+      ></video>
+      <img
+        class="login-character-presentation-final"
+        data-companion-presentation-final
+        alt=""
+        hidden
+      />
+      ${createLoginPresentationLoaderMarkup(character)}
+      ${createLoginPresentationAudioMarkup()}
+    `;
   }
 
   function createLoginPreviewPickerMarkup(selectedId = 'luna') {
@@ -187,21 +280,87 @@
     `;
   }
 
-  const loginAssetCache = new Map();
+  const loginPresentationCache = new Map();
 
-  function preloadLoginFullAsset(character) {
-    const src = getLoginFullAsset(character);
-    if (loginAssetCache.has(src)) return loginAssetCache.get(src);
+  function preloadLoginPresentationAsset(character) {
+    const src = getLoginPresentationAsset(character);
+    if (loginPresentationCache.has(src)) return loginPresentationCache.get(src);
 
-    const preload = new Image();
-    preload.decoding = 'async';
+    const preload = document.createElement('video');
+    preload.preload = 'metadata';
+    preload.muted = true;
+    preload.playsInline = true;
     const ready = new Promise((resolve) => {
-      preload.addEventListener('load', () => resolve(src), { once: true });
+      preload.addEventListener('loadedmetadata', () => resolve(src), { once: true });
       preload.addEventListener('error', () => resolve(null), { once: true });
     });
-    loginAssetCache.set(src, ready);
+    loginPresentationCache.set(src, ready);
     preload.src = src;
+    preload.load();
     return ready;
+  }
+
+  function playVideo(video) {
+    if (!video || reducedMotion.matches) {
+      video?.pause();
+      return;
+    }
+    const playback = video.play();
+    if (playback && typeof playback.catch === 'function') playback.catch(() => undefined);
+  }
+
+  function syncLoopVideo(video, character) {
+    if (!video) return;
+    const src = getProfileLoopAsset(character);
+    const poster = getProfileLoopPosterAsset(character);
+    video.poster = poster;
+    video.defaultMuted = true;
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    if (video.getAttribute('src') !== src) {
+      video.setAttribute('src', src);
+      video.load();
+    }
+    playVideo(video);
+  }
+
+  function createLoopVideo(character = getCharacter()) {
+    const video = document.createElement('video');
+    video.dataset.companionLoop = '';
+    video.setAttribute('aria-hidden', 'true');
+    video.setAttribute('preload', 'auto');
+    video.setAttribute('disablepictureinpicture', '');
+    video.autoplay = true;
+    video.defaultMuted = true;
+    syncLoopVideo(video, character);
+    return video;
+  }
+
+  function syncMotionPreference() {
+    document.querySelectorAll('[data-companion-loop]').forEach((video) => {
+      if (reducedMotion.matches) {
+        video.pause();
+        try {
+          video.currentTime = 0;
+        } catch (_error) {
+          // El primer fotograma puede no estar disponible todavía.
+        }
+      } else {
+        playVideo(video);
+      }
+    });
+
+    document.querySelectorAll('[data-companion-presentation]').forEach((video) => {
+      if (reducedMotion.matches) {
+        video.pause();
+      } else if (
+        !video.ended
+        && !video.closest('.login-character-stage')?.classList.contains('is-presentation-complete')
+      ) {
+        playVideo(video);
+      }
+    });
   }
 
   function createLoginPreviewSparkBurst(button) {
@@ -228,31 +387,201 @@
   }
 
   function bindLoginPreviewPicker(stage) {
-    const previewImage = stage.querySelector('[data-companion-full]');
+    if (stage.dataset.loginPreviewBound === 'true') return;
+    stage.dataset.loginPreviewBound = 'true';
+
+    const previewVideo = stage.querySelector('[data-companion-presentation]');
+    const previewPoster = stage.querySelector('[data-companion-presentation-poster]');
+    const previewFinal = stage.querySelector('[data-companion-presentation-final]');
+    const audioButton = stage.querySelector('[data-login-presentation-audio]');
+    const audioLabel = audioButton?.querySelector('[data-login-audio-label]');
+    const presentationLoader = stage.querySelector('[data-login-presentation-loader]');
+    const presentationLoaderLabel = presentationLoader?.querySelector('[data-login-presentation-loader-label]');
     const liveRegion = stage.querySelector('[data-login-preview-live]');
     let previewRequestId = 0;
+    let previewReadyTimer = 0;
+
+    if (!previewVideo || !previewPoster) return;
+
+    const selectedCharacter = () => loginPreviewCharacters.find(
+      ({ id }) => stage.querySelector(`[data-login-companion="${id}"]`)?.getAttribute('aria-pressed') === 'true',
+    ) || loginPreviewCharacters[0];
+
+    const setPresentationAudioEnabled = (enabled, character = selectedCharacter()) => {
+      previewVideo.defaultMuted = true;
+      previewVideo.muted = !enabled;
+      stage.dataset.presentationAudio = enabled ? 'on' : 'off';
+      if (!audioButton) return;
+      audioButton.setAttribute('aria-pressed', String(enabled));
+      audioButton.setAttribute(
+        'aria-label',
+        enabled
+          ? `Silenciar la presentación de ${character.name}`
+          : `Escuchar la presentación de ${character.name}`,
+      );
+      if (audioLabel) {
+        audioLabel.textContent = enabled ? 'Silenciar presentación' : 'Escuchar presentación';
+      }
+    };
+
+    const setPresentationLoading = (loading, character = selectedCharacter()) => {
+      stage.classList.toggle('is-presentation-loading', loading && !reducedMotion.matches);
+      if (loading && !reducedMotion.matches) stage.setAttribute('aria-busy', 'true');
+      else stage.removeAttribute('aria-busy');
+      if (audioButton) audioButton.disabled = loading && !reducedMotion.matches;
+      if (!presentationLoader) return;
+      presentationLoader.setAttribute('aria-hidden', String(!loading || reducedMotion.matches));
+      if (loading && presentationLoaderLabel) {
+        presentationLoaderLabel.textContent = `Preparando a ${character.name}…`;
+      }
+    };
+
+    const resetPresentationPlaybackState = () => {
+      stage.classList.remove('is-presentation-settling', 'is-presentation-complete');
+    };
+
+    const syncPresentationFinal = (character = selectedCharacter()) => {
+      if (!previewFinal) return '';
+      const src = getLoginPresentationFinalAsset(character);
+      stage.classList.toggle('has-presentation-final', Boolean(src));
+      previewFinal.hidden = !src;
+      if (src && previewFinal.getAttribute('src') !== src) previewFinal.setAttribute('src', src);
+      return src;
+    };
+
+    const holdFinalPresentationFrame = () => {
+      if (
+        reducedMotion.matches
+        || stage.classList.contains('is-presentation-complete')
+        || !Number.isFinite(previewVideo.duration)
+      ) return;
+
+      stage.classList.add('is-presentation-complete');
+      previewVideo.pause();
+      if (getLoginPresentationFinalAsset(selectedCharacter())) {
+        stage.classList.add('is-presentation-settling');
+        return;
+      }
+      try {
+        previewVideo.currentTime = Math.max(0, previewVideo.duration - 0.06);
+      } catch (_error) {
+        // El último fotograma ya visible permanece como respaldo.
+      }
+    };
+
+    setPresentationAudioEnabled(false);
+
+    audioButton?.addEventListener('click', () => {
+      const enableAudio = audioButton.getAttribute('aria-pressed') !== 'true';
+      setPresentationAudioEnabled(enableAudio);
+      if (enableAudio) {
+        resetPresentationPlaybackState();
+        try {
+          previewVideo.currentTime = 0;
+        } catch (_error) {
+          // El vídeo arrancará desde el principio en cuanto termine de cargar.
+        }
+      }
+      playVideo(previewVideo);
+    });
+
+    const markPresentationReady = () => {
+      setPresentationLoading(false);
+      if (!reducedMotion.matches) stage.classList.add('is-presentation-ready');
+    };
+
+    previewVideo.addEventListener('timeupdate', () => {
+      const remaining = previewVideo.duration - previewVideo.currentTime;
+      if (
+        remaining > 0
+        && remaining <= 0.24
+        && getLoginPresentationFinalAsset(selectedCharacter())
+      ) {
+        stage.classList.add('is-presentation-settling');
+        return;
+      }
+      if (remaining > 0 && remaining <= 0.06) holdFinalPresentationFrame();
+    });
+    previewVideo.addEventListener('ended', holdFinalPresentationFrame);
+    if (previewVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+      markPresentationReady();
+      playVideo(previewVideo);
+    } else {
+      previewVideo.addEventListener('loadeddata', markPresentationReady, { once: true });
+    }
 
     stage.querySelectorAll('[data-login-companion]').forEach((button) => {
       const character = loginPreviewCharacters.find(({ id }) => id === button.dataset.loginCompanion);
       if (!character) return;
 
-      const warmAsset = () => preloadLoginFullAsset(character);
+      const warmAsset = () => preloadLoginPresentationAsset(character);
       button.addEventListener('pointerenter', warmAsset, { once: true });
       button.addEventListener('focus', warmAsset, { once: true });
-      button.addEventListener('click', async () => {
-        if (button.getAttribute('aria-pressed') === 'true') return;
+      button.addEventListener('click', () => {
+        const alreadySelected = button.getAttribute('aria-pressed') === 'true';
 
         stage.querySelectorAll('[data-login-companion]').forEach((choice) => {
           choice.setAttribute('aria-pressed', String(choice === button));
         });
         stage.dataset.loginTheme = character.id;
+        const audioEnabled = audioButton?.getAttribute('aria-pressed') === 'true';
+        setPresentationAudioEnabled(audioEnabled, character);
 
-        const nextAsset = getLoginFullAsset(character);
-        if (previewImage.getAttribute('src') !== nextAsset) {
+        const nextPoster = getLoginFullAsset(character);
+        const nextPresentation = getLoginPresentationAsset(character);
+        resetPresentationPlaybackState();
+        syncPresentationFinal(character);
+
+        if (alreadySelected && previewVideo.getAttribute('src') === nextPresentation) {
+          previewPoster.setAttribute('src', nextPoster);
+          previewVideo.setAttribute('poster', nextPoster);
+          try {
+            previewVideo.currentTime = 0;
+          } catch (_error) {
+            // El vídeo todavía puede estar cargando; play() continuará cuando esté listo.
+          }
+          playVideo(previewVideo);
+        } else {
           const requestId = ++previewRequestId;
-          const loadedAsset = await preloadLoginFullAsset(character);
-          if (requestId !== previewRequestId || !loadedAsset) return;
-          previewImage.setAttribute('src', loadedAsset);
+          const loadingStartedAt = performance.now();
+          window.clearTimeout(previewReadyTimer);
+          previewVideo.autoplay = false;
+          previewVideo.pause();
+          setPresentationLoading(true, character);
+          stage.classList.remove('is-presentation-ready');
+          previewPoster.setAttribute('src', nextPoster);
+          previewVideo.setAttribute('poster', nextPoster);
+          const handleReady = () => {
+            if (requestId !== previewRequestId) return;
+            const remainingLoaderTime = Math.max(
+              0,
+              (reducedMotion.matches ? 0 : LOGIN_PRESENTATION_LOADER_MIN_MS)
+                - (performance.now() - loadingStartedAt),
+            );
+            previewReadyTimer = window.setTimeout(() => {
+              if (requestId !== previewRequestId) return;
+              try {
+                previewVideo.currentTime = 0;
+              } catch (_error) {
+                // El vÃ­deo comenzarÃ¡ en cero cuando el navegador complete el seek inicial.
+              }
+              previewVideo.autoplay = true;
+              markPresentationReady();
+              playVideo(previewVideo);
+            }, remainingLoaderTime);
+          };
+          const handleError = () => {
+            if (requestId !== previewRequestId) return;
+            window.clearTimeout(previewReadyTimer);
+            previewVideo.autoplay = true;
+            setPresentationLoading(false, character);
+            stage.classList.remove('is-presentation-ready');
+            if (liveRegion) liveRegion.textContent = `No se pudo cargar la presentación de ${character.name}.`;
+          };
+          previewVideo.addEventListener('loadeddata', handleReady, { once: true });
+          previewVideo.addEventListener('error', handleError, { once: true });
+          previewVideo.setAttribute('src', nextPresentation);
+          previewVideo.load();
         }
 
         createLoginPreviewSparkBurst(button);
@@ -268,11 +597,11 @@
     const feminine = characters[runtime.ageBand].FEMININE;
     return `
       <div class="companion-picker" data-companion-picker="${context}" role="group" aria-label="Elige tu unicornio">
-        <button class="companion-choice" type="button" data-companion-choice="MASCULINE" aria-pressed="false">
+        <button class="companion-choice" type="button" data-companion-choice="MASCULINE" data-companion-id="${masculine.id}" aria-pressed="false">
           <img src="${getAvatarAsset(masculine)}" alt="" />
           <span><strong>${masculine.name}</strong><small>Unicornio</small></span>
         </button>
-        <button class="companion-choice" type="button" data-companion-choice="FEMININE" aria-pressed="false">
+        <button class="companion-choice" type="button" data-companion-choice="FEMININE" data-companion-id="${feminine.id}" aria-pressed="false">
           <img src="${getAvatarAsset(feminine)}" alt="" />
           <span><strong>${feminine.name}</strong><small>Unicornia</small></span>
         </button>
@@ -296,7 +625,19 @@
         <span class="companion-orbit companion-orbit--one" aria-hidden="true"></span>
         <span class="companion-orbit companion-orbit--two" aria-hidden="true"></span>
         <span class="companion-face">
-          <img data-companion-image src="${getAvatarAsset()}" alt="" />
+          <video
+            data-companion-loop
+            src="${getProfileLoopAsset()}"
+            poster="${getProfileLoopPosterAsset()}"
+            autoplay
+            muted
+            loop
+            playsinline
+            preload="auto"
+            disablepictureinpicture
+            aria-hidden="true"
+          ></video>
+          <img data-companion-expression src="${getExpressionAsset()}" alt="" />
         </span>
         <span class="companion-state-dot" aria-hidden="true"></span>
       </button>
@@ -381,23 +722,40 @@
   function installLoginScene() {
     if (window.location.pathname !== '/login.html') return;
     const card = document.querySelector('.form-card');
-    if (!card || card.classList.contains('login-experience')) return;
+    if (!card) return;
 
-    card.classList.add('login-experience');
-    const brand = card.querySelector('.app-brand-lockup');
-    const formColumn = document.createElement('div');
-    formColumn.className = 'login-form-column';
-    Array.from(card.children)
-      .filter((child) => child !== brand)
-      .forEach((child) => formColumn.append(child));
+    let visual = card.querySelector('.login-character-stage');
+    if (!card.classList.contains('login-experience')) {
+      card.classList.add('login-experience');
+      const brand = card.querySelector('.app-brand-lockup');
+      const formColumn = document.createElement('div');
+      formColumn.className = 'login-form-column';
+      Array.from(card.children)
+        .filter((child) => child !== brand)
+        .forEach((child) => formColumn.append(child));
 
-    const visual = document.createElement('div');
-    visual.className = 'login-character-stage';
-    visual.innerHTML = `
-      ${createLoginPreviewPickerMarkup()}
-      <img data-companion-full src="${getLoginFullAsset()}" alt="" />
-    `;
-    card.append(formColumn, visual);
+      visual = document.createElement('div');
+      visual.className = 'login-character-stage';
+      card.append(formColumn, visual);
+    }
+
+    if (!visual) return;
+    if (!visual.querySelector('.login-character-picker')) {
+      visual.insertAdjacentHTML('afterbegin', createLoginPreviewPickerMarkup());
+    }
+    if (!visual.querySelector('[data-companion-presentation]')) {
+      visual.querySelector('[data-companion-full]')?.remove();
+      visual.insertAdjacentHTML(
+        'beforeend',
+        createLoginPresentationMarkup(),
+      );
+    }
+    if (!visual.querySelector('[data-login-presentation-audio]')) {
+      visual.insertAdjacentHTML('beforeend', createLoginPresentationAudioMarkup());
+    }
+    if (!visual.querySelector('[data-login-presentation-loader]')) {
+      visual.insertAdjacentHTML('beforeend', createLoginPresentationLoaderMarkup());
+    }
     bindLoginPreviewPicker(visual);
   }
 
@@ -434,6 +792,11 @@
       '/legal.html': ['ADMIN'],
     };
     const normalizedRole = String(role || '').toUpperCase();
+    if (typeof window.renderRoleNavigation === 'function') {
+      document.querySelectorAll('.dashboard-links').forEach((container) => {
+        window.renderRoleNavigation(container, normalizedRole);
+      });
+    }
     document.querySelectorAll('[data-module-link]').forEach((link) => {
       const allowedRoles = permissions[link.dataset.moduleLink] || [];
       if (!allowedRoles.includes(normalizedRole)) link.remove();
@@ -442,21 +805,83 @@
 
   function preloadCurrentCharacter() {
     const character = getCharacter();
-    const image = new Image();
-    image.src = getAvatarAsset(character);
+    const expressionAssets = Object.keys(stateMeta).map((state) => getExpressionAsset(character, state));
+    [
+      getAvatarAsset(character),
+      getProfileLoopPosterAsset(character),
+      ...new Set(expressionAssets),
+    ].forEach((src) => {
+      const image = new Image();
+      image.src = src;
+    });
+  }
+
+  async function waitForShellImages() {
+    const media = Array.from(document.querySelectorAll(
+      '.app-brand-lockup img, .account-trigger .avatar-badge img, .account-trigger .avatar-badge video',
+    ));
+    const settled = Promise.all(media.map((item) => {
+      if (item instanceof HTMLVideoElement) {
+        if (item.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return Promise.resolve();
+        return new Promise((resolve) => {
+          item.addEventListener('loadeddata', resolve, { once: true });
+          item.addEventListener('error', resolve, { once: true });
+        });
+      }
+      if (item.complete) {
+        return typeof item.decode === 'function'
+          ? item.decode().catch(() => undefined)
+          : Promise.resolve();
+      }
+      return new Promise((resolve) => {
+        item.addEventListener('load', resolve, { once: true });
+        item.addEventListener('error', resolve, { once: true });
+      });
+    }));
+
+    await Promise.race([
+      settled,
+      new Promise((resolve) => window.setTimeout(resolve, 2000)),
+    ]);
   }
 
   function syncCharacter() {
     runtime.ageBand = resolveAgeBand();
     const character = getCharacter();
-    const asset = getAvatarAsset(character);
+    const expression = (stateMeta[runtime.state] || stateMeta.idle).expression;
+    const expressionAsset = getExpressionAsset(character);
 
     document.documentElement.dataset.companion = character.id;
     document.documentElement.dataset.companionAge = runtime.ageBand;
     runtime.widget?.setAttribute('data-state', runtime.state);
 
-    document.querySelectorAll('[data-companion-image]').forEach((image) => {
-      if (image.getAttribute('src') !== asset) image.setAttribute('src', asset);
+    document.querySelectorAll('[data-companion-loop]').forEach((video) => {
+      syncLoopVideo(video, character);
+    });
+    document.querySelectorAll('[data-companion-expression]').forEach((image) => {
+      image.dataset.companionExpressionState = expression;
+      const widget = image.closest('.companion-widget');
+      if (image.getAttribute('src') === expressionAsset) {
+        if (image.complete && image.naturalWidth > 0) {
+          widget?.classList.remove('is-expression-loading');
+        }
+        return;
+      }
+
+      widget?.classList.add('is-expression-loading');
+      const revealExpression = () => {
+        if (image.getAttribute('src') === expressionAsset) {
+          widget?.classList.remove('is-expression-loading');
+        }
+      };
+      image.addEventListener('load', revealExpression, { once: true });
+      image.addEventListener('error', revealExpression, { once: true });
+      image.setAttribute('src', expressionAsset);
+      if (typeof image.decode === 'function') {
+        image.decode().then(revealExpression, revealExpression);
+      } else if (image.complete) {
+        revealExpression();
+      }
     });
     document.querySelectorAll('[data-companion-full]').forEach((image) => {
       image.setAttribute(
@@ -475,7 +900,15 @@
 
     document.querySelectorAll('.account-trigger .avatar-badge').forEach((badge) => {
       badge.classList.add('has-companion-avatar');
-      badge.innerHTML = `<img src="${asset}" alt="" />`;
+      let video = badge.querySelector('[data-companion-loop]');
+      if (!video) {
+        video = createLoopVideo(character);
+        badge.replaceChildren(video);
+        playVideo(video);
+      } else {
+        syncLoopVideo(video, character);
+      }
+      video.setAttribute('poster', getProfileLoopPosterAsset(character));
     });
 
     syncPickers();
@@ -490,6 +923,7 @@
     document.querySelectorAll('[data-companion-choice]').forEach((button) => {
       const gender = button.dataset.companionChoice;
       const character = characters[runtime.ageBand][gender];
+      button.dataset.companionId = character.id;
       const image = button.querySelector('img');
       const name = button.querySelector('strong');
       if (image) image.src = getAvatarAsset(character);
@@ -708,37 +1142,32 @@
     const pendingGender = localStorage.getItem(PENDING_PREFERENCE_KEY);
     if (['MASCULINE', 'FEMININE'].includes(pendingGender)) runtime.gender = pendingGender;
 
-    if (window.location.pathname === '/login.html' || typeof getToken !== 'function' || !getToken()) {
+    if (window.location.pathname === '/login.html') {
       return;
     }
 
-    // El login no necesita resolver el perfil. Evitar esta petición elimina
-    // una carrera con una sesión antigua al recargar la pantalla de acceso.
-    if (window.location.pathname !== '/login.html' && typeof getToken === 'function' && getToken()) {
-      try {
-        const response = await apiRequest('/auth/me');
-        runtime.user = response.data.user;
-        document.documentElement.dataset.userRole = String(runtime.user.role || '').toUpperCase();
-        runtime.ageBand = resolveAgeBand(runtime.user);
-        if (['MASCULINE', 'FEMININE'].includes(runtime.user.unicornGender)) {
-          runtime.gender = runtime.user.unicornGender;
-          localStorage.removeItem(PENDING_PREFERENCE_KEY);
-        }
-        filterRoleNavigation(runtime.user.role);
-        installProfilePicker();
-        if (!runtime.user.unicornGender && ['MASCULINE', 'FEMININE'].includes(pendingGender)) {
-          saveGender(pendingGender, { silent: true });
-        }
-      } catch (_error) {
-        return;
-      }
+    runtime.user = await sessionReady;
+    if (!runtime.user || typeof getToken !== 'function' || !getToken()) return;
+
+    document.documentElement.dataset.userRole = String(runtime.user.role || '').toUpperCase();
+    runtime.ageBand = resolveAgeBand(runtime.user);
+    if (['MASCULINE', 'FEMININE'].includes(runtime.user.unicornGender)) {
+      runtime.gender = runtime.user.unicornGender;
+      localStorage.removeItem(PENDING_PREFERENCE_KEY);
+    }
+    filterRoleNavigation(runtime.user.role);
+    installProfilePicker();
+    if (!runtime.user.unicornGender && ['MASCULINE', 'FEMININE'].includes(pendingGender)) {
+      saveGender(pendingGender, { silent: true });
     }
 
     buildWidget();
     bindGlobalReactions();
     syncCharacter();
     setState('idle', { ttl: 0, force: true });
+    await waitForShellImages();
     document.documentElement.classList.add('companion-ready');
+    window.UnicornioAppLoading?.markShellReady();
   }
 
   window.UnicornioCompanion = {
@@ -750,6 +1179,10 @@
     },
     getCharacter,
   };
+
+  if (typeof reducedMotion.addEventListener === 'function') {
+    reducedMotion.addEventListener('change', syncMotionPreference);
+  }
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', bootstrap, { once: true });

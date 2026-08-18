@@ -417,6 +417,7 @@ async function loadProfile() {
 }
 
 async function init() {
+  await sessionReady;
   if (!getToken()) {
     window.location.replace('/login.html');
     return;
@@ -432,6 +433,8 @@ async function init() {
     }
     setMessage(childStatusBanner, 'No hemos podido cargar la información. Comprueba tu conexión e inténtalo de nuevo.', true);
     window.UnicornioCompanion?.setState('reassuring', { announce: true, ttl: 5000 });
+  } finally {
+    if (getToken()) window.UnicornioAppLoading?.markPageReady();
   }
 }
 

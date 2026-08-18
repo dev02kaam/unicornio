@@ -30,8 +30,15 @@ form.addEventListener('submit', async (event) => {
       body: JSON.stringify(payload),
     });
 
-    setToken(response.data.token);
-    setRememberSession(formData.get('remember') === 'on');
+    const userId = response.data?.user?.id;
+    if (userId) {
+      try {
+        window.sessionStorage.removeItem(`unicornio-student-welcome-login:${userId}`);
+      } catch (_error) {
+        // El almacenamiento de sesión puede estar desactivado; el acceso continúa igualmente.
+      }
+    }
+
     window.location.href = '/dashboard.html';
   } catch (error) {
     const wait = error.payload?.data?.retryAfterMinutes;

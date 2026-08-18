@@ -17,6 +17,9 @@ const runnerProgressbar = document.getElementById('runner-progressbar');
 const runnerProgressFill = document.getElementById('runner-progress-fill');
 const previousQuestionButton = document.getElementById('previous-question-button');
 const nextQuestionButton = document.getElementById('next-question-button');
+const questionCompanionVideo = document.getElementById('question-companion-video');
+const questionVideoLoader = document.getElementById('question-video-loader');
+const replayQuestionButton = document.getElementById('replay-question-button');
 const helpButton = document.getElementById('help-button');
 const helpDialog = document.getElementById('help-dialog');
 const helpDialogStatus = document.getElementById('help-dialog-status');
@@ -25,15 +28,8 @@ const helpDeliveryWarning = document.getElementById('help-delivery-warning');
 const retryHelpButton = document.getElementById('retry-help-button');
 const helpViewMark = document.getElementById('help-view-mark');
 const helpViewEyebrow = document.getElementById('help-view-eyebrow');
-const studentSessionLabel = document.getElementById('student-session-label');
-const studentPageSubtitle = document.getElementById('student-page-subtitle');
-const previewNotice = document.getElementById('preview-notice');
-const completionEyebrow = document.getElementById('completion-eyebrow');
-const completionPrimaryAction = document.getElementById('completion-primary-action');
-const completionSecondaryAction = document.getElementById('completion-secondary-action');
-const helpDialogTitle = document.getElementById('help-dialog-title');
-const helpDialogDescription = document.getElementById('help-dialog-description');
 const studentLogoutButton = document.getElementById('student-logout-button');
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 const state = {
   assignments: [],
@@ -45,8 +41,7 @@ const state = {
   currentIndex: 0,
   savePromise: Promise.resolve(),
   savingQuestion: null,
-  isPreview: false,
-  previewAgeRange: null,
+  questionVideoCharacterId: null,
 };
 
 function escapeMarkup(value) {
@@ -58,14 +53,19 @@ function escapeMarkup(value) {
     .replaceAll("'", '&#039;');
 }
 
-function setBodyReady() {
-  document.body.classList.remove('auth-pending');
+function setBodyReady({ immediate = false } = {}) {
+  if (immediate) {
+    window.UnicornioAppLoading?.revealImmediately();
+    return;
+  }
+  window.UnicornioAppLoading?.markPageReady();
 }
 
 function showOnly(element) {
   [studentGate, assignmentView, runnerView, completionView, helpView].forEach((view) => {
     view.hidden = view !== element;
   });
+  document.body.classList.toggle('questionnaire-running', element === runnerView);
 }
 
 function showGate(message) {
@@ -146,7 +146,46 @@ function renderAssignments() {
   }).join('');
 }
 
-function renderQuestion() {
+function setQuestionVideoLoading(isLoading) {
+  questionVideoLoader.hidden = !isLoading;
+  questionCompanionVideo.classList.toggle('is-loading', isLoading);
+}
+
+function syncQuestionVideoSource() {
+  const character = window.UnicornioCompanion?.getCharacter?.() || { id: 'luna', name: 'Luna' };
+  if (state.questionVideoCharacterId === character.id) return;
+  state.questionVideoCharacterId = character.id;
+  questionCompanionVideo.src = `/assets/companions/${encodeURIComponent(character.id)}/question-speaking-transparent.webm`;
+  questionCompanionVideo.poster = `/assets/companions/${encodeURIComponent(character.id)}/question-speaking-poster.webp`;
+  questionCompanionVideo.setAttribute('aria-label', `${character.name} presenta la pregunta`);
+  setQuestionVideoLoading(true);
+  questionCompanionVideo.load();
+}
+
+async function presentQuestion({ autoplay = true } = {}) {
+  syncQuestionVideoSource();
+  questionCompanionVideo.pause();
+  try {
+    questionCompanionVideo.currentTime = 0;
+  } catch (_error) {
+    // El navegador todavía está preparando los metadatos; play() retomará desde el inicio.
+  }
+  if (!autoplay || reducedMotion.matches) {
+    replayQuestionButton.hidden = false;
+    setQuestionVideoLoading(false);
+    return;
+  }
+  replayQuestionButton.hidden = true;
+  setQuestionVideoLoading(questionCompanionVideo.readyState < HTMLMediaElement.HAVE_CURRENT_DATA);
+  try {
+    await questionCompanionVideo.play();
+  } catch (_error) {
+    setQuestionVideoLoading(false);
+    replayQuestionButton.hidden = false;
+  }
+}
+
+function renderQuestion({ autoplay = true } = {}) {
   const question = state.definition.questions[state.currentIndex];
   const total = state.definition.questions.length;
   const savedValue = state.pendingAnswers.get(question.number) ?? state.answers.get(question.number);
@@ -164,6 +203,7 @@ function renderQuestion() {
     </label>
   `).join('');
   questionText.focus?.();
+  presentQuestion({ autoplay });
 }
 
 async function startAttempt(participantId) {
@@ -184,60 +224,12 @@ async function startAttempt(participantId) {
     );
     state.currentIndex = unansweredIndex >= 0 ? unansweredIndex : 0;
     showOnly(runnerView);
-    renderQuestion();
+    renderQuestion({ autoplay: true });
     setCompanionSupport();
   } catch (error) {
     if (!handleError(error)) {
       showGate(getApiErrorMessage(error));
     }
-  }
-}
-
-async function startPreview(ageRange) {
-  state.isPreview = true;
-  state.previewAgeRange = ageRange;
-  setBodyReady();
-  document.body.classList.add('questionnaire-preview');
-  studentSessionLabel.textContent = 'Modo de prueba';
-  studentPageSubtitle.textContent = 'Recorre el cuestionario sin preparar una campaña. Nada de lo que marques saldrá de esta pestaña.';
-  previewNotice.hidden = false;
-  const companionAge = ageRange === '9-12' ? 10 : 14;
-  window.UnicornioCompanion?.setAgeContext({
-    birthDate: `${new Date().getFullYear() - companionAge}-01-01`,
-  });
-  setCompanionSupport();
-  if (studentLogoutButton) {
-    studentLogoutButton.hidden = !getToken();
-  }
-
-  try {
-    const response = await apiRequest(`/questionnaire-preview/${encodeURIComponent(ageRange)}`);
-    state.definition = response.data.definition;
-    state.attempt = { id: `preview-${ageRange}` };
-    state.answers = new Map();
-    state.pendingAnswers = new Map();
-    state.pendingSaves = new Map();
-    state.currentIndex = 0;
-    state.savePromise = Promise.resolve();
-
-    helpDialogTitle.textContent = '¿Quieres pedir ayuda?';
-    helpDialogDescription.textContent = 'En una sesión real, guardaríamos tus respuestas y avisaríamos al profesional para que pudiera escucharte. Esta prueba no enviará ningún aviso.';
-    confirmHelpButton.textContent = 'Pedir ayuda';
-
-    completionEyebrow.textContent = 'Prueba completada';
-    completionPrimaryAction.textContent = 'Volver a empezar';
-    completionPrimaryAction.href = `/questionnaire.html?preview=${encodeURIComponent(ageRange)}`;
-    const otherRange = ageRange === '9-12' ? '13-16' : '9-12';
-    completionSecondaryAction.textContent = `Probar ${otherRange} años`;
-    completionSecondaryAction.href = `/questionnaire.html?preview=${encodeURIComponent(otherRange)}`;
-    completionSecondaryAction.hidden = false;
-
-    showOnly(runnerView);
-    renderQuestion();
-    setCompanionSupport();
-  } catch (error) {
-    previewNotice.hidden = true;
-    showGate(getApiErrorMessage(error));
   }
 }
 
@@ -254,13 +246,6 @@ function updateProgress() {
 function queueSave(questionNumber, value) {
   if (!value) {
     return state.savePromise;
-  }
-  if (state.isPreview) {
-    state.answers.set(questionNumber, value);
-    state.pendingAnswers.delete(questionNumber);
-    updateProgress();
-    runnerSaveStatus.textContent = 'Guardado solo en esta prueba';
-    return Promise.resolve();
   }
   if (state.pendingAnswers.get(questionNumber) === value) {
     return state.pendingSaves.get(questionNumber) || state.savePromise;
@@ -333,7 +318,7 @@ async function submitCurrentQuestion(event) {
 
   if (state.currentIndex < state.definition.questions.length - 1) {
     state.currentIndex += 1;
-    renderQuestion();
+    renderQuestion({ autoplay: true });
     nextQuestionButton.disabled = false;
     return;
   }
@@ -344,16 +329,7 @@ async function submitCurrentQuestion(event) {
   if (firstMissing >= 0) {
     state.currentIndex = firstMissing;
     runnerSaveStatus.textContent = 'Completa las preguntas que faltan antes de enviar';
-    renderQuestion();
-    nextQuestionButton.disabled = false;
-    return;
-  }
-
-  if (state.isPreview) {
-    completionMessage.textContent = 'Has recorrido el cuestionario completo. Las respuestas de esta prueba no se han guardado, puntuado ni enviado.';
-    showOnly(completionView);
-    completionView.focus({ preventScroll: true });
-    setCompanionSupport('¡Lo has conseguido! Me alegra haber estado contigo.', 'success', true);
+    renderQuestion({ autoplay: true });
     nextQuestionButton.disabled = false;
     return;
   }
@@ -365,6 +341,7 @@ async function submitCurrentQuestion(event) {
       body: '{}',
     });
     completionMessage.textContent = response.data.message;
+    questionCompanionVideo.pause();
     showOnly(completionView);
     completionView.focus({ preventScroll: true });
     setCompanionSupport('¡Lo has conseguido! Me alegra haber estado contigo.', 'success', true);
@@ -391,35 +368,13 @@ async function goPrevious() {
     }
   }
   state.currentIndex -= 1;
-  renderQuestion();
+  renderQuestion({ autoplay: false });
 }
 
 async function requestHelp() {
   confirmHelpButton.disabled = true;
   retryHelpButton.disabled = true;
 
-  if (state.isPreview) {
-    const question = state.definition.questions[state.currentIndex];
-    const value = selectedValue();
-    if (value) {
-      await queueSave(question.number, value);
-    }
-    helpViewMark.textContent = '✓';
-    helpViewEyebrow.textContent = 'Has pedido ayuda';
-    helpViewMessage.textContent = 'No pasa nada. Pedir ayuda es muy valiente. En una sesión real, el profesional se haría cargo de escucharte y acompañarte.';
-    helpDeliveryWarning.hidden = true;
-    retryHelpButton.hidden = true;
-    helpDialog.close();
-    showOnly(helpView);
-    setCompanionSupport(
-      'Has sido muy valiente. Me quedo aquí contigo.',
-      'reassuring',
-      true,
-    );
-    confirmHelpButton.disabled = false;
-    retryHelpButton.disabled = false;
-    return;
-  }
   helpDialogStatus.textContent = 'Guardando tus respuestas y avisando al profesional…';
   let saveError = null;
   try {
@@ -475,11 +430,7 @@ async function requestHelp() {
 }
 
 async function initialize() {
-  const previewAgeRange = new URLSearchParams(window.location.search).get('preview');
-  if (previewAgeRange) {
-    await startPreview(previewAgeRange);
-    return;
-  }
+  await sessionReady;
 
   const role = String(getTokenRole() || '').toUpperCase();
   if (!getToken()) {
@@ -490,7 +441,6 @@ async function initialize() {
     window.location.href = role === 'PROFESSIONAL' ? '/questionnaires.html' : '/dashboard.html';
     return;
   }
-  setBodyReady();
   try {
     const response = await apiRequest('/me/questionnaire-assignments');
     state.assignments = response.data.assignments || [];
@@ -507,6 +457,8 @@ async function initialize() {
     if (!handleError(error)) {
       showGate(getApiErrorMessage(error));
     }
+  } finally {
+    if (getToken()) setBodyReady();
   }
 }
 
@@ -530,6 +482,26 @@ answerOptions?.addEventListener('change', () => {
   });
 });
 
+questionCompanionVideo?.addEventListener('loadeddata', () => setQuestionVideoLoading(false));
+questionCompanionVideo?.addEventListener('canplay', () => setQuestionVideoLoading(false));
+questionCompanionVideo?.addEventListener('playing', () => {
+  setQuestionVideoLoading(false);
+  replayQuestionButton.hidden = true;
+});
+questionCompanionVideo?.addEventListener('waiting', () => {
+  if (!questionCompanionVideo.paused) setQuestionVideoLoading(true);
+});
+questionCompanionVideo?.addEventListener('ended', () => {
+  setQuestionVideoLoading(false);
+  questionCompanionVideo.currentTime = 0;
+  replayQuestionButton.hidden = false;
+});
+questionCompanionVideo?.addEventListener('error', () => {
+  setQuestionVideoLoading(false);
+  replayQuestionButton.hidden = true;
+});
+replayQuestionButton?.addEventListener('click', () => presentQuestion({ autoplay: true }));
+
 questionForm?.addEventListener('submit', submitCurrentQuestion);
 previousQuestionButton?.addEventListener('click', goPrevious);
 helpButton?.addEventListener('click', () => {
@@ -552,9 +524,13 @@ document.querySelectorAll('[data-close-dialog]').forEach((button) => {
     }
   });
 });
-studentLogoutButton?.addEventListener('click', () => {
-  clearToken();
-  window.location.href = '/login.html';
+studentLogoutButton?.addEventListener('click', async () => {
+  try {
+    await apiRequest('/auth/logout', { method: 'POST' });
+  } finally {
+    clearToken();
+    window.location.href = '/login.html';
+  }
 });
 
 initialize();

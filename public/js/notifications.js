@@ -113,13 +113,13 @@ async function markRead(notificationId) {
   }
 }
 
-function initialize() {
+async function initialize() {
+  await sessionReady;
   const role = String(getTokenRole() || '').toUpperCase();
   if (!getToken()) {
     window.location.href = '/login.html';
     return;
   }
-  document.body.classList.remove('auth-pending');
   if (role === 'FAMILY') {
     notificationScopeCopy.textContent = 'Los avisos familiares son mínimos: no muestran respuestas, puntuaciones ni interpretaciones.';
   } else if (role === 'PROFESSIONAL') {
@@ -127,7 +127,8 @@ function initialize() {
   } else {
     notificationConsentsLink.hidden = true;
   }
-  loadNotifications();
+  await loadNotifications();
+  if (getToken()) window.UnicornioAppLoading?.markPageReady();
   pollingTimer = setInterval(() => loadNotifications({ silent: true }), 5000);
 }
 
@@ -138,9 +139,13 @@ notificationList?.addEventListener('click', (event) => {
   }
 });
 
-document.getElementById('notifications-logout-button')?.addEventListener('click', () => {
-  clearToken();
-  window.location.href = '/login.html';
+document.getElementById('notifications-logout-button')?.addEventListener('click', async () => {
+  try {
+    await apiRequest('/auth/logout', { method: 'POST' });
+  } finally {
+    clearToken();
+    window.location.href = '/login.html';
+  }
 });
 window.addEventListener('beforeunload', () => clearInterval(pollingTimer));
 

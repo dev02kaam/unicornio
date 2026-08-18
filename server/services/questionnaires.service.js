@@ -8,7 +8,6 @@ const {
   getUserGroupAssignments,
 } = require('../utils/organization.helpers');
 const {
-  findStudentById,
   findFamilyForStudent,
 } = require('../utils/consents.helpers');
 const {
@@ -16,12 +15,20 @@ const {
   getActiveLegalTextVersion,
 } = require('./consents.service');
 const { findUserById } = require('./users.service');
-const { depressiveMoodVersions } = require('../data/questionnaires/depressiveMood');
+const {
+  questionnaireFamilies,
+  questionnaireVersions,
+  getQuestionnaireFamily,
+} = require('../data/questionnaires/catalog');
 const {
   encryptQuestionnairePayload,
   decryptQuestionnairePayload,
+  getQuestionnaireKeyProvider,
 } = require('./questionnaire-crypto.service');
-const { evaluateQuestionnaire } = require('./questionnaire-scoring.service');
+const {
+  evaluateQuestionnaire,
+  matchesSentinelRule,
+} = require('./questionnaire-scoring.service');
 
 const COMPLETION_MESSAGES = Object.freeze({
   SUPPORT_1: 'Gracias por contarnos cómo te has sentido. Tus respuestas se han guardado y una persona profesional podrá revisarlas contigo.',
@@ -31,49 +38,46 @@ const COMPLETION_MESSAGES = Object.freeze({
 
 const COMPLETION_MESSAGE_KEYS = Object.keys(COMPLETION_MESSAGES);
 
-function getQuestionnairePreview(ageRange) {
-  if (!env.questionnairePreviewEnabled) {
-    throw new AppError(
-      'El modo de prueba funcional no está disponible en este entorno.',
-      404,
-      null,
-      'QUESTIONNAIRE_PREVIEW_DISABLED',
-    );
-  }
-
-  const normalizedRange = String(ageRange || '').trim();
-  const definition = depressiveMoodVersions.find(
-    (item) => `${item.ageMin}-${item.ageMax}` === normalizedRange,
-  );
-  if (!definition) {
-    throw new AppError(
-      'Selecciona el cuestionario de 9–12 o de 13–16 años.',
-      400,
-      null,
-      'QUESTIONNAIRE_PREVIEW_RANGE_INVALID',
-    );
-  }
-
-  return {
-    id: definition.id,
-    title: definition.title,
-    shortTitle: definition.shortTitle,
-    ageMin: definition.ageMin,
-    ageMax: definition.ageMax,
-    ageRange: normalizedRange,
-    instructions: definition.instructions,
-    responseScale: definition.responseScale.map(({ value, label }) => ({ value, label })),
-    questions: definition.questions.map((question) => ({ ...question })),
-    status: 'FUNCTIONAL_PREVIEW',
-  };
-}
-
 function newId(prefix) {
   return `${prefix}-${crypto.randomUUID()}`;
 }
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function questionnaireAad(table, recordId, field, campaignId, studentId) {
+  return { table, recordId, field, campaignId, studentId };
+}
+
+function answerAad(attemptId, questionNumber, campaignId, studentId) {
+  return questionnaireAad(
+    'unicornio_questionnaire_answers',
+    `${attemptId}:question:${questionNumber}`,
+    'encrypted_payload',
+    campaignId,
+    studentId,
+  );
+}
+
+function resultAad(attemptId, campaignId, studentId) {
+  return questionnaireAad(
+    'unicornio_questionnaire_results',
+    `${attemptId}:result`,
+    'encrypted_payload',
+    campaignId,
+    studentId,
+  );
+}
+
+function alertAad(attemptId, type, campaignId, studentId, field = 'encrypted_context') {
+  return questionnaireAad(
+    'unicornio_questionnaire_alerts',
+    `${attemptId}:${type}`,
+    field,
+    campaignId,
+    studentId,
+  );
 }
 
 function ensureQuestionnairePilotAvailable() {
@@ -95,7 +99,9 @@ function ensureQuestionnairePilotAvailable() {
     );
   }
 
-  if (Buffer.from(env.questionnaireDataKey || '', 'base64').length !== 32) {
+  try {
+    getQuestionnaireKeyProvider();
+  } catch (_error) {
     throw new AppError(
       'Falta una QUESTIONNAIRE_DATA_KEY válida para proteger las respuestas.',
       503,
@@ -172,6 +178,9 @@ function mapDefinitionRow(row, { includeScoring = true } = {}) {
     publishedAt: row.published_at,
   };
 
+  const family = getQuestionnaireFamily(row.family_key);
+  definition.family = family ? { ...family } : null;
+
   if (includeScoring) {
     definition.scoringRules = row.scoring_rules;
   }
@@ -182,9 +191,13 @@ function mapCampaignRow(row) {
   if (!row) {
     return null;
   }
+  const familyKeys = Array.isArray(row.family_keys)
+    ? row.family_keys
+    : row.family_key ? [row.family_key] : [];
   return {
     id: row.id,
     familyKey: row.family_key,
+    familyKeys,
     centerId: row.center_id,
     groupId: row.group_id,
     createdByUserId: row.created_by_user_id,
@@ -204,6 +217,10 @@ function publicCampaign(campaign) {
   const group = findGroupById(campaign.groupId);
   return {
     ...campaign,
+    questionnaires: campaign.familyKeys
+      .map((familyKey) => getQuestionnaireFamily(familyKey))
+      .filter(Boolean)
+      .map((family) => ({ ...family })),
     group: group ? {
       id: group.id,
       name: group.name,
@@ -218,7 +235,7 @@ async function initializeQuestionnaireModule() {
     return;
   }
 
-  for (const definition of depressiveMoodVersions) {
+  for (const definition of questionnaireVersions) {
     const sourceHash = calculateDefinitionHash(definition);
     await database.query(
       `insert into unicornio_questionnaire_versions (
@@ -228,12 +245,17 @@ async function initializeQuestionnaireModule() {
         $1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11::jsonb, $12, $13, $14, now()
       )
       on conflict (id) do update set
+        family_key = excluded.family_key,
+        version = excluded.version,
         title = excluded.title,
         short_title = excluded.short_title,
+        age_min = excluded.age_min,
+        age_max = excluded.age_max,
         instructions = excluded.instructions,
         response_scale = excluded.response_scale,
         questions = excluded.questions,
         scoring_rules = excluded.scoring_rules,
+        source_document = excluded.source_document,
         source_hash = excluded.source_hash,
         status = excluded.status`,
       [
@@ -264,7 +286,10 @@ async function listQuestionnaireDefinitions(currentUser) {
      where status = 'EXPERIMENTAL'
      order by family_key, age_min`,
   );
-  return result.rows.map((row) => mapDefinitionRow(row, { includeScoring: false }));
+  return {
+    families: questionnaireFamilies.map((family) => ({ ...family })),
+    definitions: result.rows.map((row) => mapDefinitionRow(row, { includeScoring: false })),
+  };
 }
 
 async function getDefinitionById(definitionId, executor = database) {
@@ -281,7 +306,14 @@ async function getDefinitionById(definitionId, executor = database) {
 
 async function getCampaignById(campaignId, executor = database) {
   const result = await executor.query(
-    'select * from unicornio_questionnaire_campaigns where id = $1',
+    `select c.*,
+       coalesce((
+         select array_agg(cf.family_key order by cf.position)
+         from unicornio_questionnaire_campaign_families cf
+         where cf.campaign_id = c.id
+       ), array[c.family_key]) as family_keys
+     from unicornio_questionnaire_campaigns c
+     where c.id = $1`,
     [campaignId],
   );
   const campaign = mapCampaignRow(result.rows[0]);
@@ -291,12 +323,16 @@ async function getCampaignById(campaignId, executor = database) {
   return campaign;
 }
 
-function assertCampaignOwner(campaign, currentUser) {
-  assertRole(currentUser, 'PROFESSIONAL');
-  if (campaign.createdByUserId !== currentUser.id) {
-    throw new AppError('Solo el profesional responsable puede gestionar esta campaña.', 403, null, 'FORBIDDEN');
+function assertScopedCampaignOwner(campaign, currentUser) {
+  const hasAssignment = getUserGroupAssignments(currentUser?.id)
+    .some((assignment) => assignment.groupId === String(campaign.groupId));
+  if (
+    String(currentUser?.role || '').toUpperCase() !== 'PROFESSIONAL'
+    || campaign.createdByUserId !== currentUser.id
+    || !hasAssignment
+  ) {
+    throw new AppError('Campaña no encontrada.', 404, null, 'NOT_FOUND');
   }
-  assertProfessionalGroupAccess(currentUser, campaign.groupId);
 }
 
 async function createCampaign(data, currentUser) {
@@ -308,28 +344,68 @@ async function createCampaign(data, currentUser) {
   }
   assertProfessionalGroupAccess(currentUser, groupId);
 
-  const title = String(data.title || 'Sesión de estado de ánimo').trim();
+  const requestedFamilyKeys = [...new Set(
+    (data.familyKeys || []).map((familyKey) => String(familyKey).trim()),
+  )];
+  const knownFamilyKeys = new Set(questionnaireFamilies.map((family) => family.key));
+  if (
+    requestedFamilyKeys.length === 0
+    || requestedFamilyKeys.some((familyKey) => !knownFamilyKeys.has(familyKey))
+  ) {
+    throw new AppError('Selecciona al menos un cuestionario válido.', 400, null, 'BAD_REQUEST');
+  }
+
+  const title = String(data.title || 'Evaluación de bienestar').trim();
   const plannedFor = data.plannedFor ? new Date(data.plannedFor) : new Date();
   if (!title || Number.isNaN(plannedFor.getTime())) {
     throw new AppError('Indica un título y una fecha válidos.', 400, null, 'BAD_REQUEST');
   }
+  if (!getActiveLegalTextVersion()) {
+    throw new AppError('No existe una versión legal activa.', 409, null, 'NO_ACTIVE_LEGAL_TEXT');
+  }
+  const hasActiveStudents = getGroupUsers(group.id).some(
+    (entry) => entry.user?.isActive && String(entry.user.role || '').toUpperCase() === 'STUDENT',
+  );
+  if (!hasActiveStudents) {
+    throw new AppError('El grupo no tiene alumnos activos.', 409, null, 'EMPTY_GROUP');
+  }
 
   const id = newId('campaign');
   const now = nowIso();
-  const result = await database.query(
-    `insert into unicornio_questionnaire_campaigns (
-      id, family_key, center_id, group_id, created_by_user_id, title, status,
-      planned_for, created_at, updated_at
-    ) values ($1, 'depressive-mood', $2, $3, $4, $5, 'DRAFT', $6, $7, $7)
-    returning *`,
-    [id, group.centerId, group.id, currentUser.id, title, plannedFor.toISOString(), now],
-  );
+  await database.transaction(async (client) => {
+    await client.query(
+      `insert into unicornio_questionnaire_campaigns (
+        id, family_key, center_id, group_id, created_by_user_id, title, status,
+        planned_for, created_at, updated_at
+      ) values ($1, $2, $3, $4, $5, $6, 'DRAFT', $7, $8, $8)`,
+      [
+        id,
+        requestedFamilyKeys[0],
+        group.centerId,
+        group.id,
+        currentUser.id,
+        title,
+        plannedFor.toISOString(),
+        now,
+      ],
+    );
+    for (const [position, familyKey] of requestedFamilyKeys.entries()) {
+      await client.query(
+        `insert into unicornio_questionnaire_campaign_families (
+          campaign_id, family_key, position, created_at
+        ) values ($1, $2, $3, $4)`,
+        [id, familyKey, position, now],
+      );
+    }
+  });
 
   await writeAudit(currentUser.id, 'CAMPAIGN_CREATED', 'CAMPAIGN', id, {
     groupId: group.id,
     centerId: group.centerId,
+    familyKeys: requestedFamilyKeys,
   });
-  return publicCampaign(mapCampaignRow(result.rows[0]));
+  const monitor = await requestCampaignConsents(id, currentUser);
+  return monitor.campaign;
 }
 
 async function listCampaigns(currentUser) {
@@ -340,29 +416,44 @@ async function listCampaigns(currentUser) {
 
   if (role === 'PROFESSIONAL') {
     result = await database.query(
-      `select * from unicornio_questionnaire_campaigns
-       where created_by_user_id = $1 order by created_at desc`,
+      `select c.*,
+         coalesce((select array_agg(cf.family_key order by cf.position)
+           from unicornio_questionnaire_campaign_families cf where cf.campaign_id = c.id),
+           array[c.family_key]) as family_keys
+       from unicornio_questionnaire_campaigns c
+       where c.created_by_user_id = $1 order by c.created_at desc`,
       [currentUser.id],
     );
   } else if (role === 'SCHOOL') {
     result = await database.query(
-      `select * from unicornio_questionnaire_campaigns
-       where center_id = $1 order by created_at desc`,
+      `select c.*,
+         coalesce((select array_agg(cf.family_key order by cf.position)
+           from unicornio_questionnaire_campaign_families cf where cf.campaign_id = c.id),
+           array[c.family_key]) as family_keys
+       from unicornio_questionnaire_campaigns c
+       where c.center_id = $1 order by c.created_at desc`,
       [currentUser.schoolId],
     );
   } else {
     result = await database.query(
-      'select * from unicornio_questionnaire_campaigns order by created_at desc',
+      `select c.*,
+         coalesce((select array_agg(cf.family_key order by cf.position)
+           from unicornio_questionnaire_campaign_families cf where cf.campaign_id = c.id),
+           array[c.family_key]) as family_keys
+       from unicornio_questionnaire_campaigns c order by c.created_at desc`,
     );
   }
 
   return result.rows.map((row) => publicCampaign(mapCampaignRow(row)));
 }
 
-function selectDefinitionForStudent(student, atDate) {
+function selectDefinitionForStudent(student, familyKey, atDate) {
   const age = calculateAge(student.birthDate, atDate);
-  const definition = depressiveMoodVersions.find(
-    (item) => age !== null && age >= item.ageMin && age <= item.ageMax,
+  const definition = questionnaireVersions.find(
+    (item) => item.familyKey === familyKey
+      && age !== null
+      && age >= item.ageMin
+      && age <= item.ageMax,
   ) || null;
   return { age, definition };
 }
@@ -370,7 +461,7 @@ function selectDefinitionForStudent(student, atDate) {
 async function requestCampaignConsents(campaignId, currentUser) {
   ensureQuestionnairePilotAvailable();
   const campaign = await getCampaignById(campaignId);
-  assertCampaignOwner(campaign, currentUser);
+  assertScopedCampaignOwner(campaign, currentUser);
   if (!['DRAFT', 'CONSENT_PENDING', 'READY'].includes(campaign.status)) {
     throw new AppError('No se pueden solicitar consentimientos en el estado actual.', 409, null, 'CONFLICT');
   }
@@ -390,35 +481,42 @@ async function requestCampaignConsents(campaignId, currentUser) {
   const participantRows = [];
   for (const student of groupStudents) {
     const family = findFamilyForStudent(student.id);
-    const { age, definition } = selectDefinitionForStudent(student, campaign.plannedFor || new Date());
-    const row = {
-      id: newId('participant'),
-      studentId: student.id,
-      familyUserId: family?.id || null,
-      questionnaireVersionId: definition?.id || null,
-      consentId: null,
-      status: 'AWAITING_CONSENT',
-      ineligibleReason: null,
-    };
-
-    if (!definition) {
-      row.status = 'INELIGIBLE';
-      row.ineligibleReason = age === null ? 'MISSING_BIRTH_DATE' : 'AGE_OUT_OF_RANGE';
-    } else if (!family) {
-      row.status = 'INELIGIBLE';
-      row.ineligibleReason = 'NO_LINKED_FAMILY';
-    } else {
-      const consent = createConsentRequest({
+    const consent = family ? createConsentRequest({
         studentId: student.id,
         familyUserId: family.id,
         legalTextVersionId: legalTextVersion.id,
         centerId: campaign.centerId,
         campaignId: campaign.id,
-      }, currentUser, { allowProfessionalCampaign: true });
-      row.consentId = consent.id;
-      row.status = consent.status === 'ACCEPTED' ? 'AVAILABLE' : 'AWAITING_CONSENT';
+      }, currentUser, { allowProfessionalCampaign: true }) : null;
+
+    for (const familyKey of campaign.familyKeys) {
+      const { age, definition } = selectDefinitionForStudent(
+        student,
+        familyKey,
+        campaign.plannedFor || new Date(),
+      );
+      const row = {
+        id: newId('participant'),
+        familyKey,
+        studentId: student.id,
+        familyUserId: family?.id || null,
+        questionnaireVersionId: definition?.id || null,
+        consentId: consent?.id || null,
+        status: 'AWAITING_CONSENT',
+        ineligibleReason: null,
+      };
+
+      if (!definition) {
+        row.status = 'INELIGIBLE';
+        row.ineligibleReason = age === null ? 'MISSING_BIRTH_DATE' : 'AGE_OUT_OF_RANGE';
+      } else if (!family) {
+        row.status = 'INELIGIBLE';
+        row.ineligibleReason = 'NO_LINKED_FAMILY';
+      } else {
+        row.status = consent.status === 'ACCEPTED' ? 'AVAILABLE' : 'AWAITING_CONSENT';
+      }
+      participantRows.push(row);
     }
-    participantRows.push(row);
   }
 
   await database.flush();
@@ -427,10 +525,10 @@ async function requestCampaignConsents(campaignId, currentUser) {
     for (const participant of participantRows) {
       await client.query(
         `insert into unicornio_questionnaire_participants (
-          id, campaign_id, student_id, family_user_id, consent_id,
+          id, campaign_id, family_key, student_id, family_user_id, consent_id,
           questionnaire_version_id, status, ineligible_reason, created_at, updated_at
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
-        on conflict (campaign_id, student_id) do update set
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
+        on conflict (campaign_id, student_id, family_key) do update set
           family_user_id = excluded.family_user_id,
           consent_id = excluded.consent_id,
           questionnaire_version_id = excluded.questionnaire_version_id,
@@ -444,6 +542,7 @@ async function requestCampaignConsents(campaignId, currentUser) {
         [
           participant.id,
           campaign.id,
+          participant.familyKey,
           participant.studentId,
           participant.familyUserId,
           participant.consentId,
@@ -465,7 +564,7 @@ async function requestCampaignConsents(campaignId, currentUser) {
   });
 
   await writeAudit(currentUser.id, 'CAMPAIGN_CONSENTS_REQUESTED', 'CAMPAIGN', campaign.id, {
-    requested: participantRows.filter((item) => item.consentId).length,
+    requested: new Set(participantRows.map((item) => item.consentId).filter(Boolean)).size,
     ineligible: participantRows.filter((item) => item.status === 'INELIGIBLE').length,
   });
   return getCampaignMonitor(campaign.id, currentUser);
@@ -488,6 +587,7 @@ async function syncParticipantFromConsent(consent) {
     `update unicornio_questionnaire_participants
      set status = case
        when status in ('SUBMITTED', 'HELP_REQUESTED') then status
+       when ineligible_reason is not null or questionnaire_version_id is null then 'INELIGIBLE'
        else $2
      end,
      updated_at = now()
@@ -514,7 +614,8 @@ async function syncParticipantFromConsent(consent) {
 
 async function refreshParticipantEligibilityAtSession(campaign, atDate) {
   const participants = await database.query(
-    `select p.id, p.student_id, p.status, p.ineligible_reason, c.status as consent_status
+    `select p.id, p.family_key, p.student_id, p.status, p.ineligible_reason,
+            c.status as consent_status
      from unicornio_questionnaire_participants p
      left join unicornio_consent_records c on c.id = p.consent_id
      where p.campaign_id = $1`,
@@ -527,7 +628,11 @@ async function refreshParticipantEligibilityAtSession(campaign, atDate) {
         continue;
       }
       const student = findUserById(participant.student_id);
-      const { age, definition } = selectDefinitionForStudent(student || {}, atDate);
+      const { age, definition } = selectDefinitionForStudent(
+        student || {},
+        participant.family_key,
+        atDate,
+      );
       if (!definition) {
         await client.query(
           `update unicornio_questionnaire_participants
@@ -569,7 +674,7 @@ async function refreshParticipantEligibilityAtSession(campaign, atDate) {
 async function openCampaign(campaignId, currentUser) {
   ensureQuestionnairePilotAvailable();
   const campaign = await getCampaignById(campaignId);
-  assertCampaignOwner(campaign, currentUser);
+  assertScopedCampaignOwner(campaign, currentUser);
   if (campaign.status === 'LIVE') {
     return publicCampaign(campaign);
   }
@@ -599,13 +704,16 @@ async function openCampaign(campaignId, currentUser) {
   await writeAudit(currentUser.id, 'CAMPAIGN_OPENED', 'CAMPAIGN', campaign.id, {
     liveExpiresAt: expiresAt.toISOString(),
   });
-  return publicCampaign(mapCampaignRow(result.rows[0]));
+  return publicCampaign({
+    ...mapCampaignRow(result.rows[0]),
+    familyKeys: campaign.familyKeys,
+  });
 }
 
 async function closeCampaign(campaignId, currentUser) {
   ensureQuestionnairePilotAvailable();
   const campaign = await getCampaignById(campaignId);
-  assertCampaignOwner(campaign, currentUser);
+  assertScopedCampaignOwner(campaign, currentUser);
   if (campaign.status === 'CLOSED') {
     return publicCampaign(campaign);
   }
@@ -630,13 +738,16 @@ async function closeCampaign(campaignId, currentUser) {
     return updated.rows[0];
   });
   await writeAudit(currentUser.id, 'CAMPAIGN_CLOSED', 'CAMPAIGN', campaign.id);
-  return publicCampaign(mapCampaignRow(result));
+  return publicCampaign({
+    ...mapCampaignRow(result),
+    familyKeys: campaign.familyKeys,
+  });
 }
 
 async function cancelCampaign(campaignId, currentUser) {
   ensureQuestionnairePilotAvailable();
   const campaign = await getCampaignById(campaignId);
-  assertCampaignOwner(campaign, currentUser);
+  assertScopedCampaignOwner(campaign, currentUser);
   if (campaign.status === 'CANCELLED') {
     return publicCampaign(campaign);
   }
@@ -666,18 +777,23 @@ async function cancelCampaign(campaignId, currentUser) {
     return updated.rows[0];
   });
   await writeAudit(currentUser.id, 'CAMPAIGN_CANCELLED', 'CAMPAIGN', campaign.id);
-  return publicCampaign(mapCampaignRow(result));
+  return publicCampaign({
+    ...mapCampaignRow(result),
+    familyKeys: campaign.familyKeys,
+  });
 }
 
 async function getCampaignMonitor(campaignId, currentUser) {
   ensureQuestionnairePilotAvailable();
   const campaign = await getCampaignById(campaignId);
-  assertCampaignOwner(campaign, currentUser);
+  assertScopedCampaignOwner(campaign, currentUser);
 
   const participantsResult = await database.query(
-    `select p.*, c.status as consent_status
+    `select p.*, c.status as consent_status,
+            v.short_title, v.age_min, v.age_max
      from unicornio_questionnaire_participants p
      left join unicornio_consent_records c on c.id = p.consent_id
+     left join unicornio_questionnaire_versions v on v.id = p.questionnaire_version_id
      where p.campaign_id = $1
      order by p.created_at`,
     [campaign.id],
@@ -690,7 +806,13 @@ async function getCampaignMonitor(campaignId, currentUser) {
       familyUserId: row.family_user_id,
       consentId: row.consent_id,
       consentStatus: row.consent_status || null,
+      familyKey: row.family_key,
       questionnaireVersionId: row.questionnaire_version_id,
+      questionnaire: {
+        familyKey: row.family_key,
+        title: row.short_title || getQuestionnaireFamily(row.family_key)?.shortLabel || 'Cuestionario',
+        ageRange: row.age_min ? `${row.age_min}-${row.age_max}` : null,
+      },
       status: row.status,
       ineligibleReason: row.ineligible_reason,
       updatedAt: row.updated_at,
@@ -714,7 +836,7 @@ async function listStudentAssignments(currentUser) {
   const result = await database.query(
     `select p.*, c.title as campaign_title, c.status as campaign_status,
             c.live_started_at, c.live_expires_at, c.group_id,
-            v.short_title, v.age_min, v.age_max
+            v.family_key, v.short_title, v.age_min, v.age_max
      from unicornio_questionnaire_participants p
      join unicornio_questionnaire_campaigns c on c.id = p.campaign_id
      left join unicornio_questionnaire_versions v on v.id = p.questionnaire_version_id
@@ -728,6 +850,7 @@ async function listStudentAssignments(currentUser) {
     campaignId: row.campaign_id,
     title: row.campaign_title,
     questionnaireTitle: row.short_title,
+    familyKey: row.family_key,
     campaignStatus: row.campaign_status,
     status: row.status,
     liveStartedAt: row.live_started_at,
@@ -826,7 +949,10 @@ async function startAttempt(participantId, currentUser) {
       },
       answers: savedAnswers.rows.map((row) => ({
         questionNumber: row.question_number,
-        value: decryptQuestionnairePayload(row.encrypted_payload).value,
+        value: decryptQuestionnairePayload(
+          row.encrypted_payload,
+          answerAad(attempt.id, row.question_number, participant.campaign_id, participant.student_id),
+        ).value,
       })),
     };
   });
@@ -843,17 +969,23 @@ async function upsertAlert({
   severity,
   context,
   professionalUserId,
+  studentId,
   familyUserId = null,
   executor = null,
 }) {
   const now = nowIso();
   const execute = async (client) => {
     const alertId = newId('alert');
+    const encryptedContext = encryptQuestionnairePayload(
+      context,
+      alertAad(attemptId, type, campaignId, studentId),
+    );
     const alertResult = await client.query(
       `insert into unicornio_questionnaire_alerts (
         id, campaign_id, participant_id, attempt_id, type, severity, status,
-        encrypted_context, encryption_key_version, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, 'OPEN', $7, $8, $9, $9)
+        encrypted_context, encryption_key_version, owner_professional_legacy_id,
+        created_at, updated_at
+      ) values ($1, $2, $3, $4, $5, $6, 'OPEN', $7, $8, $9, $10, $10)
       on conflict (attempt_id, type) do update set
         severity = case
           when excluded.severity = 'RED' then 'RED'
@@ -872,8 +1004,9 @@ async function upsertAlert({
         attemptId,
         type,
         severity,
-        encryptQuestionnairePayload(context),
-        env.questionnaireDataKeyVersion,
+        encryptedContext,
+        JSON.parse(encryptedContext).keyVersion,
+        professionalUserId,
         now,
       ],
     );
@@ -953,11 +1086,18 @@ async function saveAnswer(attemptId, data, currentUser) {
 
   const now = nowIso();
   const sentinelSeverities = definition.scoringRules.sentinelRules
-    .filter((rule) => rule.questionNumbers.includes(questionNumber) && option.points >= rule.minimumPoints)
+    .filter((rule) => (
+      rule.questionNumbers.includes(questionNumber)
+      && matchesSentinelRule(rule, Number(option.points))
+    ))
     .map((rule) => rule.severity);
   const severity = sentinelSeverities.includes('RED')
     ? 'RED'
     : sentinelSeverities.includes('ORANGE') ? 'ORANGE' : null;
+  const encryptedAnswer = encryptQuestionnairePayload(
+    { value: option.value, points: option.points },
+    answerAad(attempt.id, questionNumber, attempt.campaign_id, attempt.student_id),
+  );
   await database.transaction(async (client) => {
     await client.query(
       `insert into unicornio_questionnaire_answers (
@@ -971,8 +1111,8 @@ async function saveAnswer(attemptId, data, currentUser) {
         newId('answer'),
         attempt.id,
         questionNumber,
-        encryptQuestionnairePayload({ value: option.value, points: option.points }),
-        env.questionnaireDataKeyVersion,
+        encryptedAnswer,
+        JSON.parse(encryptedAnswer).keyVersion,
         now,
       ],
     );
@@ -986,6 +1126,7 @@ async function saveAnswer(attemptId, data, currentUser) {
         severity,
         context: { questionNumber, points: option.points, rule: 'SENTINEL_ITEM' },
         professionalUserId: attempt.created_by_user_id,
+        studentId: attempt.student_id,
         executor: client,
       });
     }
@@ -1027,7 +1168,10 @@ async function submitAttempt(attemptId, currentUser) {
   );
   const answers = answersResult.rows.map((row) => ({
     questionNumber: row.question_number,
-    value: decryptQuestionnairePayload(row.encrypted_payload).value,
+    value: decryptQuestionnairePayload(
+      row.encrypted_payload,
+      answerAad(attempt.id, row.question_number, attempt.campaign_id, attempt.student_id),
+    ).value,
   }));
 
   let evaluation;
@@ -1047,6 +1191,14 @@ async function submitAttempt(attemptId, currentUser) {
   const messageKey = COMPLETION_MESSAGE_KEYS[previousCompletions.rows[0].count % COMPLETION_MESSAGE_KEYS.length];
   const now = nowIso();
 
+  const encryptedResult = encryptQuestionnairePayload({
+    totalScore: evaluation.totalScore,
+    bandScore: evaluation.bandScore,
+    band: evaluation.band,
+    subscales: evaluation.subscales,
+    triggeredRules: evaluation.triggeredRules,
+    pendingClinicalRules: evaluation.pendingClinicalRules,
+  }, resultAad(attempt.id, attempt.campaign_id, attempt.student_id));
   await database.transaction(async (client) => {
     await client.query(
       `insert into unicornio_questionnaire_results (
@@ -1057,14 +1209,10 @@ async function submitAttempt(attemptId, currentUser) {
       [
         newId('result'),
         attempt.id,
-        evaluation.totalScore,
-        evaluation.band.key,
-        encryptQuestionnairePayload({
-          band: evaluation.band,
-          triggeredRules: evaluation.triggeredRules,
-          pendingClinicalRules: evaluation.pendingClinicalRules,
-        }),
-        env.questionnaireDataKeyVersion,
+        null,
+        null,
+        encryptedResult,
+        JSON.parse(encryptedResult).keyVersion,
         now,
       ],
     );
@@ -1093,6 +1241,7 @@ async function submitAttempt(attemptId, currentUser) {
           triggeredRules: evaluation.triggeredRules,
         },
         professionalUserId: attempt.created_by_user_id,
+        studentId: attempt.student_id,
         executor: client,
       });
     }
@@ -1122,6 +1271,7 @@ async function requestHelp(attemptId, currentUser) {
         partialAnswersPreserved: true,
       },
       professionalUserId: attempt.created_by_user_id,
+      studentId: attempt.student_id,
       familyUserId: attempt.family_user_id,
     });
     return {
@@ -1153,6 +1303,7 @@ async function requestHelp(attemptId, currentUser) {
       severity: 'ORANGE',
       context: { requestedAt: now, partialAnswersPreserved: true },
       professionalUserId: attempt.created_by_user_id,
+      studentId: attempt.student_id,
       familyUserId: attempt.family_user_id,
       executor: client,
     });
@@ -1167,7 +1318,7 @@ async function requestHelp(attemptId, currentUser) {
 async function listCampaignAlerts(campaignId, currentUser) {
   ensureQuestionnairePilotAvailable();
   const campaign = await getCampaignById(campaignId);
-  assertCampaignOwner(campaign, currentUser);
+  assertScopedCampaignOwner(campaign, currentUser);
   const result = await database.query(
     `select a.*, p.student_id
      from unicornio_questionnaire_alerts a
@@ -1195,22 +1346,30 @@ async function listCampaignAlerts(campaignId, currentUser) {
 async function acknowledgeAlert(alertId, currentUser) {
   ensureQuestionnairePilotAvailable();
   assertRole(currentUser, 'PROFESSIONAL');
-  const result = await database.query(
-    `update unicornio_questionnaire_alerts a
-     set status = case when a.status = 'OPEN' then 'ACKNOWLEDGED' else a.status end,
-         acknowledged_by_user_id = coalesce(a.acknowledged_by_user_id, $2),
-         acknowledged_at = coalesce(a.acknowledged_at, now()),
-         updated_at = now()
-     from unicornio_questionnaire_campaigns c
-     where a.id = $1 and c.id = a.campaign_id and c.created_by_user_id = $2
-     returning a.*`,
-    [alertId, currentUser.id],
-  );
-  if (!result.rows[0]) {
-    throw new AppError('Alerta no encontrada o no autorizada.', 404, null, 'NOT_FOUND');
-  }
-  await writeAudit(currentUser.id, 'ALERT_ACKNOWLEDGED', 'ALERT', alertId);
-  return result.rows[0];
+  return database.transaction(async (client) => {
+    const result = await client.query(
+      `update unicornio_questionnaire_alerts a
+       set status = case when a.status = 'OPEN' then 'ACKNOWLEDGED' else a.status end,
+           acknowledged_by_user_id = coalesce(a.acknowledged_by_user_id, $2),
+           acknowledged_at = coalesce(a.acknowledged_at, now()),
+           updated_at = now()
+       from unicornio_questionnaire_campaigns c
+       where a.id = $1 and c.id = a.campaign_id
+         and coalesce(a.owner_professional_legacy_id, c.created_by_user_id) = $2
+       returning a.*`,
+      [alertId, currentUser.id],
+    );
+    if (!result.rows[0]) {
+      throw new AppError('Alerta no encontrada o no autorizada.', 404, null, 'NOT_FOUND');
+    }
+    await client.query(
+      `insert into unicornio_questionnaire_audit_logs (
+         id, actor_user_id, action, entity_type, entity_id, metadata, created_at
+       ) values ($1, $2, 'ALERT_ACKNOWLEDGED', 'ALERT', $3, null, now())`,
+      [newId('qaudit'), currentUser.id, alertId],
+    );
+    return result.rows[0];
+  });
 }
 
 async function resolveAlert(alertId, note, currentUser) {
@@ -1220,26 +1379,75 @@ async function resolveAlert(alertId, note, currentUser) {
   if (!resolutionNote) {
     throw new AppError('Describe brevemente la actuación realizada.', 400, null, 'BAD_REQUEST');
   }
-  const result = await database.query(
-    `update unicornio_questionnaire_alerts a
-     set status = 'RESOLVED', resolved_by_user_id = $2, resolved_at = now(),
-         resolution_note = $3, updated_at = now()
-     from unicornio_questionnaire_campaigns c
-     where a.id = $1 and c.id = a.campaign_id and c.created_by_user_id = $2
-     returning a.*`,
-    [alertId, currentUser.id, resolutionNote],
-  );
-  if (!result.rows[0]) {
-    throw new AppError('Alerta no encontrada o no autorizada.', 404, null, 'NOT_FOUND');
-  }
-  await writeAudit(currentUser.id, 'ALERT_RESOLVED', 'ALERT', alertId);
-  return result.rows[0];
+  return database.transaction(async (client) => {
+    const locked = await client.query(
+      `select a.*, p.student_id
+       from unicornio_questionnaire_alerts a
+       join unicornio_questionnaire_campaigns c on c.id = a.campaign_id
+       join unicornio_questionnaire_participants p on p.id = a.participant_id
+       where a.id = $1
+         and coalesce(a.owner_professional_legacy_id, c.created_by_user_id) = $2
+       for update of a`,
+      [alertId, currentUser.id],
+    );
+    const alert = locked.rows[0];
+    if (!alert) {
+      throw new AppError('Alerta no encontrada o no autorizada.', 404, null, 'NOT_FOUND');
+    }
+    const encryptedNote = encryptQuestionnairePayload(
+      { note: resolutionNote },
+      questionnaireAad(
+        'unicornio_questionnaire_alerts',
+        `${alertId}:resolution-note`,
+        'encrypted_resolution_note',
+        alert.campaign_id,
+        alert.student_id,
+      ),
+    );
+    const result = await client.query(
+      `update unicornio_questionnaire_alerts
+       set status = 'RESOLVED', resolved_by_user_id = $2, resolved_at = now(),
+           resolution_note = null, encrypted_resolution_note = $3, updated_at = now()
+       where id = $1
+       returning *`,
+      [alertId, currentUser.id, encryptedNote],
+    );
+    await client.query(
+      `insert into unicornio_questionnaire_audit_logs (
+         id, actor_user_id, action, entity_type, entity_id, metadata, created_at
+       ) values ($1, $2, 'ALERT_RESOLVED', 'ALERT', $3, null, now())`,
+      [newId('qaudit'), currentUser.id, alertId],
+    );
+    return result.rows[0];
+  });
 }
 
-async function transferAlert(alertId, note, currentUser) {
+function validateAlertTransferTarget(actor, target, groupId, assignments) {
+  if (!target || !target.isActive || String(target.role || '').toUpperCase() !== 'PROFESSIONAL') {
+    throw new AppError('Profesional de destino no encontrado.', 404, null, 'NOT_FOUND');
+  }
+  if (String(actor.id) === String(target.id)) {
+    throw new AppError('Selecciona otro profesional como destino.', 400, null, 'BAD_REQUEST');
+  }
+  const isAssigned = (assignments || []).some((assignment) => (
+    assignment.isActive
+    && String(assignment.userId) === String(target.id)
+    && String(assignment.groupId) === String(groupId)
+  ));
+  if (!isAssigned) {
+    throw new AppError('Profesional de destino no encontrado.', 404, null, 'NOT_FOUND');
+  }
+  return true;
+}
+
+async function transferAlert(alertId, transfer, currentUser) {
   ensureQuestionnairePilotAvailable();
   assertRole(currentUser, 'PROFESSIONAL');
-  const transferNote = String(note || '').trim();
+  const targetProfessionalId = String(transfer?.targetProfessionalId || '').trim();
+  const transferNote = String(transfer?.note || '').trim();
+  if (!targetProfessionalId) {
+    throw new AppError('Selecciona un profesional de destino.', 400, null, 'BAD_REQUEST');
+  }
   if (!transferNote) {
     throw new AppError(
       'Indica a quién se transfiere la alerta y el siguiente paso acordado.',
@@ -1248,80 +1456,168 @@ async function transferAlert(alertId, note, currentUser) {
       'BAD_REQUEST',
     );
   }
-  const result = await database.query(
-    `update unicornio_questionnaire_alerts a
-     set status = 'TRANSFERRED', transferred_by_user_id = $2, transferred_at = now(),
-         transfer_note = $3, updated_at = now()
-     from unicornio_questionnaire_campaigns c
-     where a.id = $1 and c.id = a.campaign_id and c.created_by_user_id = $2
-     returning a.*`,
-    [alertId, currentUser.id, transferNote],
-  );
-  if (!result.rows[0]) {
-    throw new AppError('Alerta no encontrada o no autorizada.', 404, null, 'NOT_FOUND');
-  }
-  await writeAudit(currentUser.id, 'ALERT_TRANSFERRED', 'ALERT', alertId, {
-    note: transferNote,
+  const target = findUserById(targetProfessionalId);
+
+  return database.transaction(async (client) => {
+    const alertResult = await client.query(
+      `select a.*, c.group_id, p.student_id
+       from unicornio_questionnaire_alerts a
+       join unicornio_questionnaire_campaigns c on c.id = a.campaign_id
+       join unicornio_questionnaire_participants p on p.id = a.participant_id
+       where a.id = $1
+         and coalesce(a.owner_professional_legacy_id, c.created_by_user_id) = $2
+       for update of a`,
+      [alertId, currentUser.id],
+    );
+    const alert = alertResult.rows[0];
+    if (!alert) {
+      throw new AppError('Alerta no encontrada o no autorizada.', 404, null, 'NOT_FOUND');
+    }
+
+    validateAlertTransferTarget(
+      currentUser,
+      target,
+      alert.group_id,
+      getUserGroupAssignments(target.id),
+    );
+    const encryptedNote = encryptQuestionnairePayload(
+      { note: transferNote },
+      questionnaireAad(
+        'unicornio_questionnaire_alerts',
+        `${alertId}:transfer-note`,
+        'encrypted_transfer_note',
+        alert.campaign_id,
+        alert.student_id,
+      ),
+    );
+    const updated = await client.query(
+      `update unicornio_questionnaire_alerts
+       set status = 'TRANSFERRED',
+           owner_professional_legacy_id = $2,
+           transferred_by_user_id = $3,
+           transferred_at = now(),
+           transfer_note = null,
+           encrypted_transfer_note = $4,
+           updated_at = now()
+       where id = $1
+       returning *`,
+      [alertId, target.id, currentUser.id, encryptedNote],
+    );
+
+    await client.query(
+      `insert into unicornio_notifications (
+         id, recipient_user_id, alert_id, kind, title, body, href, created_at
+       ) values ($1, $2, $3, 'ALERT_TRANSFER_ASSIGNED', $4, $5, $6, now())
+       on conflict (alert_id, recipient_user_id, kind) do nothing`,
+      [
+        newId('notification'),
+        target.id,
+        alertId,
+        'Nueva alerta asignada',
+        'Se te ha asignado una alerta para seguimiento profesional.',
+        `/questionnaires.html?campaignId=${encodeURIComponent(alert.campaign_id)}&alertId=${encodeURIComponent(alertId)}`,
+      ],
+    );
+    await client.query(
+      `insert into unicornio_questionnaire_audit_logs (
+         id, actor_user_id, action, entity_type, entity_id, metadata, created_at
+       ) values ($1, $2, 'ALERT_TRANSFERRED', 'ALERT', $3, $4::jsonb, now())`,
+      [
+        newId('qaudit'),
+        currentUser.id,
+        alertId,
+        JSON.stringify({ targetProfessionalId: target.id }),
+      ],
+    );
+    return updated.rows[0];
   });
-  return result.rows[0];
 }
 
 async function getStudentResult(campaignId, studentId, currentUser) {
   ensureQuestionnairePilotAvailable();
   const campaign = await getCampaignById(campaignId);
-  assertCampaignOwner(campaign, currentUser);
+  assertScopedCampaignOwner(campaign, currentUser);
   const result = await database.query(
-    `select r.*, a.id as attempt_id, p.student_id, p.questionnaire_version_id
+    `select r.*, a.id as attempt_id, p.student_id, p.family_key,
+            p.questionnaire_version_id, v.short_title, v.age_min, v.age_max,
+            v.questions, v.response_scale
      from unicornio_questionnaire_results r
      join unicornio_questionnaire_attempts a on a.id = r.attempt_id
      join unicornio_questionnaire_participants p on p.id = a.participant_id
-     where p.campaign_id = $1 and p.student_id = $2`,
+     join unicornio_questionnaire_versions v on v.id = p.questionnaire_version_id
+     where p.campaign_id = $1 and p.student_id = $2
+     order by p.created_at`,
     [campaign.id, studentId],
   );
-  const row = result.rows[0];
-  if (!row) {
+  if (result.rows.length === 0) {
     throw new AppError('El alumno todavía no tiene un resultado.', 404, null, 'NOT_FOUND');
   }
 
-  const definition = await getDefinitionById(row.questionnaire_version_id);
+  const attemptIds = result.rows.map((row) => row.attempt_id);
   const answerRows = await database.query(
-    `select question_number, encrypted_payload
-     from unicornio_questionnaire_answers where attempt_id = $1 order by question_number`,
-    [row.attempt_id],
+    `select attempt_id, question_number, encrypted_payload
+     from unicornio_questionnaire_answers
+     where attempt_id = any($1::text[])
+     order by attempt_id, question_number`,
+    [attemptIds],
   );
-  const answers = answerRows.rows.map((answerRow) => {
-    const value = decryptQuestionnairePayload(answerRow.encrypted_payload);
-    const question = definition.questions.find((item) => item.number === answerRow.question_number);
-    const option = definition.responseScale.find((item) => item.value === value.value);
-    return {
-      questionNumber: answerRow.question_number,
-      question: question?.text || '',
-      value: value.value,
-      label: option?.label || value.value,
-      points: option?.points ?? value.points,
-    };
+  const answersByAttempt = new Map();
+  answerRows.rows.forEach((answerRow) => {
+    const rows = answersByAttempt.get(answerRow.attempt_id) || [];
+    rows.push(answerRow);
+    answersByAttempt.set(answerRow.attempt_id, rows);
   });
-  const clinical = decryptQuestionnairePayload(row.encrypted_payload);
+
+  const reviewedAt = nowIso();
   await database.query(
     `update unicornio_questionnaire_results
      set reviewed_by_user_id = $2, reviewed_at = coalesce(reviewed_at, now()), updated_at = now()
-     where id = $1`,
-    [row.id, currentUser.id],
+     where id = any($1::text[])`,
+    [result.rows.map((row) => row.id), currentUser.id],
   );
-  await writeAudit(currentUser.id, 'RESULT_VIEWED', 'RESULT', row.id, {
+  await writeAudit(currentUser.id, 'RESULTS_VIEWED', 'CAMPAIGN_STUDENT', `${campaignId}:${studentId}`, {
     campaignId,
     studentId,
+    resultCount: result.rows.length,
   });
   const student = findUserById(studentId);
   return {
-    id: row.id,
     student: student ? { id: student.id, name: student.name } : { id: studentId, name: 'Alumno no disponible' },
-    totalScore: row.total_score,
-    band: clinical.band,
-    triggeredRules: clinical.triggeredRules,
-    pendingClinicalRules: clinical.pendingClinicalRules,
-    answers,
-    reviewedAt: row.reviewed_at || nowIso(),
+    results: result.rows.map((row) => {
+      const clinical = decryptQuestionnairePayload(
+        row.encrypted_payload,
+        resultAad(row.attempt_id, campaign.id, studentId),
+      );
+      const answerItems = (answersByAttempt.get(row.attempt_id) || []).map((answerRow) => {
+        const value = decryptQuestionnairePayload(
+          answerRow.encrypted_payload,
+          answerAad(row.attempt_id, answerRow.question_number, campaign.id, studentId),
+        );
+        const question = row.questions.find((item) => item.number === answerRow.question_number);
+        const option = row.response_scale.find((item) => item.value === value.value);
+        return {
+          questionNumber: answerRow.question_number,
+          question: question?.text || '',
+          value: value.value,
+          label: option?.label || value.value,
+          points: option?.points ?? value.points,
+        };
+      });
+      return {
+        id: row.id,
+        familyKey: row.family_key,
+        questionnaireTitle: row.short_title,
+        ageRange: `${row.age_min}-${row.age_max}`,
+        totalScore: clinical.totalScore,
+        bandScore: clinical.bandScore ?? clinical.totalScore,
+        band: clinical.band,
+        subscales: clinical.subscales || [],
+        triggeredRules: clinical.triggeredRules,
+        pendingClinicalRules: clinical.pendingClinicalRules,
+        answers: answerItems,
+        reviewedAt: row.reviewed_at || reviewedAt,
+      };
+    }),
     disclaimer: 'Resultado orientativo de cribado experimental. No constituye un diagnóstico.',
   };
 }
@@ -1389,7 +1685,6 @@ module.exports = {
   COMPLETION_MESSAGES,
   calculateAge,
   calculateDefinitionHash,
-  getQuestionnairePreview,
   ensureQuestionnairePilotAvailable,
   initializeQuestionnaireModule,
   listQuestionnaireDefinitions,
@@ -1409,6 +1704,7 @@ module.exports = {
   listCampaignAlerts,
   acknowledgeAlert,
   resolveAlert,
+  validateAlertTransferTarget,
   transferAlert,
   getStudentResult,
   listNotifications,

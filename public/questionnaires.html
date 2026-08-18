@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Piloto de cuestionarios | Proyecto Unicornio</title>
+    <title>Cuestionarios | Proyecto Unicornio</title>
     <meta name="theme-color" content="#0F1833" />
     <link rel="icon" type="image/png" sizes="64x64" href="/assets/companions/favicon-64.png" />
     <link rel="apple-touch-icon" href="/assets/companions/favicon-192.png" />
@@ -20,7 +20,7 @@
   <body class="questionnaire-app auth-pending">
     <!--
       Impeccable design contract
-      Context: professional, school and admin control surface for a supervised Spanish pilot.
+      Context: professional, school and admin control surface for supervised questionnaires.
       Brand: existing Unicornio navy/violet cosmos; calm, educational, non-clinical.
       Reuse: styles.css + galaxy.css + cosmos.css tokens, buttons, badges and status language.
       Divergence: an operational three-zone workspace is necessary for live supervision.
@@ -41,7 +41,7 @@
           <span class="badge">Área profesional · <strong id="account-name">Profesional</strong></span>
           <h1>Cuestionarios</h1>
           <p class="dashboard-subtitle">Prepara campañas, supervisa sesiones y revisa alertas dentro del mismo espacio de Proyecto Unicornio.</p>
-          <nav class="action-row dashboard-links icon-navigation" aria-label="Navegación del piloto">
+          <nav class="action-row dashboard-links icon-navigation" aria-label="Navegación de cuestionarios">
             <a class="button secondary" href="/dashboard.html">Inicio</a>
             <a class="button secondary" aria-current="page" href="/questionnaires.html">Cuestionarios</a>
             <a class="button secondary" href="/consents.html">Consentimientos</a>
@@ -60,21 +60,10 @@
       </section>
 
       <section id="pilot-disabled" class="pilot-gate card" hidden>
-        <span class="eyebrow">Piloto protegido</span>
+        <span class="eyebrow">Área protegida</span>
         <h1>Los cuestionarios están desactivados</h1>
         <p id="pilot-disabled-message">Este entorno no admite todavía sesiones con datos reales.</p>
-        <p>Para una prueba supervisada, configura PostgreSQL, la clave de cifrado y <code>QUESTIONNAIRE_PILOT_ENABLED=true</code>.</p>
-        <div class="preview-launcher" aria-labelledby="preview-launcher-title">
-          <div>
-            <span class="eyebrow">Sin configuración</span>
-            <h2 id="preview-launcher-title">Abrir una prueba funcional</h2>
-            <p>Podrás recorrer todas las preguntas. Las respuestas solo vivirán en esta pestaña y no se crearán resultados ni alertas.</p>
-          </div>
-          <div class="action-row">
-            <a class="button primary" href="/questionnaire.html?preview=9-12">Probar 9–12 años</a>
-            <a class="button secondary" href="/questionnaire.html?preview=13-16">Probar 13–16 años</a>
-          </div>
-        </div>
+        <p>Configura PostgreSQL, la clave de cifrado y <code>QUESTIONNAIRE_PILOT_ENABLED=true</code> para habilitar sesiones supervisadas.</p>
         <a class="button secondary" href="/dashboard.html">Volver al dashboard</a>
       </section>
 
@@ -93,7 +82,7 @@
 
         <section class="session-stage" aria-labelledby="session-title">
           <div id="session-empty" class="session-empty">
-            <span class="eyebrow">Piloto experimental</span>
+            <span class="eyebrow">Sesión supervisada</span>
             <h2 id="session-title">Prepara una sesión supervisada</h2>
             <p>Selecciona una campaña o crea una nueva. Los alumnos solo podrán entrar tras la aceptación familiar y cuando abras la sesión.</p>
           </div>
@@ -119,7 +108,7 @@
               <div class="orbit-summary__center">
                 <span id="orbit-kicker">Participantes</span>
                 <strong id="orbit-total">0</strong>
-                <span id="orbit-title">en esta campaña</span>
+                <span id="orbit-title">asignaciones</span>
               </div>
               <dl id="session-counts" class="session-counts"></dl>
             </div>
@@ -156,7 +145,7 @@
         <header class="operations-heading">
           <div>
             <span class="eyebrow">Estado operativo</span>
-            <h1>Campañas del piloto</h1>
+            <h1>Campañas de cuestionarios</h1>
             <p>Esta vista muestra actividad y estados. El centro y la administración no tienen acceso ordinario a respuestas ni resultados.</p>
           </div>
         </header>
@@ -164,32 +153,70 @@
       </section>
     </main>
 
-    <dialog id="campaign-dialog" class="pilot-dialog" aria-labelledby="campaign-dialog-title">
+    <dialog id="campaign-dialog" class="pilot-dialog campaign-catalog-dialog" aria-labelledby="campaign-dialog-title">
       <form id="campaign-form" method="dialog">
         <div class="dialog-heading">
           <div>
             <span class="eyebrow">Nueva campaña</span>
-            <h2 id="campaign-dialog-title">Prepara el grupo</h2>
+            <h2 id="campaign-dialog-title">Prepara la sesión</h2>
           </div>
           <button class="icon-action" type="button" data-close-dialog aria-label="Cerrar">×</button>
         </div>
-        <label>
-          Título de la campaña
-          <input id="campaign-name-input" name="title" maxlength="120" required value="Sesión de estado de ánimo" />
-        </label>
-        <label>
-          Grupo asignado
-          <select id="campaign-group-select" name="groupId" required></select>
-        </label>
-        <label>
-          Fecha prevista
-          <input id="campaign-date-input" name="plannedFor" type="datetime-local" required />
-        </label>
-        <p class="form-note">Al crearla seguirá en borrador. El envío de consentimientos se realiza en el siguiente paso.</p>
+        <div class="campaign-dialog-grid">
+          <section class="campaign-dialog-main" aria-labelledby="campaign-context-title">
+            <h3 id="campaign-context-title">Dónde y cuándo</h3>
+            <div class="campaign-context-grid">
+              <label>
+                Centro
+                <select id="campaign-center-select" required></select>
+              </label>
+              <label>
+                Aula o grupo
+                <select id="campaign-group-select" name="groupId" required></select>
+              </label>
+              <label>
+                Título de la campaña
+                <input id="campaign-name-input" name="title" maxlength="120" required value="Evaluación de bienestar" />
+              </label>
+              <label>
+                Fecha prevista
+                <input id="campaign-date-input" name="plannedFor" type="datetime-local" required />
+              </label>
+            </div>
+
+            <fieldset class="questionnaire-catalog-fieldset">
+              <legend>Qué cuestionarios se harán</legend>
+              <div class="catalog-toolbar">
+                <p>Selecciona una o varias áreas. La versión se adapta automáticamente a la edad de cada alumno.</p>
+                <label>
+                  Edad
+                  <select id="questionnaire-age-filter">
+                    <option value="all">Todas</option>
+                    <option value="9-12">9–12 años</option>
+                    <option value="13-18">13–18 años</option>
+                  </select>
+                </label>
+              </div>
+              <div id="questionnaire-catalog" class="questionnaire-catalog" tabindex="-1" aria-live="polite"></div>
+            </fieldset>
+          </section>
+
+          <aside class="campaign-selection-summary" aria-labelledby="campaign-summary-title">
+            <span class="eyebrow">Resumen</span>
+            <h3 id="campaign-summary-title">Sesión preparada</h3>
+            <ol class="campaign-summary-steps">
+              <li><span>1</span><div><strong>Centro y grupo</strong><small id="campaign-summary-group">Selecciona un grupo</small></div></li>
+              <li><span>2</span><div><strong>Cuestionarios</strong><small id="campaign-summary-count">0 seleccionados</small></div></li>
+              <li><span>3</span><div><strong>Consentimiento familiar</strong><small>Se solicitará automáticamente al crear la campaña.</small></div></li>
+              <li><span>4</span><div><strong>Apertura</strong><small>Solo podrán entrar los alumnos con consentimiento aceptado.</small></div></li>
+            </ol>
+          </aside>
+        </div>
+        <p class="form-note">Los cuestionarios son instrumentos experimentales de cribado y no constituyen un diagnóstico.</p>
         <div id="campaign-form-status" class="inline-status" role="status" aria-live="polite"></div>
-        <div class="action-row">
-          <button class="button primary" type="submit">Crear campaña</button>
-          <button class="button secondary" type="button" data-close-dialog>Cancelar</button>
+        <div class="action-row dialog-actions">
+          <button class="button primary" type="submit">Crear y solicitar consentimientos</button>
+          <button class="button secondary" type="button" data-close-dialog>Seguir preparando</button>
         </div>
       </form>
     </dialog>

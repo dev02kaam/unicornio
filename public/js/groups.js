@@ -26,6 +26,11 @@ const groupFormTitle = document.getElementById('create-group-title');
 const groupFormError = document.getElementById('group-form-error');
 const groupFormSuccess = document.getElementById('group-form-success');
 const groupFeedback = document.getElementById('group-feedback');
+const studentGroupPanel = document.getElementById('student-group-panel');
+const studentGroupName = document.getElementById('student-group-name');
+const studentGroupDescription = document.getElementById('student-group-description');
+const groupToolsPanel = document.getElementById('group-tools-panel');
+const groupsListPanel = document.getElementById('groups-list-panel');
 const groupFormSubmitButton = groupForm?.querySelector('button[type="submit"]');
 const groupsHead = document.getElementById('groups-head');
 const groupsBody = document.getElementById('groups-body');
@@ -529,6 +534,21 @@ function applyGroupFilters() {
 function renderGroups(groups) {
   allGroups = groups;
 
+  if (currentGroupsRole === 'STUDENT') {
+    visibleGroups = groups;
+    selectedGroupId = groups[0]?.id || null;
+    const group = groups[0] || null;
+    if (studentGroupName) {
+      studentGroupName.textContent = group?.name || 'Sin grupo asignado';
+    }
+    if (studentGroupDescription) {
+      studentGroupDescription.textContent = group
+        ? 'Esta es tu clase. Desde tu cuenta solo puedes consultar este grupo.'
+        : 'Todavía no tienes un grupo asignado. Tu centro podrá vincularlo cuando esté preparado.';
+    }
+    return;
+  }
+
   if (!selectedGroupId || !allGroups.some((group) => group.id === selectedGroupId)) {
     selectedGroupId = allGroups[0]?.id || null;
   }
@@ -691,6 +711,10 @@ async function loadProfile() {
   const response = await apiRequest('/auth/me');
   groupsCurrentUser = response.data.user;
   currentGroupsRole = String(groupsCurrentUser?.role || '').toUpperCase();
+  const isStudent = currentGroupsRole === 'STUDENT';
+  if (studentGroupPanel) studentGroupPanel.hidden = !isStudent;
+  if (groupToolsPanel) groupToolsPanel.hidden = isStudent;
+  if (groupsListPanel) groupsListPanel.hidden = isStudent;
   if (createGroupTrigger) {
     createGroupTrigger.hidden = !canCreateGroups();
   }
@@ -796,6 +820,11 @@ async function deleteGroup(groupId) {
 }
 
 async function loadCentersAndGroups() {
+  if (currentGroupsRole === 'STUDENT') {
+    await loadAllGroups();
+    return;
+  }
+
   const response = await apiRequest('/centers');
   renderCenters(response.data.centers || []);
 
@@ -876,6 +905,11 @@ async function loadGroupUsers(groupId) {
 }
 
 async function refreshGroupManagement() {
+  if (currentGroupsRole === 'STUDENT') {
+    await loadAllGroups();
+    return;
+  }
+
   if (currentGroupsRole === 'ADMIN') {
     await loadAllGroups();
     if (selectedGroupId) renderGroupSelection(selectedGroupId);
@@ -1091,10 +1125,17 @@ addUserToGroupButton?.addEventListener('click', async () => {
 
 async function init() {
   try {
+    await sessionReady;
     initializeFormHelpers();
     await loadProfile();
     await loadAccountSheet();
     await loadCentersAndGroups();
+
+    if (currentGroupsRole === 'STUDENT') {
+      window.UnicornioAppLoading?.markPageReady();
+      return;
+    }
+
     renderFilterBuilder();
 
     const query = new URLSearchParams(window.location.search);
@@ -1106,6 +1147,7 @@ async function init() {
       selectedGroupId = visibleGroups[0].id;
       renderGroupSelection(selectedGroupId);
     }
+    window.UnicornioAppLoading?.markPageReady();
   } catch (error) {
     if (error.status === 401) {
       clearToken();
@@ -1114,6 +1156,7 @@ async function init() {
     }
 
     setMessage(groupFormError, error.message || 'No se pudieron cargar los grupos.', true);
+    window.UnicornioAppLoading?.markPageReady();
   }
 }
 

@@ -10,30 +10,162 @@
     <link rel="stylesheet" href="/css/styles.css" />
     <link rel="stylesheet" href="/css/galaxy.css" />
     <link rel="stylesheet" href="/css/cosmos.css" />
+    <link rel="preload" as="image" href="/assets/companions/luna/login-full-v3.png" />
   </head>
   <body>
     <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
     <main id="main-content" class="shell">
-      <section class="card form-card">
-        <h1>Hola, qué alegría verte</h1>
-        <p>Entra en tu espacio seguro. Tu compañero Unicornio te está esperando.</p>
-        <form id="login-form" class="stack">
-          <label>
-            <span>Email</span>
-            <input type="email" name="email" placeholder="tu@email.com" autocomplete="username" autocapitalize="none" spellcheck="false" required />
-          </label>
-          <label>
-            <span>Contraseña</span>
-            <input type="password" name="password" placeholder="Introduce tu contraseña" autocomplete="current-password" minlength="8" required />
-          </label>
-          <label class="login-remember-row">
-            <input type="checkbox" name="remember" />
-            <span>Recordarme en este dispositivo</span>
-          </label>
-          <p class="field-note login-device-note">Déjalo desmarcado si compartes este ordenador en casa o en el cole.</p>
-          <p id="login-error" class="error" role="alert" aria-live="assertive" tabindex="-1" hidden></p>
-          <button id="login-submit" class="button primary" type="submit">Entrar con mi compañero</button>
-        </form>
+      <section class="card form-card login-experience">
+        <a class="app-brand-lockup" href="/login.html" aria-label="Proyecto Unicornio, ir al inicio">
+          <img src="/assets/brand/logo_proyecto_unicornio_horizontal_limpio.png" alt="Proyecto Unicornio — Escuchar antes. Cuidar mejor." />
+        </a>
+        <div class="login-form-column">
+          <h1>Hola, qué alegría verte</h1>
+          <p>Entra en tu espacio seguro. Tu compañero Unicornio te está esperando.</p>
+          <form id="login-form" class="stack">
+            <label>
+              <span>Email</span>
+              <input type="email" name="email" placeholder="tu@email.com" autocomplete="username" autocapitalize="none" spellcheck="false" required />
+            </label>
+            <label>
+              <span>Contraseña</span>
+              <input type="password" name="password" placeholder="Introduce tu contraseña" autocomplete="current-password" minlength="8" required />
+            </label>
+            <label class="login-remember-row">
+              <input type="checkbox" name="remember" />
+              <span>Recordarme en este dispositivo</span>
+            </label>
+            <p class="field-note login-device-note">Déjalo desmarcado si compartes este ordenador en casa o en el cole.</p>
+            <p id="login-error" class="error" role="alert" aria-live="assertive" tabindex="-1" hidden></p>
+            <button id="login-submit" class="button primary" type="submit">Entrar con mi compañero</button>
+          </form>
+        </div>
+        <div class="login-character-stage" data-login-theme="luna">
+          <div class="login-character-picker" role="group" aria-label="Previsualiza los cuatro compañeros">
+            <span class="login-character-picker__prompt">¿Quién te acompaña hoy?</span>
+            <div class="login-character-picker__sky">
+              <svg class="login-character-picker__orbit" viewBox="0 0 420 76" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+                <path d="M42 43 C 83 16, 128 15, 167 37 S 252 66, 292 38 S 357 16, 396 34" />
+              </svg>
+              <button class="login-character-choice" type="button" data-login-companion="luna" aria-label="Ver a Luna, calma lunar" aria-pressed="true">
+                <span class="login-character-choice__symbol" aria-hidden="true">
+                  <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+                    <circle cx="24" cy="24" r="20" fill="#30265f" />
+                    <path d="M30.6 10.5a14.8 14.8 0 1 0 7.1 24.2 13 13 0 1 1-7.1-24.2Z" fill="#fff2bd" />
+                    <circle cx="35.2" cy="14.4" r="1.7" fill="#9fe3d5" />
+                    <circle cx="39.1" cy="22.2" r="1.1" fill="#ff9bc7" />
+                  </svg>
+                </span>
+                <span class="login-character-choice__label">
+                  <strong class="login-character-choice__name">Luna</strong>
+                  <small class="login-character-choice__trait">calma lunar</small>
+                </span>
+              </button>
+              <button class="login-character-choice" type="button" data-login-companion="nico" aria-label="Ver a Nico, estrella viajera" aria-pressed="false">
+                <span class="login-character-choice__symbol" aria-hidden="true">
+                  <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+                    <path d="m29.4 8.2 2.5 7.1 7.4 1-5.8 4.7 1.7 7.3-6.3-4-6.4 3.9 1.8-7.2-5.8-4.8 7.5-1Z" fill="#fff1a8" />
+                    <path d="M20.5 26.5 8.8 38.2M25.1 30 17 38.1M17 22.6l-7.8 7.8" fill="none" stroke="#d9f7ff" stroke-linecap="round" stroke-width="3" />
+                    <circle cx="37.5" cy="34.5" r="2" fill="#ff9bc7" />
+                  </svg>
+                </span>
+                <span class="login-character-choice__label">
+                  <strong class="login-character-choice__name">Nico</strong>
+                  <small class="login-character-choice__trait">estrella viajera</small>
+                </span>
+              </button>
+              <button class="login-character-choice" type="button" data-login-companion="sol" aria-label="Ver a Sol, luz valiente" aria-pressed="false">
+                <span class="login-character-choice__symbol" aria-hidden="true">
+                  <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+                    <g fill="none" stroke="#9b581e" stroke-linecap="round" stroke-width="2.6">
+                      <path d="M24 3.5v6M24 38.5v6M3.5 24h6M38.5 24h6M9.5 9.5l4.2 4.2M34.3 34.3l4.2 4.2M38.5 9.5l-4.2 4.2M13.7 34.3l-4.2 4.2" />
+                    </g>
+                    <circle cx="24" cy="24" r="11.5" fill="#ffc95d" />
+                    <circle cx="20" cy="20" r="3.2" fill="#ffe8a9" opacity=".82" />
+                  </svg>
+                </span>
+                <span class="login-character-choice__label">
+                  <strong class="login-character-choice__name">Sol</strong>
+                  <small class="login-character-choice__trait">luz valiente</small>
+                </span>
+              </button>
+              <button class="login-character-choice" type="button" data-login-companion="orion" aria-label="Ver a Orion, mapa del cielo" aria-pressed="false">
+                <span class="login-character-choice__symbol" aria-hidden="true">
+                  <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+                    <g fill="none" stroke="#a9d7ff" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6">
+                      <path d="m12 10 8.5 8.5 10-4 5.5 9-9 6.5-7-3.5-8 11.5" />
+                      <path d="m20.5 18.5-.5 8 7-2 3.5-10.5" />
+                    </g>
+                    <g fill="#fff2bd">
+                      <circle cx="12" cy="10" r="2.5" />
+                      <circle cx="20.5" cy="18.5" r="2.1" />
+                      <circle cx="30.5" cy="14" r="2.7" />
+                      <circle cx="36" cy="23" r="2" />
+                      <circle cx="27" cy="30" r="2.5" />
+                      <circle cx="20" cy="26.5" r="2" />
+                      <circle cx="12" cy="38" r="2.3" />
+                    </g>
+                  </svg>
+                </span>
+                <span class="login-character-choice__label">
+                  <strong class="login-character-choice__name">Orion</strong>
+                  <small class="login-character-choice__trait">mapa del cielo</small>
+                </span>
+              </button>
+            </div>
+          </div>
+          <p class="sr-only" data-login-preview-live aria-live="polite">Luna seleccionada para previsualización.</p>
+          <img
+            class="login-character-poster"
+            data-companion-presentation-poster
+            src="/assets/companions/luna/login-full-v3.png"
+            alt=""
+          />
+          <video
+            class="login-character-presentation"
+            data-companion-presentation
+            src="/assets/companions/luna/login-presentation-transparent.webm"
+            poster="/assets/companions/luna/login-full-v3.png"
+            autoplay
+            muted
+            playsinline
+            preload="metadata"
+            aria-hidden="true"
+          ></video>
+          <img
+            class="login-character-presentation-final"
+            data-companion-presentation-final
+            alt=""
+            hidden
+          />
+          <div
+            class="login-presentation-loader"
+            data-login-presentation-loader
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            aria-hidden="true"
+          >
+            <span class="login-presentation-loader__orbit" aria-hidden="true">
+              <i></i><i></i><i></i>
+            </span>
+            <span data-login-presentation-loader-label>Preparando a Luna&hellip;</span>
+          </div>
+          <button
+            class="login-presentation-audio"
+            type="button"
+            data-login-presentation-audio
+            aria-label="Escuchar la presentación de Luna"
+            aria-pressed="false"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path class="login-presentation-audio__speaker" d="M4 10v4h3.2l4.1 3.2V6.8L7.2 10H4Z" />
+              <path class="login-presentation-audio__waves" d="M14.3 9.1a4 4 0 0 1 0 5.8M16.8 6.8a7.2 7.2 0 0 1 0 10.4" />
+              <path class="login-presentation-audio__muted" d="m15.2 9.2 4.6 4.6m0-4.6-4.6 4.6" />
+            </svg>
+            <span data-login-audio-label>Escuchar presentación</span>
+          </button>
+        </div>
       </section>
     </main>
     <script src="/js/api.js"></script>

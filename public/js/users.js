@@ -673,6 +673,7 @@ async function doLogout() {
 }
 
 async function init() {
+  await sessionReady;
   if (!getToken()) {
     window.location.replace('/login.html');
     return;
@@ -681,6 +682,7 @@ async function init() {
   try {
     await loadProfile();
     await loadData();
+    window.UnicornioAppLoading?.markPageReady();
   } catch (_error) {
     clearToken();
     window.location.href = '/login.html';

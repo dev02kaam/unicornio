@@ -62,6 +62,11 @@ const relationshipPanelBody = document.getElementById('relationship-panel-body')
 const dashboardWelcome = document.getElementById('dashboard-welcome');
 const dashboardRoleLabel = document.getElementById('dashboard-role-label');
 const dashboardSubtitle = document.getElementById('dashboard-subtitle');
+const dashboardHero = document.querySelector('.dashboard-hero');
+const studentWelcomeCard = document.getElementById('student-welcome-card');
+const studentWelcomeVideo = document.getElementById('student-welcome-video');
+const studentWelcomePlayButton = document.getElementById('student-welcome-play');
+const studentWelcomePlayLabel = document.getElementById('student-welcome-play-label');
 
 let currentUser = null;
 let currentEditingUserId = null;
@@ -69,6 +74,90 @@ let availableCenters = [];
 let availableGroups = [];
 let availableCenterStudents = [];
 let adminUsers = [];
+let studentWelcomeStorageKey = '';
+
+const STUDENT_WELCOME_STORAGE_PREFIX = 'unicornio-student-welcome-login';
+
+function getStudentWelcomeStorageKey(userId) {
+  return `${STUDENT_WELCOME_STORAGE_PREFIX}:${userId}`;
+}
+
+function hasSeenStudentWelcome(storageKey) {
+  try {
+    return window.sessionStorage.getItem(storageKey) === 'seen';
+  } catch (_error) {
+    return false;
+  }
+}
+
+function setStudentWelcomeVisible(visible) {
+  if (!studentWelcomeCard || !dashboardHero) return;
+
+  studentWelcomeCard.hidden = !visible;
+  dashboardHero.classList.toggle('has-student-welcome', visible);
+}
+
+function rememberStudentWelcome() {
+  if (!studentWelcomeStorageKey) return;
+
+  try {
+    window.sessionStorage.setItem(studentWelcomeStorageKey, 'seen');
+  } catch (_error) {
+    // El almacenamiento puede estar desactivado; la bienvenida seguirá funcionando.
+  }
+}
+
+function hideStudentWelcome() {
+  studentWelcomeVideo?.pause();
+  setStudentWelcomeVisible(false);
+}
+
+async function playStudentWelcome() {
+  if (!studentWelcomeVideo) return;
+
+  try {
+    if (studentWelcomeVideo.ended) studentWelcomeVideo.currentTime = 0;
+    studentWelcomeVideo.muted = false;
+    studentWelcomeVideo.volume = 1;
+    await studentWelcomeVideo.play();
+    if (studentWelcomePlayButton) studentWelcomePlayButton.hidden = true;
+  } catch (_error) {
+    if (studentWelcomePlayButton) studentWelcomePlayButton.hidden = false;
+  }
+}
+
+function setupStudentWelcome(user) {
+  const role = String(user?.role || '').toUpperCase();
+  if (role !== 'STUDENT' || !user?.id) {
+    hideStudentWelcome();
+    return;
+  }
+
+  studentWelcomeStorageKey = getStudentWelcomeStorageKey(user.id);
+  if (hasSeenStudentWelcome(studentWelcomeStorageKey)) {
+    setStudentWelcomeVisible(false);
+    return;
+  }
+
+  setStudentWelcomeVisible(true);
+  if (studentWelcomePlayButton) studentWelcomePlayButton.hidden = false;
+  if (studentWelcomePlayLabel) studentWelcomePlayLabel.textContent = 'Toca para escucharme';
+
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!prefersReducedMotion) {
+    window.requestAnimationFrame(() => playStudentWelcome());
+  }
+}
+
+studentWelcomePlayButton?.addEventListener('click', playStudentWelcome);
+studentWelcomeVideo?.addEventListener('playing', () => {
+  if (studentWelcomePlayButton) studentWelcomePlayButton.hidden = true;
+});
+studentWelcomeVideo?.addEventListener('ended', () => {
+  rememberStudentWelcome();
+  if (studentWelcomePlayLabel) studentWelcomePlayLabel.textContent = 'Volver a escuchar';
+  if (studentWelcomePlayButton) studentWelcomePlayButton.hidden = false;
+});
 
 function escapeDashboardMarkup(value) {
   return window.escapeHtml(value);
@@ -1507,6 +1596,7 @@ async function doLogout() {
 }
 
 async function loadProfile() {
+  await sessionReady;
   if (!getToken()) {
     window.location.replace('/login.html');
     return;
@@ -1516,7 +1606,6 @@ async function loadProfile() {
     resetTransientUiState();
     const response = await apiRequest('/auth/me');
     currentUser = response.data.user;
-    document.body.classList.remove('auth-pending');
     if (profileNameElement) {
       profileNameElement.textContent = currentUser.name;
     }
@@ -1525,6 +1614,7 @@ async function loadProfile() {
     }
     const context = currentUser.context || null;
     const role = String(currentUser.role || '').toUpperCase();
+    setupStudentWelcome(currentUser);
     const assignmentsResponse = await apiRequest(`/users/${currentUser.id}/assignments`);
     const assignments = assignmentsResponse.data;
     let consentSummary = null;
@@ -1610,7 +1700,6 @@ async function loadProfile() {
       return;
     }
 
-    document.body.classList.remove('auth-pending');
   }
 }
 
@@ -1782,7 +1871,8 @@ adminSchoolSelect?.addEventListener('change', async () => {
   }
 });
 
-window.addEventListener('pageshow', () => {
+window.addEventListener('pageshow', async () => {
+  await sessionReady;
   if (!getToken()) {
     document.body.classList.add('auth-pending');
     window.location.replace('/login.html');
@@ -1795,4 +1885,6 @@ window.addEventListener('pageshow', () => {
 resetTransientUiState();
 updateCreateUserFieldVisibility();
 
-loadProfile();
+loadProfile().finally(() => {
+  if (getToken()) window.UnicornioAppLoading?.markPageReady();
+});

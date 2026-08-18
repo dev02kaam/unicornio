@@ -1,65 +1,36 @@
-const path = require('path');
-const express = require('express');
-const helmet = require('helmet');
-const cors = require('cors');
-
 const { env } = require('./config/env');
 const { database } = require('./config/database');
-const { healthRouter } = require('./routes/health.routes');
-const { authRouter } = require('./routes/auth.routes');
-const { usersRouter } = require('./routes/users.routes');
-const { centersRouter } = require('./routes/centers.routes');
-const { groupsRouter } = require('./routes/groups.routes');
-const { assignmentsRouter } = require('./routes/assignments.routes');
-const { consentsRouter } = require('./routes/consents.routes');
-const { deletionImpactRouter } = require('./routes/deletion-impact.routes');
-const {
-  questionnairePreviewRouter,
-  questionnairesRouter,
-} = require('./routes/questionnaires.routes');
+const { createApp } = require('./create-app');
+const { createPostgresSessionStore } = require('./config/session');
 const { initializeQuestionnaireModule } = require('./services/questionnaires.service');
-const { notFoundMiddleware, errorMiddleware } = require('./middlewares/error.middleware');
-
-const app = express();
-
-app.use(helmet());
-app.use(cors({
-  origin: env.corsOrigin,
-  credentials: true,
-}));
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-app.use(express.static(path.join(__dirname, '..', 'public')));
-
-app.use('/api/health', healthRouter);
-app.use('/api', questionnairePreviewRouter);
-app.use('/api/auth', authRouter);
-app.use('/api/users', usersRouter);
-app.use('/api/centers', centersRouter);
-app.use('/api/groups', groupsRouter);
-app.use('/api', assignmentsRouter);
-app.use('/api', consentsRouter);
-app.use('/api', deletionImpactRouter);
-app.use('/api', questionnairesRouter);
-
-app.get('/', (_req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
-});
-
-app.use(notFoundMiddleware);
-app.use(errorMiddleware);
+const { loadConfiguredKeyProvider } = require('./services/key-provider-loader.service');
 
 async function startServer() {
-  try {
-    await database.initialize();
-    await initializeQuestionnaireModule();
-    app.listen(env.port, () => {
-      console.log(`Proyecto Unicornio escuchando en http://localhost:${env.port}`);
-    });
-  } catch (error) {
-    console.error('No se pudo iniciar Proyecto Unicornio:', error.message);
-    process.exit(1);
-  }
+  await database.initialize();
+  await loadConfiguredKeyProvider(env);
+  await initializeQuestionnaireModule();
+
+  const app = createApp({ sessionStore: createPostgresSessionStore(database.getPool()) });
+  const server = app.listen(env.port, () => {
+    console.log(`Proyecto Unicornio escuchando en http://localhost:${env.port}`);
+  });
+
+  server.requestTimeout = 30_000;
+  server.headersTimeout = 15_000;
+  server.keepAliveTimeout = 5_000;
+  server.on('clientError', (error, socket) => {
+    if (!socket.destroyed) socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+    if (env.nodeEnv !== 'test') console.warn(`Conexion HTTP rechazada: ${error.code || 'CLIENT_ERROR'}`);
+  });
+
+  return server;
 }
 
-startServer();
+if (require.main === module) {
+  startServer().catch((error) => {
+    console.error(`No se pudo iniciar Proyecto Unicornio: ${error.message}`);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { startServer };

@@ -1,4 +1,5 @@
 (async function redirectFromRoot() {
+  await sessionReady;
   const token = getToken();
 
   if (!token) {

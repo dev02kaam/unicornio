@@ -12,6 +12,7 @@ function getDefaultErrorCode(statusCode) {
     403: 'FORBIDDEN',
     404: 'NOT_FOUND',
     409: 'CONFLICT',
+    410: 'GONE',
     413: 'PAYLOAD_TOO_LARGE',
     415: 'UNSUPPORTED_MEDIA_TYPE',
   };
@@ -42,7 +43,19 @@ function getBodyParserError(error) {
   return knownErrors[error?.type] || null;
 }
 
-function errorMiddleware(error, _req, res, _next) {
+function errorMiddleware(error, req, res, _next) {
+  const statusCode = error instanceof AppError ? error.statusCode : Number(error?.statusCode || 500);
+  const logContext = {
+    event: statusCode === 429 ? 'REQUEST_RATE_LIMITED' : 'REQUEST_REJECTED',
+    requestId: req.id,
+    method: req.method,
+    path: req.path,
+    statusCode,
+    errorCode: error.code || error.type || error.name,
+  };
+  if (statusCode >= 500) req.log?.error(logContext, 'request failed');
+  else if ([401, 403, 429].includes(statusCode)) req.log?.warn(logContext, 'request rejected');
+
   if (error instanceof AppError) {
     return sendError(
       res,
@@ -61,6 +74,16 @@ function errorMiddleware(error, _req, res, _next) {
       bodyParserError.statusCode,
       null,
       getDefaultErrorCode(bodyParserError.statusCode),
+    );
+  }
+
+  if (Number.isInteger(error?.statusCode) && error.statusCode >= 400 && error.statusCode < 500) {
+    return sendError(
+      res,
+      error.statusCode === 403 ? 'Solicitud rechazada.' : 'Solicitud no valida.',
+      error.statusCode,
+      null,
+      getDefaultErrorCode(error.statusCode),
     );
   }
 

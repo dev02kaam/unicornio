@@ -1,77 +1,141 @@
 const API_BASE = '/api';
-const TOKEN_KEY = 'unicornio_token';
-const REMEMBER_SESSION_KEY_PREFIX = 'unicornio_remember_session:';
+const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-// El contenido del token solo se usa para adaptar la interfaz. La autenticación
-// sigue dependiendo siempre de la validación del servidor.
-function getTokenPayload(token) {
-  try {
-    const payload = token?.split('.')[1];
-    if (!payload) {
-      return null;
-    }
+let currentSessionUser = null;
+let currentCsrfToken = null;
 
-    const normalizedPayload = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const decodedPayload = atob(normalizedPayload.padEnd(Math.ceil(normalizedPayload.length / 4) * 4, '='));
-    return JSON.parse(decodedPayload);
-  } catch (_error) {
-    return null;
+const appLoadingState = {
+  sessionReady: false,
+  authenticated: false,
+  shellReady: false,
+  pageReady: false,
+  revealQueued: false,
+  fallbackTimer: null,
+};
+
+function getPendingBody() {
+  return document.body?.classList.contains('auth-pending') ? document.body : null;
+}
+
+function installAppLoadingStatus() {
+  const body = getPendingBody();
+  if (!body) return;
+
+  body.setAttribute('aria-busy', 'true');
+  document.getElementById('main-content')?.setAttribute('aria-busy', 'true');
+  if (!document.querySelector('.app-loading-status')) {
+    const status = document.createElement('div');
+    status.className = 'app-loading-status';
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
+    status.innerHTML = `
+      <div class="app-loading-status__panel">
+        <img src="/assets/brand/logo_proyecto_unicornio_horizontal_limpio.png" alt="" />
+        <span>Preparando tu espacio&hellip;</span>
+      </div>
+    `;
+    body.append(status);
   }
 }
 
-function getTokenSubject(token = getToken()) {
-  return getTokenPayload(token)?.sub || null;
+function revealApp() {
+  const body = document.body;
+  if (!body) return;
+
+  window.clearTimeout(appLoadingState.fallbackTimer);
+  appLoadingState.fallbackTimer = null;
+  body.classList.remove('auth-pending');
+  body.removeAttribute('aria-busy');
+  document.getElementById('main-content')?.removeAttribute('aria-busy');
+  document.querySelector('.app-loading-status')?.remove();
 }
 
-function getTokenRole(token = getToken()) {
-  return getTokenPayload(token)?.role || null;
+function queueAppReveal({ immediate = false } = {}) {
+  if (appLoadingState.revealQueued) return;
+  appLoadingState.revealQueued = true;
+
+  const reveal = () => {
+    appLoadingState.revealQueued = false;
+    revealApp();
+  };
+  if (immediate) {
+    window.requestAnimationFrame(reveal);
+    return;
+  }
+  window.requestAnimationFrame(() => window.requestAnimationFrame(reveal));
 }
 
-function getRememberSessionKey(token = getToken()) {
-  const subject = getTokenSubject(token);
-  return subject ? `${REMEMBER_SESSION_KEY_PREFIX}${encodeURIComponent(subject)}` : null;
+function maybeRevealApp() {
+  if (
+    appLoadingState.sessionReady
+    && appLoadingState.authenticated
+    && appLoadingState.shellReady
+    && appLoadingState.pageReady
+  ) {
+    queueAppReveal();
+  }
 }
 
-function shouldRememberSession(token = getToken()) {
-  const key = getRememberSessionKey(token);
-  return !key || localStorage.getItem(key) !== 'false';
+window.UnicornioAppLoading = {
+  setSessionReady(authenticated) {
+    appLoadingState.sessionReady = true;
+    appLoadingState.authenticated = Boolean(authenticated);
+    if (authenticated && getPendingBody() && !appLoadingState.fallbackTimer) {
+      appLoadingState.fallbackTimer = window.setTimeout(() => queueAppReveal(), 12000);
+    }
+    maybeRevealApp();
+  },
+  markShellReady() {
+    appLoadingState.shellReady = true;
+    maybeRevealApp();
+  },
+  markPageReady() {
+    appLoadingState.pageReady = true;
+    maybeRevealApp();
+  },
+  revealImmediately() {
+    queueAppReveal({ immediate: true });
+  },
+};
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', installAppLoadingStatus, { once: true });
+} else {
+  installAppLoadingStatus();
+}
+
+function setSessionUser(user) {
+  currentSessionUser = user || null;
+  if (currentSessionUser?.role) {
+    document.documentElement.dataset.userRole = String(currentSessionUser.role).toUpperCase();
+  }
 }
 
 function getToken() {
-  return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+  // Compatibilidad temporal con las vistas: es una marca en memoria, nunca una credencial.
+  return currentSessionUser ? 'cookie-session' : null;
 }
 
-function setToken(token) {
-  const storage = shouldRememberSession(token) ? localStorage : sessionStorage;
-  const otherStorage = storage === localStorage ? sessionStorage : localStorage;
-  otherStorage.removeItem(TOKEN_KEY);
-  storage.setItem(TOKEN_KEY, token);
+function getTokenSubject() {
+  return currentSessionUser?.id || null;
 }
 
-function setRememberSession(remember) {
-  const token = getToken();
-  const key = getRememberSessionKey(token);
-  if (key) {
-    localStorage.setItem(key, String(remember));
-  }
+function getTokenRole() {
+  return currentSessionUser?.role || null;
+}
 
-  if (!token) {
-    return;
-  }
-
-  const storage = remember ? localStorage : sessionStorage;
-  const otherStorage = remember ? sessionStorage : localStorage;
-  otherStorage.removeItem(TOKEN_KEY);
-  storage.setItem(TOKEN_KEY, token);
+function setRememberSession() {
+  // La politica de expiracion se aplica en el servidor; el navegador no decide la persistencia.
 }
 
 function clearToken() {
-  localStorage.removeItem(TOKEN_KEY);
-  sessionStorage.removeItem(TOKEN_KEY);
+  currentSessionUser = null;
+  currentCsrfToken = null;
+  delete document.documentElement.dataset.userRole;
 }
 
 function getApiErrorMessage(error) {
-  const details = error?.payload?.details;
+  const details = error?.payload?.error?.details || error?.payload?.details;
   if (Array.isArray(details) && details.length > 0) {
     return details.join(' ');
   }
@@ -79,34 +143,82 @@ function getApiErrorMessage(error) {
   return error?.message || 'Error en la peticion.';
 }
 
+async function parseApiResponse(response) {
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(payload.message || 'Error en la peticion.');
+    error.payload = payload;
+    error.status = response.status;
+    throw error;
+  }
+  return payload;
+}
+
+async function refreshSession() {
+  try {
+    const response = await fetch(`${API_BASE}/auth/session`, {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+    });
+    const payload = await parseApiResponse(response);
+    setSessionUser(payload.data?.user);
+    return currentSessionUser;
+  } catch (error) {
+    if (error.status !== 401) throw error;
+    clearToken();
+    return null;
+  }
+}
+
+const sessionReady = refreshSession().finally(() => {
+  window.UnicornioAppLoading.setSessionReady(Boolean(currentSessionUser));
+});
+
+async function getCsrfToken({ force = false } = {}) {
+  if (currentCsrfToken && !force) return currentCsrfToken;
+  const response = await fetch(`${API_BASE}/auth/csrf`, {
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json' },
+  });
+  const payload = await parseApiResponse(response);
+  currentCsrfToken = payload.data?.csrfToken || null;
+  if (!currentCsrfToken) throw new Error('No se pudo obtener la proteccion CSRF.');
+  return currentCsrfToken;
+}
+
 async function apiRequest(path, options = {}) {
+  const method = String(options.method || 'GET').toUpperCase();
   const headers = {
-    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    ...(options.body && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
     ...(options.headers || {}),
   };
 
-  const token = getToken();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
+  if (UNSAFE_METHODS.has(method)) {
+    // El login puede permanecer abierto mientras el servidor local se reinicia.
+    // En ese caso la pestaña conserva un token ligado a la sesión anterior.
+    headers['X-CSRF-Token'] = await getCsrfToken({ force: path === '/auth/login' });
   }
 
-  const method = String(options.method || 'GET').toUpperCase();
   const requestDetail = { path, method };
   document.dispatchEvent(new CustomEvent('unicornio:request-start', { detail: requestDetail }));
 
   try {
     const response = await fetch(`${API_BASE}${path}`, {
       ...options,
+      method,
       headers,
+      credentials: 'same-origin',
     });
+    const payload = await parseApiResponse(response);
 
-    const payload = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      const error = new Error(payload.message || 'Error en la peticion.');
-      error.payload = payload;
-      error.status = response.status;
-      throw error;
+    if (path === '/auth/login') {
+      setSessionUser(payload.data?.user);
+      currentCsrfToken = payload.data?.csrfToken || null;
+    } else if (path === '/auth/session' || path === '/auth/me') {
+      setSessionUser(payload.data?.user);
+    } else if (path === '/auth/logout') {
+      clearToken();
     }
 
     document.dispatchEvent(new CustomEvent('unicornio:request-end', {

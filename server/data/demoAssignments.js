@@ -169,6 +169,26 @@ function createDemoUserGroupAssignments() {
       createdAt: now,
       updatedAt: now,
     },
+    {
+      id: 'uga-7',
+      userId: '6',
+      groupId: 'group-1',
+      role: 'PROFESSIONAL',
+      isPrimary: true,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'uga-8',
+      userId: '11',
+      groupId: 'group-3',
+      role: 'PROFESSIONAL',
+      isPrimary: true,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    },
   ];
 }
 

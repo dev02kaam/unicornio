@@ -24,9 +24,14 @@ const notificationCount = document.getElementById('notification-count');
 const newCampaignButton = document.getElementById('new-campaign-button');
 const campaignDialog = document.getElementById('campaign-dialog');
 const campaignForm = document.getElementById('campaign-form');
+const campaignCenterSelect = document.getElementById('campaign-center-select');
 const campaignGroupSelect = document.getElementById('campaign-group-select');
 const campaignDateInput = document.getElementById('campaign-date-input');
 const campaignFormStatus = document.getElementById('campaign-form-status');
+const questionnaireAgeFilter = document.getElementById('questionnaire-age-filter');
+const questionnaireCatalog = document.getElementById('questionnaire-catalog');
+const campaignSummaryGroup = document.getElementById('campaign-summary-group');
+const campaignSummaryCount = document.getElementById('campaign-summary-count');
 const resultDialog = document.getElementById('result-dialog');
 const resultDialogTitle = document.getElementById('result-dialog-title');
 const resultContent = document.getElementById('result-content');
@@ -65,6 +70,9 @@ const state = {
   userId: getTokenSubject(),
   campaigns: [],
   groups: [],
+  families: [],
+  definitions: [],
+  selectedFamilyKeys: new Set(),
   selectedCampaignId: null,
   monitor: null,
   alerts: [],
@@ -123,7 +131,7 @@ function handleApiError(error) {
 }
 
 function setBodyReady() {
-  document.body.classList.remove('auth-pending');
+  window.UnicornioAppLoading?.markPageReady();
 }
 
 function closeDialog(dialog) {
@@ -181,8 +189,8 @@ function renderTimeline(status) {
 
 function renderCampaignActions(campaign) {
   const actions = [];
-  if (['DRAFT', 'CONSENT_PENDING', 'READY'].includes(campaign.status)) {
-    actions.push('<button class="button secondary" type="button" data-campaign-action="consents">Solicitar consentimientos</button>');
+  if (['CONSENT_PENDING', 'READY'].includes(campaign.status)) {
+    actions.push('<button class="button secondary" type="button" data-campaign-action="consents">Actualizar consentimientos</button>');
   }
   if (['READY', 'CONSENT_PENDING'].includes(campaign.status)) {
     actions.push('<button class="button primary" type="button" data-campaign-action="open">Abrir sesión</button>');
@@ -228,7 +236,11 @@ function renderParticipants(participants) {
       <article class="participant-row">
         <div class="participant-person">
           <span class="participant-avatar" aria-hidden="true">${escapeMarkup(initials(participant.student.name))}</span>
-          <span><strong>${escapeMarkup(participant.student.name)}</strong><small>${escapeMarkup(consent)}</small></span>
+          <span>
+            <strong>${escapeMarkup(participant.student.name)}</strong>
+            <small>${escapeMarkup(participant.questionnaire?.title || 'Cuestionario')}${participant.questionnaire?.ageRange ? ` · ${escapeMarkup(participant.questionnaire.ageRange)} años` : ''}</small>
+            <small>${escapeMarkup(consent)}</small>
+          </span>
         </div>
         <span class="participant-state" data-tone="${meta.tone}">${escapeMarkup(meta.label)}</span>
         ${resultAction}
@@ -317,7 +329,8 @@ function renderMonitor() {
   campaignTitle.textContent = campaign.title;
   campaignStatus.textContent = meta.label;
   campaignStatus.dataset.tone = meta.tone;
-  campaignMeta.textContent = `${campaign.group?.name || 'Grupo'} · ${formatDate(campaign.plannedFor)}${campaign.liveExpiresAt ? ` · finaliza ${formatDate(campaign.liveExpiresAt, { withTime: true })}` : ''}`;
+  const questionnaireSummary = (campaign.questionnaires || []).map((item) => item.shortLabel).join(', ');
+  campaignMeta.textContent = `${campaign.group?.name || 'Grupo'} · ${formatDate(campaign.plannedFor)}${questionnaireSummary ? ` · ${questionnaireSummary}` : ''}${campaign.liveExpiresAt ? ` · finaliza ${formatDate(campaign.liveExpiresAt, { withTime: true })}` : ''}`;
   renderTimeline(campaign.status);
   renderCampaignActions(campaign);
   renderCounts(counts, participants.length);
@@ -399,14 +412,105 @@ function defaultLocalDateTime() {
   return local.toISOString().slice(0, 16);
 }
 
+function assignmentCenter(assignment) {
+  return assignment.center || {
+    id: assignment.centerId || assignment.group?.centerId,
+    name: assignment.centerName || 'Centro',
+  };
+}
+
+function availableCenters() {
+  const centers = new Map();
+  state.groups.forEach((assignment) => {
+    const center = assignmentCenter(assignment);
+    if (center?.id) centers.set(center.id, center);
+  });
+  return [...centers.values()].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+}
+
+function renderGroupOptions() {
+  const centerId = campaignCenterSelect.value;
+  const previousGroupId = campaignGroupSelect.value;
+  const assignments = state.groups.filter((assignment) => (
+    String(assignmentCenter(assignment)?.id || '') === String(centerId)
+  ));
+  campaignGroupSelect.innerHTML = assignments.map((assignment) => `
+    <option value="${escapeMarkup(assignment.group?.id || assignment.groupId)}">
+      ${escapeMarkup(assignment.group?.name || 'Grupo')}
+    </option>
+  `).join('');
+  if (assignments.some((assignment) => (
+    String(assignment.group?.id || assignment.groupId) === String(previousGroupId)
+  ))) {
+    campaignGroupSelect.value = previousGroupId;
+  }
+  updateCampaignGroupSummary();
+}
+
+function updateCampaignGroupSummary() {
+  const selected = state.groups.find((assignment) => (
+    String(assignment.group?.id || assignment.groupId) === String(campaignGroupSelect.value)
+  ));
+  campaignSummaryGroup.textContent = selected
+    ? `${assignmentCenter(selected)?.name || 'Centro'} · ${selected.group?.name || 'Grupo'}`
+    : 'Selecciona un grupo';
+}
+
+function familyAgeRanges(familyKey) {
+  return state.definitions
+    .filter((definition) => definition.familyKey === familyKey)
+    .map((definition) => `${definition.ageMin}–${definition.ageMax}`);
+}
+
+function familyMatchesAgeFilter(familyKey, filter) {
+  if (filter === 'all') return true;
+  const [minimum, maximum] = filter.split('-').map(Number);
+  return state.definitions.some((definition) => (
+    definition.familyKey === familyKey
+    && definition.ageMin <= maximum
+    && definition.ageMax >= minimum
+  ));
+}
+
+function updateCatalogSummary() {
+  const count = state.selectedFamilyKeys.size;
+  campaignSummaryCount.textContent = `${count} ${count === 1 ? 'seleccionado' : 'seleccionados'}`;
+}
+
+function renderQuestionnaireCatalog() {
+  const filter = questionnaireAgeFilter.value || 'all';
+  const families = state.families.filter((family) => familyMatchesAgeFilter(family.key, filter));
+  questionnaireCatalog.innerHTML = families.map((family) => {
+    const checked = state.selectedFamilyKeys.has(family.key);
+    const ranges = [...new Set(familyAgeRanges(family.key))].join(' y ');
+    return `
+      <label class="questionnaire-catalog-item${checked ? ' is-selected' : ''}">
+        <input type="checkbox" name="familyKey" value="${escapeMarkup(family.key)}" ${checked ? 'checked' : ''} />
+        <span class="questionnaire-catalog-item__check" aria-hidden="true"></span>
+        <span class="questionnaire-catalog-item__copy">
+          <strong>${escapeMarkup(family.label)}</strong>
+          <small>${escapeMarkup(family.description)}</small>
+        </span>
+        <span class="questionnaire-catalog-item__age">${escapeMarkup(ranges)} años</span>
+      </label>
+    `;
+  }).join('');
+  if (families.length === 0) {
+    questionnaireCatalog.innerHTML = '<p class="empty-copy">No hay cuestionarios para ese intervalo de edad.</p>';
+  }
+  updateCatalogSummary();
+}
+
 function openCampaignDialog() {
   campaignFormStatus.textContent = '';
   campaignDateInput.value = defaultLocalDateTime();
-  campaignGroupSelect.innerHTML = state.groups.map((assignment) => `
-    <option value="${escapeMarkup(assignment.group?.id || assignment.groupId)}">
-      ${escapeMarkup(assignment.group?.name || 'Grupo')} · ${escapeMarkup(assignment.center?.name || 'Centro')}
-    </option>
+  state.selectedFamilyKeys.clear();
+  questionnaireAgeFilter.value = 'all';
+  campaignCenterSelect.innerHTML = availableCenters().map((center) => `
+    <option value="${escapeMarkup(center.id)}">${escapeMarkup(center.name)}</option>
   `).join('');
+  renderGroupOptions();
+  renderQuestionnaireCatalog();
   if (state.groups.length === 0) {
     campaignFormStatus.textContent = 'Necesitas estar asignado a un grupo antes de crear una campaña.';
   }
@@ -416,6 +520,11 @@ function openCampaignDialog() {
 async function submitCampaign(event) {
   event.preventDefault();
   if (state.groups.length === 0) {
+    return;
+  }
+  if (state.selectedFamilyKeys.size === 0) {
+    campaignFormStatus.textContent = 'Selecciona al menos un cuestionario.';
+    questionnaireCatalog.focus({ preventScroll: false });
     return;
   }
   const submitButton = campaignForm.querySelector('[type="submit"]');
@@ -428,6 +537,7 @@ async function submitCampaign(event) {
       body: JSON.stringify({
         title: formData.get('title'),
         groupId: formData.get('groupId'),
+        familyKeys: [...state.selectedFamilyKeys],
         plannedFor: new Date(formData.get('plannedFor')).toISOString(),
       }),
     });
@@ -491,18 +601,34 @@ async function showResult(studentId) {
     resultDialogTitle.textContent = result.student.name;
     resultContent.innerHTML = `
       <p>${escapeMarkup(result.disclaimer)}</p>
-      <div class="result-summary">
-        <div><span class="eyebrow">Total</span><strong>${Number(result.totalScore)} / 60</strong></div>
-        <div><span class="eyebrow">Banda orientativa</span><strong>${escapeMarkup(result.band?.label || result.band?.key || 'Sin banda')}</strong></div>
-      </div>
-      <h3>Respuestas</h3>
-      <div class="result-answer-list">
-        ${(result.answers || []).map((answer) => `
-          <div class="result-answer">
-            <strong>${Number(answer.questionNumber)}</strong>
-            <span>${escapeMarkup(answer.question)}</span>
-            <span>${escapeMarkup(answer.label)} (${Number(answer.points)})</span>
-          </div>
+      <div class="student-result-list">
+        ${(result.results || []).map((questionnaireResult) => `
+          <section class="student-result-section">
+            <div class="student-result-section__heading">
+              <div><span class="eyebrow">${escapeMarkup(questionnaireResult.ageRange)} años</span><h3>${escapeMarkup(questionnaireResult.questionnaireTitle)}</h3></div>
+            </div>
+            <div class="result-summary">
+              <div><span class="eyebrow">Puntuación</span><strong>${Number(questionnaireResult.totalScore)}</strong></div>
+              <div><span class="eyebrow">Banda orientativa</span><strong>${escapeMarkup(questionnaireResult.band?.label || questionnaireResult.band?.key || 'Sin banda')}</strong></div>
+            </div>
+            ${(questionnaireResult.subscales || []).length ? `
+              <div class="result-subscales" aria-label="Subescalas">
+                ${questionnaireResult.subscales.map((subscale) => `<span><strong>${escapeMarkup(subscale.label || subscale.key)}</strong> ${Number(subscale.score)}</span>`).join('')}
+              </div>
+            ` : ''}
+            <details>
+              <summary>Ver respuestas</summary>
+              <div class="result-answer-list">
+                ${(questionnaireResult.answers || []).map((answer) => `
+                  <div class="result-answer">
+                    <strong>${Number(answer.questionNumber)}</strong>
+                    <span>${escapeMarkup(answer.question)}</span>
+                    <span>${escapeMarkup(answer.label)} (${Number(answer.points)})</span>
+                  </div>
+                `).join('')}
+              </div>
+            </details>
+          </section>
         `).join('')}
       </div>
     `;
@@ -558,6 +684,9 @@ async function submitAlertAction(event) {
 }
 
 async function initialize() {
+  await sessionReady;
+  state.role = String(getTokenRole() || '').toUpperCase();
+  state.userId = getTokenSubject();
   if (!getToken() || !state.userId) {
     window.location.href = '/login.html';
     return;
@@ -567,7 +696,6 @@ async function initialize() {
     return;
   }
 
-  setBodyReady();
   try {
     const requests = [
       apiRequest(`/users/${encodeURIComponent(state.userId)}`),
@@ -575,13 +703,16 @@ async function initialize() {
     ];
     if (state.role === 'PROFESSIONAL') {
       requests.push(apiRequest(`/users/${encodeURIComponent(state.userId)}/assignments`));
+      requests.push(apiRequest('/questionnaire-definitions'));
     }
-    const [userResponse, campaignResponse, assignmentsResponse] = await Promise.all(requests);
+    const [userResponse, campaignResponse, assignmentsResponse, definitionsResponse] = await Promise.all(requests);
     accountName.textContent = userResponse.data.user.name;
     state.campaigns = campaignResponse.data.campaigns || [];
 
     if (state.role === 'PROFESSIONAL') {
       state.groups = assignmentsResponse?.data?.groups || [];
+      state.families = definitionsResponse?.data?.families || [];
+      state.definitions = definitionsResponse?.data?.definitions || [];
       professionalSurface.hidden = false;
       renderCampaigns();
       const requestedCampaign = new URLSearchParams(window.location.search).get('campaignId');
@@ -601,6 +732,8 @@ async function initialize() {
       pilotDisabled.hidden = false;
       pilotDisabledMessage.textContent = getApiErrorMessage(error);
     }
+  } finally {
+    if (getToken()) setBodyReady();
   }
 }
 
@@ -640,14 +773,32 @@ alertList?.addEventListener('click', (event) => {
 newCampaignButton?.addEventListener('click', openCampaignDialog);
 campaignForm?.addEventListener('submit', submitCampaign);
 alertActionForm?.addEventListener('submit', submitAlertAction);
+campaignCenterSelect?.addEventListener('change', renderGroupOptions);
+campaignGroupSelect?.addEventListener('change', updateCampaignGroupSummary);
+questionnaireAgeFilter?.addEventListener('change', renderQuestionnaireCatalog);
+questionnaireCatalog?.addEventListener('change', (event) => {
+  const input = event.target.closest('input[name="familyKey"]');
+  if (!input) return;
+  if (input.checked) {
+    state.selectedFamilyKeys.add(input.value);
+  } else {
+    state.selectedFamilyKeys.delete(input.value);
+  }
+  input.closest('.questionnaire-catalog-item')?.classList.toggle('is-selected', input.checked);
+  updateCatalogSummary();
+});
 
 document.querySelectorAll('[data-close-dialog]').forEach((button) => {
   button.addEventListener('click', () => closeDialog(button.closest('dialog')));
 });
 
-document.getElementById('logout-button')?.addEventListener('click', () => {
-  clearToken();
-  window.location.href = '/login.html';
+document.getElementById('logout-button')?.addEventListener('click', async () => {
+  try {
+    await apiRequest('/auth/logout', { method: 'POST' });
+  } finally {
+    clearToken();
+    window.location.href = '/login.html';
+  }
 });
 
 window.addEventListener('beforeunload', () => clearInterval(state.pollingTimer));

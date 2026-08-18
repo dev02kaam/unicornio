@@ -1,12 +1,28 @@
 const questionnairePilot = require('./001-questionnaire-pilot');
 const questionnaireAlertTransfer = require('./002-questionnaire-alert-transfer');
 const questionnaireIdempotencyIndexes = require('./003-questionnaire-idempotency-indexes');
+const relationalSecurityFoundation = require('./004-relational-security-foundation');
+const alertOwnership = require('./005-alert-ownership');
+const sensitiveDataAndImmutability = require('./006-sensitive-data-and-immutability');
+const rlsRequestContext = require('./007-rls-request-context');
+const persistentAbuseControls = require('./008-persistent-abuse-controls');
+const emergencyAdmin = require('./009-emergency-admin');
+const questionnaireCatalogAndMultiAssignment = require('./010-questionnaire-catalog-and-multi-assignment');
 
 const migrations = [
   questionnairePilot,
   questionnaireAlertTransfer,
   questionnaireIdempotencyIndexes,
+  relationalSecurityFoundation,
+  alertOwnership,
+  sensitiveDataAndImmutability,
+  rlsRequestContext,
+  persistentAbuseControls,
+  emergencyAdmin,
+  questionnaireCatalogAndMultiAssignment,
 ];
+
+const expectedMigrationIds = Object.freeze(migrations.map((migration) => migration.id));
 
 async function runMigrations(pool) {
   await pool.query(`
@@ -43,4 +59,4 @@ async function runMigrations(pool) {
   }
 }
 
-module.exports = { runMigrations };
+module.exports = { runMigrations, migrations, expectedMigrationIds };

@@ -1,10 +1,12 @@
-const bcrypt = require('bcryptjs');
 const { database } = require('../config/database');
 const { createUserModel, sanitizeUser } = require('../models/user.model');
 const { createCenterAssignmentModel } = require('../models/assignment.model');
 const { AppError } = require('../utils/errors');
 const { isEmail, isNonEmptyString, validatePassword, normalizeRole, pickDefined, isPastOrTodayDate, normalizeDateOnly } = require('../utils/validators');
 const { CENTER_ASSIGNMENT_ROLES, UNICORN_GENDERS } = require('../utils/constants');
+const { hashPassword, verifyPasswordHash } = require('./password.service');
+const { env } = require('../config/env');
+const identityRepository = require('../repositories/identity.repository');
 
 function getAllUsers() {
   return database.getUsers().map(sanitizeUser);
@@ -139,7 +141,7 @@ function assertValidStudentBirthDate(role, birthDate) {
   }
 }
 
-function createUser(data) {
+async function createUser(data) {
   const name = String(data.name || '').trim();
   const email = String(data.email || '').trim().toLowerCase();
   const password = String(data.password || '');
@@ -178,7 +180,7 @@ function createUser(data) {
     id: database.nextUserId(),
     name,
     email,
-    passwordHash: bcrypt.hashSync(password, 10),
+    passwordHash: await hashPassword(password),
     role,
     isActive: true,
     schoolId: nextSchoolId,
@@ -265,7 +267,7 @@ function createUserWithPasswordHash(data) {
   return sanitizeUser(user);
 }
 
-function updateUser(id, updates, options = {}) {
+async function updateUser(id, updates, options = {}) {
   const user = findUserById(id);
   if (!user) {
     throw new AppError('Usuario no encontrado.', 404);
@@ -302,7 +304,7 @@ function updateUser(id, updates, options = {}) {
     if (!validatePassword(patch.password)) {
       throw new AppError('La contrasena debe tener al menos 8 caracteres.', 400);
     }
-    user.passwordHash = bcrypt.hashSync(String(patch.password), 10);
+    user.passwordHash = await hashPassword(String(patch.password));
   }
 
   if (patch.schoolId !== undefined) {
@@ -378,17 +380,24 @@ function deleteUser(id) {
   return sanitizeUser(user);
 }
 
-function verifyPassword(user, password) {
-  return bcrypt.compareSync(password, user.passwordHash);
+async function verifyPassword(user, password) {
+  const verification = await verifyPasswordHash(password, user.passwordHash);
+  if (verification.valid && verification.needsUpgrade) {
+    user.passwordHash = await hashPassword(password);
+    user.updatedAt = new Date().toISOString();
+    database.persistUsers();
+    await database.flush();
+  }
+  return verification.valid;
 }
 
-function changePassword(id, currentPassword, newPassword) {
+async function changePassword(id, currentPassword, newPassword) {
   const user = findUserById(id);
   if (!user) {
     throw new AppError('Usuario no encontrado.', 404);
   }
 
-  if (!verifyPassword(user, String(currentPassword || ''))) {
+  if (!await verifyPassword(user, String(currentPassword || ''))) {
     throw new AppError('La contraseña actual no es correcta.', 400);
   }
 
@@ -396,7 +405,8 @@ function changePassword(id, currentPassword, newPassword) {
     throw new AppError('La nueva contraseña debe tener al menos 8 caracteres.', 400);
   }
 
-  user.passwordHash = bcrypt.hashSync(String(newPassword), 10);
+  user.passwordHash = await hashPassword(String(newPassword));
+  user.sessionVersion = Number(user.sessionVersion || 1) + 1;
   user.updatedAt = new Date().toISOString();
   database.persistUsers();
   return sanitizeUser(user);
@@ -419,6 +429,34 @@ function updateUnicornGender(id, unicornGender) {
   return sanitizeUser(user, { includePreferences: true });
 }
 
+async function updateOwnProfile(currentUser, auth, profile, options = {}) {
+  const config = options.config || env;
+  const repository = options.repository || identityRepository;
+  if (config.appProfile === 'production') {
+    const updated = await repository.updateOwnProfile(auth.sub, profile);
+    if (!updated) throw new AppError('Usuario no encontrado.', 404);
+    const { passwordHash, internalId, sessionVersion, ...publicUser } = updated;
+    return publicUser;
+  }
+  return updateUser(currentUser.id, { name: profile.name }, { canUpdateRole: false });
+}
+
+async function updateOwnCompanion(currentUser, auth, unicornGender, options = {}) {
+  const normalizedGender = String(unicornGender || '').toUpperCase();
+  if (!Object.values(UNICORN_GENDERS).includes(normalizedGender)) {
+    throw new AppError('La preferencia del unicornio no es valida.', 400);
+  }
+  const config = options.config || env;
+  const repository = options.repository || identityRepository;
+  if (config.appProfile === 'production') {
+    const updated = await repository.updateOwnCompanion(auth.sub, normalizedGender);
+    if (!updated) throw new AppError('Usuario no encontrado.', 404);
+    const { passwordHash, internalId, sessionVersion, ...publicUser } = updated;
+    return publicUser;
+  }
+  return updateUnicornGender(currentUser.id, normalizedGender);
+}
+
 module.exports = {
   getAllUsers,
   findUserById,
@@ -428,6 +466,8 @@ module.exports = {
   updateUser,
   changePassword,
   updateUnicornGender,
+  updateOwnProfile,
+  updateOwnCompanion,
   deleteUser,
   verifyPassword,
 };

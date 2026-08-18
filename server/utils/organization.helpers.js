@@ -157,6 +157,12 @@ function hasGroupAccess(user, groupId) {
     return true;
   }
 
+  const role = String(user.role || '').toUpperCase();
+  if (role === 'STUDENT') {
+    const primaryGroupId = findPrimaryGroupIdForUser(user.id) || user.groupId;
+    return Boolean(primaryGroupId && String(primaryGroupId) === String(groupId));
+  }
+
   if (getUserGroupAssignments(user.id).some((assignment) => assignment.groupId === String(groupId))) {
     return true;
   }
@@ -166,7 +172,7 @@ function hasGroupAccess(user, groupId) {
     return false;
   }
 
-  if (String(user?.role || '').toUpperCase() === 'FAMILY' && user.linkedStudentId) {
+  if (role === 'FAMILY' && user.linkedStudentId) {
     return findPrimaryGroupIdForUser(user.linkedStudentId) === group.id;
   }
 
@@ -296,6 +302,8 @@ module.exports = {
   findAcademicYearById,
   findCenterById,
   findGroupById,
+  findPrimaryCenterIdForUser,
+  findPrimaryGroupIdForUser,
   findPrimaryTeacherForGroup,
   getUserCenterAssignments,
   getUserGroupAssignments,

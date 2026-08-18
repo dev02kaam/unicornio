@@ -1,0 +1,90 @@
+name: Security CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: unicornio_ci_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d unicornio_ci_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npm run migrate
+        env:
+          MIGRATION_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/unicornio_ci_test
+          DATABASE_URL: postgresql://unicornio_app:unicornio_app@localhost:5432/unicornio_ci_test
+          MIGRATION_DATABASE_SSL_MODE: disable
+      - name: Create least-privilege application role
+        run: |
+          psql postgresql://postgres:postgres@localhost:5432/unicornio_ci_test -v ON_ERROR_STOP=1 <<'SQL'
+          create role unicornio_app login password 'unicornio_app' nobypassrls;
+          grant connect on database unicornio_ci_test to unicornio_app;
+          grant usage on schema public to unicornio_app;
+          grant select, insert, update, delete on all tables in schema public to unicornio_app;
+          grant usage, select on all sequences in schema public to unicornio_app;
+          alter default privileges in schema public grant select, insert, update, delete on tables to unicornio_app;
+          alter default privileges in schema public grant usage, select on sequences to unicornio_app;
+          SQL
+      - run: npm run seed:demo
+        env:
+          APP_PROFILE: demo
+          DEMO_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/unicornio_ci_test
+      - run: npm run lint
+      - run: npm test
+        env:
+          NODE_ENV: test
+          APP_PROFILE: demo
+          QUESTIONNAIRE_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/unicornio_ci_test
+      - run: npm audit --audit-level=high
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+        env:
+          NODE_ENV: test
+          APP_PROFILE: demo
+          PORT: 3001
+          APP_ORIGIN: http://127.0.0.1:3001
+          DATABASE_URL: postgresql://unicornio_app:unicornio_app@localhost:5432/unicornio_ci_test
+          SESSION_SECRET: ci-only-session-secret-with-at-least-32-chars
+      - run: npm sbom --sbom-format cyclonedx > unicornio-sbom.cdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: unicornio-sbom.cdx.json
+
+  codeql:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with: { languages: javascript-typescript }
+      - uses: github/codeql-action/analyze@v3
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@v2

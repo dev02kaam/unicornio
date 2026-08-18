@@ -20,26 +20,12 @@ const {
   getStudentResult,
   listNotifications,
   markNotificationRead,
-  getQuestionnairePreview,
 } = require('../services/questionnaires.service');
-
-async function getQuestionnairePreviewController(req, res, next) {
-  try {
-    const definition = getQuestionnairePreview(req.params.ageRange);
-    return sendSuccess(
-      res,
-      { definition },
-      'Modo de prueba funcional cargado.',
-    );
-  } catch (error) {
-    return next(error);
-  }
-}
 
 async function listDefinitionsController(req, res, next) {
   try {
-    const definitions = await listQuestionnaireDefinitions(req.user);
-    return sendSuccess(res, { definitions }, 'Cuestionarios cargados.');
+    const catalog = await listQuestionnaireDefinitions(req.user);
+    return sendSuccess(res, catalog, 'Cuestionarios cargados.');
   } catch (error) {
     return next(error);
   }
@@ -182,7 +168,7 @@ async function resolveAlertController(req, res, next) {
 
 async function transferAlertController(req, res, next) {
   try {
-    const alert = await transferAlert(req.params.alertId, req.body?.note, req.user);
+    const alert = await transferAlert(req.params.alertId, req.body, req.user);
     return sendSuccess(res, { alert }, 'Alerta transferida.');
   } catch (error) {
     return next(error);
@@ -221,7 +207,6 @@ async function markNotificationReadController(req, res, next) {
 }
 
 module.exports = {
-  getQuestionnairePreviewController,
   listDefinitionsController,
   createCampaignController,
   listCampaignsController,

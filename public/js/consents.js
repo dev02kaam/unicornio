@@ -475,6 +475,7 @@ modalLogoutButton?.addEventListener('click', async () => {
 });
 
 (async function init() {
+  await sessionReady;
   if (!ensureAuth()) {
     return;
   }
@@ -494,5 +495,7 @@ modalLogoutButton?.addEventListener('click', async () => {
     await loadConsents();
   } catch (error) {
     showBanner(error.message || 'No se pudieron cargar los consentimientos.', 'error');
+  } finally {
+    if (getToken()) window.UnicornioAppLoading?.markPageReady();
   }
 })();

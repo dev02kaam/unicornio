@@ -24,7 +24,7 @@
       Brand: Unicornio cosmos, calm and age-respectful; no clinical scoring language.
       Reuse: established color tokens, controls and companion imagery.
       Divergence: distraction-free runner with a persistent help control is safety-critical.
-      Layout: centered reading column; one question, four large answers, explicit progress.
+      Layout: tablet-first 65/35 workspace; one question, large answers and companion video.
       Aesthetic: “Constelación serena”; generous space and minimal visual noise.
       Responsive: same semantic order at every width; controls become full width below 640px.
       Accessibility: fieldset/legend, keyboard radios, live save status, 44px targets, reduced motion.
@@ -58,20 +58,9 @@
       </section>
 
       <section id="student-gate" class="pilot-gate card" hidden>
-        <span class="eyebrow">Piloto protegido</span>
+        <span class="eyebrow">Acceso protegido</span>
         <h1>El cuestionario no está disponible</h1>
         <p id="student-gate-message">Tu profesional te avisará cuando la sesión esté preparada.</p>
-        <div class="preview-launcher" aria-labelledby="student-preview-title">
-          <div>
-            <span class="eyebrow">Modo de prueba</span>
-            <h2 id="student-preview-title">Abrir sin campaña ni consentimiento</h2>
-            <p>Úsalo para comprobar el recorrido. Nada de lo que marques se guardará ni generará avisos.</p>
-          </div>
-          <div class="action-row">
-            <a class="button primary" href="/questionnaire.html?preview=9-12">Probar 9–12 años</a>
-            <a class="button secondary" href="/questionnaire.html?preview=13-16">Probar 13–16 años</a>
-          </div>
-        </div>
         <a class="button secondary" href="/dashboard.html">Volver a mi espacio</a>
       </section>
 
@@ -86,10 +75,6 @@
       </section>
 
       <section id="runner-view" class="runner-view card" hidden>
-        <div id="preview-notice" class="preview-notice" role="status" hidden>
-          <strong>Modo de prueba funcional</strong>
-          <span>Las respuestas no se guardan ni generan resultados o alertas.</span>
-        </div>
         <header class="runner-progress">
           <div>
             <span id="runner-question-count">Pregunta 1 de 20</span>
@@ -109,36 +94,61 @@
         </header>
 
         <form id="question-form" class="question-panel">
-          <fieldset>
-            <legend id="question-text" tabindex="-1">Cargando pregunta…</legend>
-            <div id="answer-options" class="answer-options"></div>
-          </fieldset>
+          <div class="question-workspace">
+            <div class="question-response-column">
+              <fieldset>
+                <legend id="question-text" tabindex="-1">Cargando pregunta…</legend>
+                <div id="answer-options" class="answer-options"></div>
+              </fieldset>
 
-          <button
-            id="help-button"
-            class="help-button"
-            type="button"
-            aria-label="Pedir ayuda con mi compañero Unicornio"
-          >
-            <span class="help-button__avatar" aria-hidden="true">
-              <img
-                data-companion-image
-                src="/assets/companions/luna/avatar-v2.png"
-                alt=""
-                width="48"
-                height="48"
-              />
-            </span>
-            <span class="help-button__copy">
-              <strong><span data-companion-name>Tu compañero</span> está contigo</strong>
-              <small>Si algo te preocupa, podéis pedir ayuda juntos.</small>
-            </span>
-            <span class="help-button__action" aria-hidden="true">Pedir ayuda <span>→</span></span>
-          </button>
+              <div class="runner-navigation">
+                <button id="previous-question-button" class="button secondary" type="button">Anterior</button>
+                <button id="next-question-button" class="button primary" type="submit">Guardar y continuar</button>
+              </div>
+            </div>
 
-          <div class="runner-navigation">
-            <button id="previous-question-button" class="button secondary" type="button">Anterior</button>
-            <button id="next-question-button" class="button primary" type="submit">Guardar y continuar</button>
+            <aside class="question-companion-stage" aria-label="Tu compañero presenta la pregunta">
+              <div class="question-video-frame">
+                <video
+                  id="question-companion-video"
+                  class="question-companion-video"
+                  muted
+                  playsinline
+                  preload="metadata"
+                  aria-label="Tu compañero presenta la pregunta"
+                ></video>
+                <div id="question-video-loader" class="question-video-loader" role="status" aria-live="polite">
+                  <span class="question-video-loader__orbit" aria-hidden="true"></span>
+                  <span>Preparando la pregunta…</span>
+                </div>
+              </div>
+              <button id="replay-question-button" class="replay-question-button" type="button" hidden>
+                <span aria-hidden="true">↻</span>
+                Volver a escuchar la pregunta
+              </button>
+
+              <button
+                id="help-button"
+                class="help-button"
+                type="button"
+                aria-label="Pedir ayuda con mi compañero Unicornio"
+              >
+                <span class="help-button__avatar" aria-hidden="true">
+                  <img
+                    data-companion-image
+                    src="/assets/companions/luna/avatar-v2.png"
+                    alt=""
+                    width="48"
+                    height="48"
+                  />
+                </span>
+                <span class="help-button__copy">
+                  <strong><span data-companion-name>Tu compañero</span> está contigo</strong>
+                  <small>Si algo te preocupa, podéis pedir ayuda juntos.</small>
+                </span>
+                <span class="help-button__action" aria-hidden="true">Pedir ayuda <span>→</span></span>
+              </button>
+            </aside>
           </div>
         </form>
       </section>
@@ -160,7 +170,6 @@
           <p id="completion-message"></p>
           <div class="action-row">
             <a id="completion-primary-action" class="button primary" href="/dashboard.html">Volver a mi espacio</a>
-            <a id="completion-secondary-action" class="button secondary" href="/questionnaire.html" hidden>Probar la otra versión</a>
           </div>
         </div>
       </section>

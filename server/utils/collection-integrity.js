@@ -33,6 +33,8 @@ function repairLegalTextVersions(items = []) {
 
 function getMaximumPrefixedSequence(items = [], prefix) {
   const escapedPrefix = String(prefix || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // El prefijo ya esta escapado y procede de constantes internas.
+  // eslint-disable-next-line security/detect-non-literal-regexp
   const pattern = new RegExp(`^${escapedPrefix}-(\\d+)$`);
 
   return items.reduce((maximum, item) => {

@@ -559,11 +559,13 @@ async function doLogout() {
 
 async function init() {
   try {
+    await sessionReady;
     initializeFormHelpers();
     await loadProfile();
     await loadAccountSheet();
     await loadCenters();
     renderCenterFilterBuilder();
+    window.UnicornioAppLoading?.markPageReady();
   } catch (_error) {
     clearToken();
     window.location.href = '/login.html';
