@@ -21,7 +21,7 @@ const resultParamsSchema = z.object({
 }).strict();
 const campaignCreateBodySchema = z.object({
   groupId: opaqueIdSchema,
-  familyKeys: z.array(opaqueIdSchema).min(1).max(7),
+  questionnaireVersionIds: z.array(opaqueIdSchema).min(1).max(14),
   title: z.string().trim().min(1).max(160).optional(),
   plannedFor: z.string().trim().max(40).refine((value) => !Number.isNaN(Date.parse(value)), 'Fecha no valida.').optional(),
 }).strict();

@@ -111,9 +111,46 @@ function evaluateQuestionnaire(definition, answers) {
   };
 }
 
+function evaluateQuestionnaireSubmission(definition, answers) {
+  const questionNumbers = new Set(definition.questions.map((question) => question.number));
+  const answeredQuestionNumbers = new Set(
+    (answers || [])
+      .map((answer) => Number(answer.questionNumber))
+      .filter((questionNumber) => questionNumbers.has(questionNumber)),
+  );
+  const answeredCount = answeredQuestionNumbers.size;
+  const totalQuestions = definition.questions.length;
+  const isComplete = answeredCount === totalQuestions;
+  const completion = {
+    status: isComplete ? 'COMPLETE' : 'PARTIAL',
+    answeredCount,
+    totalQuestions,
+  };
+
+  if (isComplete) {
+    return {
+      ...evaluateQuestionnaire(definition, answers),
+      completion,
+    };
+  }
+
+  return {
+    totalScore: null,
+    bandScore: null,
+    band: null,
+    subscales: [],
+    answers: [],
+    triggeredRules: [],
+    alertSeverity: null,
+    pendingClinicalRules: [],
+    completion,
+  };
+}
+
 module.exports = {
   normalizeAnswers,
   getBand,
   matchesSentinelRule,
   evaluateQuestionnaire,
+  evaluateQuestionnaireSubmission,
 };

@@ -15,9 +15,18 @@ const runnerQuestionCount = document.getElementById('runner-question-count');
 const runnerSaveStatus = document.getElementById('runner-save-status');
 const runnerProgressbar = document.getElementById('runner-progressbar');
 const runnerProgressFill = document.getElementById('runner-progress-fill');
+const questionIndex = document.getElementById('question-index');
+const finishQuestionnaireButton = document.getElementById('finish-questionnaire-button');
+const finishDialog = document.getElementById('finish-dialog');
+const finishDialogSummary = document.getElementById('finish-dialog-summary');
+const finishDialogNote = document.getElementById('finish-dialog-note');
+const finishDialogStatus = document.getElementById('finish-dialog-status');
+const confirmFinishButton = document.getElementById('confirm-finish-button');
 const previousQuestionButton = document.getElementById('previous-question-button');
 const nextQuestionButton = document.getElementById('next-question-button');
+const questionCompanionIdleVideo = document.getElementById('question-companion-idle-video');
 const questionCompanionVideo = document.getElementById('question-companion-video');
+const questionCompanionAudio = document.getElementById('question-companion-audio');
 const questionVideoLoader = document.getElementById('question-video-loader');
 const replayQuestionButton = document.getElementById('replay-question-button');
 const helpButton = document.getElementById('help-button');
@@ -28,8 +37,22 @@ const helpDeliveryWarning = document.getElementById('help-delivery-warning');
 const retryHelpButton = document.getElementById('retry-help-button');
 const helpViewMark = document.getElementById('help-view-mark');
 const helpViewEyebrow = document.getElementById('help-view-eyebrow');
+const completionEyebrow = document.getElementById('completion-eyebrow');
+const completionTitle = document.getElementById('completion-title');
 const studentLogoutButton = document.getElementById('student-logout-button');
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+const QUESTION_AUDIO_ASSETS = Object.freeze({
+  orion: Object.freeze({
+    'me cuesta disfrutar de las cosas que antes me gustaban': '/assets/companions/orion/question-depressive-mood.mp3',
+    'tardo mucho en volver a calmarme cuando me altero': '/assets/companions/orion/question-anger-regulation.mp3',
+  }),
+  sol: Object.freeze({
+    'me siento sola incluso rodeada de gente': '/assets/companions/sol/question-depressive-mood.mp3',
+    'me siento solo/a incluso rodeado/a de gente': '/assets/companions/sol/question-depressive-mood.mp3',
+    'siento una rabia que a veces no sé explicar': '/assets/companions/sol/question-anger-regulation.mp3',
+  }),
+});
 
 const state = {
   assignments: [],
@@ -42,6 +65,9 @@ const state = {
   savePromise: Promise.resolve(),
   savingQuestion: null,
   questionVideoCharacterId: null,
+  questionVideoMode: null,
+  questionAudioAsset: '',
+  questionPresentationId: 0,
 };
 
 function escapeMarkup(value) {
@@ -51,6 +77,20 @@ function escapeMarkup(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+function normalizeQuestionPrompt(value) {
+  return String(value || '')
+    .normalize('NFC')
+    .trim()
+    .toLocaleLowerCase('es-ES')
+    .replace(/[.!?¡¿]+$/gu, '')
+    .replace(/\s+/gu, ' ');
+}
+
+function questionAudioAsset(characterId, question) {
+  const characterAssets = QUESTION_AUDIO_ASSETS[String(characterId || '').toLowerCase()];
+  return characterAssets?.[normalizeQuestionPrompt(question?.text)] || '';
 }
 
 function setBodyReady({ immediate = false } = {}) {
@@ -65,6 +105,12 @@ function showOnly(element) {
   [studentGate, assignmentView, runnerView, completionView, helpView].forEach((view) => {
     view.hidden = view !== element;
   });
+  if (element !== runnerView) {
+    state.questionPresentationId += 1;
+    questionCompanionIdleVideo?.pause();
+    questionCompanionVideo?.pause();
+    questionCompanionAudio?.pause();
+  }
   document.body.classList.toggle('questionnaire-running', element === runnerView);
 }
 
@@ -151,38 +197,136 @@ function setQuestionVideoLoading(isLoading) {
   questionCompanionVideo.classList.toggle('is-loading', isLoading);
 }
 
-function syncQuestionVideoSource() {
+function setQuestionVideoMode(mode) {
+  state.questionVideoMode = mode;
+  questionCompanionIdleVideo.classList.toggle('is-active', mode === 'idle');
+  questionCompanionVideo.classList.toggle('is-active', mode === 'speaking');
+}
+
+function resetMediaPlayback(media) {
+  if (!media) return;
+  media.pause();
+  try {
+    media.currentTime = 0;
+  } catch (_error) {
+    // El recurso puede seguir cargando; load() lo dejará preparado desde el inicio.
+  }
+}
+
+function playQuestionIdle() {
+  if (reducedMotion.matches) {
+    questionCompanionIdleVideo.pause();
+    if (questionCompanionIdleVideo.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      questionCompanionIdleVideo.currentTime = 0;
+    }
+    return;
+  }
+  questionCompanionIdleVideo.play().catch(() => {
+    // El póster mantiene al compañero visible si el navegador bloquea la reproducción automática.
+  });
+}
+
+function showQuestionIdle({ replay = Boolean(state.questionAudioAsset), invalidate = true } = {}) {
+  if (invalidate) state.questionPresentationId += 1;
+  setQuestionVideoLoading(false);
+  resetMediaPlayback(questionCompanionVideo);
+  resetMediaPlayback(questionCompanionAudio);
+  setQuestionVideoMode('idle');
+  replayQuestionButton.hidden = !replay;
+  playQuestionIdle();
+}
+
+function syncQuestionMedia(question) {
   const character = window.UnicornioCompanion?.getCharacter?.() || { id: 'luna', name: 'Luna' };
-  if (state.questionVideoCharacterId === character.id) return;
-  state.questionVideoCharacterId = character.id;
-  questionCompanionVideo.src = `/assets/companions/${encodeURIComponent(character.id)}/question-speaking-transparent.webm`;
-  questionCompanionVideo.poster = `/assets/companions/${encodeURIComponent(character.id)}/question-speaking-poster.webp`;
-  questionCompanionVideo.setAttribute('aria-label', `${character.name} presenta la pregunta`);
-  setQuestionVideoLoading(true);
-  questionCompanionVideo.load();
+  if (state.questionVideoCharacterId !== character.id) {
+    state.questionVideoCharacterId = character.id;
+    const characterAssetRoot = `/assets/companions/${encodeURIComponent(character.id)}`;
+    questionCompanionIdleVideo.src = `${characterAssetRoot}/question-idle-transparent.webm`;
+    questionCompanionIdleVideo.poster = `${characterAssetRoot}/question-idle-poster.webp`;
+    questionCompanionVideo.src = `${characterAssetRoot}/question-speaking-transparent.webm`;
+    questionCompanionVideo.poster = `${characterAssetRoot}/question-speaking-poster.webp`;
+    questionCompanionVideo.setAttribute('aria-label', `${character.name} presenta la pregunta`);
+    questionCompanionIdleVideo.load();
+    questionCompanionVideo.load();
+  }
+
+  const audioAsset = questionAudioAsset(character.id, question);
+  state.questionAudioAsset = audioAsset;
+  if (questionCompanionAudio.getAttribute('src') !== audioAsset) {
+    if (audioAsset) {
+      questionCompanionAudio.src = audioAsset;
+    } else {
+      questionCompanionAudio.removeAttribute('src');
+    }
+    questionCompanionAudio.load();
+  }
+  replayQuestionButton.setAttribute(
+    'aria-label',
+    audioAsset ? `${character.name} vuelve a leer la pregunta` : 'Volver a escuchar la pregunta',
+  );
+  return audioAsset;
 }
 
 async function presentQuestion({ autoplay = true } = {}) {
-  syncQuestionVideoSource();
-  questionCompanionVideo.pause();
-  try {
-    questionCompanionVideo.currentTime = 0;
-  } catch (_error) {
-    // El navegador todavía está preparando los metadatos; play() retomará desde el inicio.
-  }
-  if (!autoplay || reducedMotion.matches) {
-    replayQuestionButton.hidden = false;
-    setQuestionVideoLoading(false);
+  const question = state.definition?.questions?.[state.currentIndex];
+  const audioAsset = syncQuestionMedia(question);
+  const presentationId = state.questionPresentationId + 1;
+  state.questionPresentationId = presentationId;
+  resetMediaPlayback(questionCompanionVideo);
+  resetMediaPlayback(questionCompanionAudio);
+
+  if (!audioAsset) {
+    showQuestionIdle({ replay: false, invalidate: false });
     return;
   }
-  replayQuestionButton.hidden = true;
-  setQuestionVideoLoading(questionCompanionVideo.readyState < HTMLMediaElement.HAVE_CURRENT_DATA);
-  try {
-    await questionCompanionVideo.play();
-  } catch (_error) {
-    setQuestionVideoLoading(false);
-    replayQuestionButton.hidden = false;
+  if (!autoplay) {
+    showQuestionIdle({ replay: true, invalidate: false });
+    return;
   }
+
+  questionCompanionIdleVideo.pause();
+  setQuestionVideoMode('speaking');
+  replayQuestionButton.hidden = true;
+  setQuestionVideoLoading(questionCompanionAudio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA);
+  try {
+    await questionCompanionAudio.play();
+    if (presentationId !== state.questionPresentationId) return;
+    setQuestionVideoLoading(false);
+    if (!reducedMotion.matches) {
+      questionCompanionVideo.play().catch(() => {
+        // El póster de lectura permanece visible si el vídeo no puede reproducirse.
+      });
+    }
+  } catch (_error) {
+    if (presentationId === state.questionPresentationId) {
+      showQuestionIdle({ replay: true });
+    }
+  }
+}
+
+function renderQuestionIndex() {
+  if (!state.definition) {
+    questionIndex.innerHTML = '';
+    return;
+  }
+
+  questionIndex.innerHTML = state.definition.questions.map((question, index) => {
+    const answered = state.answers.has(question.number);
+    const pending = state.pendingAnswers.has(question.number);
+    const current = index === state.currentIndex;
+    const states = [answered ? 'respondida' : 'sin responder'];
+    if (pending) states.push('guardándose');
+    if (current) states.push('actual');
+    return `
+      <button
+        class="question-index__button${answered ? ' is-answered' : ''}${pending ? ' is-pending' : ''}${current ? ' is-current' : ''}"
+        type="button"
+        data-question-index="${index}"
+        aria-label="Pregunta ${question.number}, ${states.join(', ')}"
+        ${current ? 'aria-current="step"' : ''}
+      >${question.number}</button>
+    `;
+  }).join('');
 }
 
 function renderQuestion({ autoplay = true } = {}) {
@@ -202,6 +346,7 @@ function renderQuestion({ autoplay = true } = {}) {
       <span>${escapeMarkup(option.label)}</span>
     </label>
   `).join('');
+  renderQuestionIndex();
   questionText.focus?.();
   presentQuestion({ autoplay });
 }
@@ -241,6 +386,7 @@ function updateProgress() {
   const total = state.definition.questions.length;
   runnerProgressbar.setAttribute('aria-valuenow', String(state.answers.size));
   runnerProgressFill.style.transform = `scaleX(${state.answers.size / total})`;
+  renderQuestionIndex();
 }
 
 function queueSave(questionNumber, value) {
@@ -255,6 +401,7 @@ function queueSave(questionNumber, value) {
   }
 
   state.pendingAnswers.set(questionNumber, value);
+  renderQuestionIndex();
   runnerSaveStatus.textContent = 'Guardando…';
   state.savingQuestion = questionNumber;
   const operation = state.savePromise
@@ -282,6 +429,7 @@ function queueSave(questionNumber, value) {
         state.pendingSaves.delete(questionNumber);
       }
       state.savingQuestion = null;
+      renderQuestionIndex();
     });
   state.pendingSaves.set(questionNumber, operation);
   state.savePromise = operation.catch(() => undefined);
@@ -305,6 +453,32 @@ async function saveCurrentAnswer() {
     }
     return false;
   }
+}
+
+function showCompletion(data) {
+  const isComplete = data.isComplete !== false;
+  completionEyebrow.textContent = isComplete ? 'Respuestas guardadas' : 'Respuestas enviadas';
+  completionTitle.textContent = isComplete ? 'Has terminado' : 'Has terminado por ahora';
+  completionMessage.textContent = data.message;
+  questionCompanionIdleVideo.pause();
+  questionCompanionVideo.pause();
+  questionCompanionAudio.pause();
+  showOnly(completionView);
+  completionView.focus({ preventScroll: true });
+  setCompanionSupport(
+    isComplete
+      ? '¡Lo has conseguido! Me alegra haber estado contigo.'
+      : 'Lo que habías respondido ya está enviado. Has hecho bien en decidir terminar.',
+    'success',
+    true,
+  );
+}
+
+async function sendAttempt() {
+  return apiRequest(`/questionnaire-attempts/${encodeURIComponent(state.attempt.id)}/submit`, {
+    method: 'POST',
+    body: '{}',
+  });
 }
 
 async function submitCurrentQuestion(event) {
@@ -336,21 +510,52 @@ async function submitCurrentQuestion(event) {
 
   try {
     runnerSaveStatus.textContent = 'Enviando…';
-    const response = await apiRequest(`/questionnaire-attempts/${encodeURIComponent(state.attempt.id)}/submit`, {
-      method: 'POST',
-      body: '{}',
-    });
-    completionMessage.textContent = response.data.message;
-    questionCompanionVideo.pause();
-    showOnly(completionView);
-    completionView.focus({ preventScroll: true });
-    setCompanionSupport('¡Lo has conseguido! Me alegra haber estado contigo.', 'success', true);
+    const response = await sendAttempt();
+    showCompletion(response.data);
   } catch (error) {
     if (!handleError(error)) {
       runnerSaveStatus.textContent = getApiErrorMessage(error);
     }
   } finally {
     nextQuestionButton.disabled = false;
+  }
+}
+
+async function openFinishDialog() {
+  finishQuestionnaireButton.disabled = true;
+  finishDialogStatus.textContent = '';
+  try {
+    await state.savePromise;
+    const answeredCount = state.answers.size;
+    const totalQuestions = state.definition.questions.length;
+    const missingCount = Math.max(0, totalQuestions - answeredCount);
+    finishDialogSummary.textContent = missingCount === 0
+      ? `Has respondido las ${totalQuestions} preguntas.`
+      : `Has respondido ${answeredCount} de ${totalQuestions} preguntas. Faltan ${missingCount}.`;
+    finishDialogNote.hidden = missingCount === 0;
+    confirmFinishButton.textContent = missingCount === 0
+      ? 'Enviar cuestionario'
+      : 'Enviar respuestas y terminar';
+    finishDialog.showModal();
+  } finally {
+    finishQuestionnaireButton.disabled = false;
+  }
+}
+
+async function finishQuestionnaire() {
+  confirmFinishButton.disabled = true;
+  finishDialogStatus.textContent = 'Enviando tus respuestas…';
+  try {
+    await state.savePromise;
+    const response = await sendAttempt();
+    finishDialog.close();
+    showCompletion(response.data);
+  } catch (error) {
+    if (!handleError(error)) {
+      finishDialogStatus.textContent = getApiErrorMessage(error);
+    }
+  } finally {
+    confirmFinishButton.disabled = false;
   }
 }
 
@@ -482,6 +687,17 @@ answerOptions?.addEventListener('change', () => {
   });
 });
 
+questionIndex?.addEventListener('click', (event) => {
+  const target = event.target.closest('[data-question-index]');
+  if (!target) return;
+  const nextIndex = Number(target.dataset.questionIndex);
+  if (!Number.isInteger(nextIndex) || nextIndex < 0 || nextIndex >= state.definition.questions.length) {
+    return;
+  }
+  state.currentIndex = nextIndex;
+  renderQuestion({ autoplay: false });
+});
+
 questionCompanionVideo?.addEventListener('loadeddata', () => setQuestionVideoLoading(false));
 questionCompanionVideo?.addEventListener('canplay', () => setQuestionVideoLoading(false));
 questionCompanionVideo?.addEventListener('playing', () => {
@@ -491,19 +707,24 @@ questionCompanionVideo?.addEventListener('playing', () => {
 questionCompanionVideo?.addEventListener('waiting', () => {
   if (!questionCompanionVideo.paused) setQuestionVideoLoading(true);
 });
-questionCompanionVideo?.addEventListener('ended', () => {
-  setQuestionVideoLoading(false);
-  questionCompanionVideo.currentTime = 0;
-  replayQuestionButton.hidden = false;
-});
 questionCompanionVideo?.addEventListener('error', () => {
   setQuestionVideoLoading(false);
-  replayQuestionButton.hidden = true;
 });
+questionCompanionIdleVideo?.addEventListener('loadeddata', () => {
+  if (state.questionVideoMode === 'idle') playQuestionIdle();
+});
+questionCompanionAudio?.addEventListener('playing', () => setQuestionVideoLoading(false));
+questionCompanionAudio?.addEventListener('waiting', () => {
+  if (!questionCompanionAudio.paused) setQuestionVideoLoading(true);
+});
+questionCompanionAudio?.addEventListener('ended', () => showQuestionIdle({ replay: true }));
+questionCompanionAudio?.addEventListener('error', () => showQuestionIdle({ replay: false }));
 replayQuestionButton?.addEventListener('click', () => presentQuestion({ autoplay: true }));
 
 questionForm?.addEventListener('submit', submitCurrentQuestion);
 previousQuestionButton?.addEventListener('click', goPrevious);
+finishQuestionnaireButton?.addEventListener('click', openFinishDialog);
+confirmFinishButton?.addEventListener('click', finishQuestionnaire);
 helpButton?.addEventListener('click', () => {
   helpDialogStatus.textContent = '';
   setCompanionSupport(

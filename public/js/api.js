@@ -187,11 +187,12 @@ async function getCsrfToken({ force = false } = {}) {
 }
 
 async function apiRequest(path, options = {}) {
-  const method = String(options.method || 'GET').toUpperCase();
+  const { companionSilent = false, ...requestOptions } = options;
+  const method = String(requestOptions.method || 'GET').toUpperCase();
   const headers = {
     Accept: 'application/json',
-    ...(options.body && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
-    ...(options.headers || {}),
+    ...(requestOptions.body && !(requestOptions.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
+    ...(requestOptions.headers || {}),
   };
 
   if (UNSAFE_METHODS.has(method)) {
@@ -200,12 +201,12 @@ async function apiRequest(path, options = {}) {
     headers['X-CSRF-Token'] = await getCsrfToken({ force: path === '/auth/login' });
   }
 
-  const requestDetail = { path, method };
+  const requestDetail = { path, method, companionSilent: Boolean(companionSilent) };
   document.dispatchEvent(new CustomEvent('unicornio:request-start', { detail: requestDetail }));
 
   try {
     const response = await fetch(`${API_BASE}${path}`, {
-      ...options,
+      ...requestOptions,
       method,
       headers,
       credentials: 'same-origin',

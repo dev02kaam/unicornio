@@ -47,7 +47,7 @@
             <button id="student-logout-button" class="button secondary compact-button" type="button">Salir</button>
           </nav>
         </div>
-        <a class="account-trigger" href="/dashboard.html" aria-label="Volver a mi espacio">
+        <a class="account-trigger" data-companion-avatar="static" href="/dashboard.html" aria-label="Volver a mi espacio">
           <span class="avatar-badge avatar-large" aria-hidden="true">
             <svg class="avatar-icon" viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="8" r="3.25" fill="currentColor" />
@@ -93,6 +93,22 @@
           </div>
         </header>
 
+        <section class="question-index-panel" aria-labelledby="question-index-title">
+          <div class="question-index-panel__heading">
+            <div>
+              <h2 id="question-index-title">Ir a una pregunta</h2>
+              <p>
+                <span class="question-index-legend is-answered" aria-hidden="true"></span> Respondida
+                <span class="question-index-legend" aria-hidden="true"></span> Sin responder
+              </p>
+            </div>
+          </div>
+          <nav id="question-index" class="question-index" aria-label="Preguntas del cuestionario"></nav>
+          <div class="question-index-panel__footer">
+            <button id="finish-questionnaire-button" class="button secondary finish-questionnaire-button" type="button">Terminar cuestionario</button>
+          </div>
+        </section>
+
         <form id="question-form" class="question-panel">
           <div class="question-workspace">
             <div class="question-response-column">
@@ -110,13 +126,23 @@
             <aside class="question-companion-stage" aria-label="Tu compañero presenta la pregunta">
               <div class="question-video-frame">
                 <video
+                  id="question-companion-idle-video"
+                  class="question-companion-video question-companion-video--idle"
+                  muted
+                  playsinline
+                  preload="auto"
+                  loop
+                  aria-hidden="true"
+                ></video>
+                <video
                   id="question-companion-video"
-                  class="question-companion-video"
+                  class="question-companion-video question-companion-video--speaking"
                   muted
                   playsinline
                   preload="metadata"
                   aria-label="Tu compañero presenta la pregunta"
                 ></video>
+                <audio id="question-companion-audio" preload="auto" hidden></audio>
                 <div id="question-video-loader" class="question-video-loader" role="status" aria-live="polite">
                   <span class="question-video-loader__orbit" aria-hidden="true"></span>
                   <span>Preparando la pregunta…</span>
@@ -166,7 +192,7 @@
         </div>
         <div class="completion-view__content">
           <span id="completion-eyebrow" class="eyebrow">Respuestas guardadas</span>
-          <h1>Has terminado</h1>
+          <h1 id="completion-title">Has terminado</h1>
           <p id="completion-message"></p>
           <div class="action-row">
             <a id="completion-primary-action" class="button primary" href="/dashboard.html">Volver a mi espacio</a>
@@ -187,6 +213,23 @@
         <button id="retry-help-button" class="button secondary" type="button" hidden>Volver a pedir ayuda</button>
       </section>
     </main>
+
+    <dialog id="finish-dialog" class="pilot-dialog finish-dialog" aria-labelledby="finish-dialog-title">
+      <div class="dialog-heading">
+        <div>
+          <span class="eyebrow">Terminar cuestionario</span>
+          <h2 id="finish-dialog-title">¿Quieres enviar lo que llevas?</h2>
+        </div>
+        <button class="icon-action" type="button" data-close-dialog aria-label="Cerrar">×</button>
+      </div>
+      <p id="finish-dialog-summary"></p>
+      <p id="finish-dialog-note" class="field-note">Las preguntas sin responder se enviarán vacías y el resultado aparecerá como incompleto, sin puntuación ni banda orientativa.</p>
+      <div id="finish-dialog-status" class="inline-status" role="status" aria-live="polite"></div>
+      <div class="action-row">
+        <button id="confirm-finish-button" class="button primary" type="button">Enviar respuestas y terminar</button>
+        <button class="button secondary" type="button" data-close-dialog>Seguir respondiendo</button>
+      </div>
+    </dialog>
 
     <dialog id="help-dialog" class="pilot-dialog help-dialog" aria-labelledby="help-dialog-title">
       <div class="dialog-heading">

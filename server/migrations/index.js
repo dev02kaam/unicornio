@@ -8,6 +8,10 @@ const rlsRequestContext = require('./007-rls-request-context');
 const persistentAbuseControls = require('./008-persistent-abuse-controls');
 const emergencyAdmin = require('./009-emergency-admin');
 const questionnaireCatalogAndMultiAssignment = require('./010-questionnaire-catalog-and-multi-assignment');
+const questionnaireVersionTargeting = require('./011-questionnaire-version-targeting');
+const questionnaireServiceWriteBoundary = require('./012-questionnaire-service-write-boundary');
+const questionnaireResultUpsertPolicy = require('./013-questionnaire-result-upsert-policy');
+const questionnaireAnswerProfessionalRead = require('./014-questionnaire-answer-professional-read');
 
 const migrations = [
   questionnairePilot,
@@ -20,6 +24,10 @@ const migrations = [
   persistentAbuseControls,
   emergencyAdmin,
   questionnaireCatalogAndMultiAssignment,
+  questionnaireVersionTargeting,
+  questionnaireServiceWriteBoundary,
+  questionnaireResultUpsertPolicy,
+  questionnaireAnswerProfessionalRead,
 ];
 
 const expectedMigrationIds = Object.freeze(migrations.map((migration) => migration.id));

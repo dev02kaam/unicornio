@@ -86,6 +86,30 @@ async function setLocalRequestIdentity(client, userId) {
   await client.query("select set_config('app.legacy_user_id', $1, true)", [isUuid ? '' : identity]);
 }
 
+async function runTransaction(callback, { questionnaireServiceWrite = false } = {}) {
+  if (!pool || persistenceMode !== 'postgres') {
+    throw new Error('Esta operacion requiere PostgreSQL.');
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('begin');
+    const userId = rlsContext.getStore()?.userId;
+    if (userId) await setLocalRequestIdentity(client, userId);
+    if (questionnaireServiceWrite) {
+      await client.query("select set_config('app.questionnaire_service_write', 'on', true)");
+    }
+    const result = await callback(client);
+    await client.query('commit');
+    return result;
+  } catch (error) {
+    await client.query('rollback');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function ensureSchema(executor = pool) {
   await executor.query(`
     create table if not exists unicornio_collections (
@@ -685,25 +709,11 @@ const database = {
       client.release();
     }
   },
-  async transaction(callback) {
-    if (!pool || persistenceMode !== 'postgres') {
-      throw new Error('Esta operacion requiere PostgreSQL.');
-    }
-
-    const client = await pool.connect();
-    try {
-      await client.query('begin');
-      const userId = rlsContext.getStore()?.userId;
-      if (userId) await setLocalRequestIdentity(client, userId);
-      const result = await callback(client);
-      await client.query('commit');
-      return result;
-    } catch (error) {
-      await client.query('rollback');
-      throw error;
-    } finally {
-      client.release();
-    }
+  transaction(callback) {
+    return runTransaction(callback);
+  },
+  questionnaireTransaction(callback) {
+    return runTransaction(callback, { questionnaireServiceWrite: true });
   },
   runAsUser(userId, callback) {
     if (!userId) throw new Error('El contexto RLS requiere una identidad.');

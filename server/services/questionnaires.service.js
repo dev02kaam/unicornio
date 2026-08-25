@@ -26,7 +26,7 @@ const {
   getQuestionnaireKeyProvider,
 } = require('./questionnaire-crypto.service');
 const {
-  evaluateQuestionnaire,
+  evaluateQuestionnaireSubmission,
   matchesSentinelRule,
 } = require('./questionnaire-scoring.service');
 
@@ -34,9 +34,29 @@ const COMPLETION_MESSAGES = Object.freeze({
   SUPPORT_1: 'Gracias por contarnos cómo te has sentido. Tus respuestas se han guardado y una persona profesional podrá revisarlas contigo.',
   SUPPORT_2: 'Has terminado. Hablar de cómo te sientes es una forma de cuidarte; si algo te preocupa, puedes pedir ayuda en cualquier momento.',
   SUPPORT_3: 'Gracias por compartirlo con sinceridad. No tienes que gestionar lo que sientes sin apoyo; hay personas preparadas para acompañarte.',
+  PARTIAL: 'Las respuestas que llevabas se han enviado. No pasa nada por haber terminado antes; una persona profesional podrá revisarlas contigo.',
 });
 
-const COMPLETION_MESSAGE_KEYS = Object.keys(COMPLETION_MESSAGES);
+const COMPLETION_MESSAGE_KEYS = Object.keys(COMPLETION_MESSAGES)
+  .filter((key) => key.startsWith('SUPPORT_'));
+
+const CAMPAIGN_SELECTION_COLUMNS = `
+  coalesce((
+    select array_agg(cf.family_key order by cf.position)
+    from unicornio_questionnaire_campaign_families cf
+    where cf.campaign_id = c.id
+  ), array[c.family_key]) as family_keys,
+  coalesce((
+    select array_agg(cv.questionnaire_version_id order by cv.position)
+    from unicornio_questionnaire_campaign_versions cv
+    where cv.campaign_id = c.id
+  ), (
+    select array_agg(v.id order by cf.position, v.age_min, v.age_max, v.id)
+    from unicornio_questionnaire_campaign_families cf
+    join unicornio_questionnaire_versions v on v.family_key = cf.family_key
+    where cf.campaign_id = c.id and v.status = 'EXPERIMENTAL'
+  ), array[]::text[]) as questionnaire_version_ids
+`;
 
 function newId(prefix) {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -194,10 +214,14 @@ function mapCampaignRow(row) {
   const familyKeys = Array.isArray(row.family_keys)
     ? row.family_keys
     : row.family_key ? [row.family_key] : [];
+  const questionnaireVersionIds = Array.isArray(row.questionnaire_version_ids)
+    ? row.questionnaire_version_ids
+    : [];
   return {
     id: row.id,
     familyKey: row.family_key,
     familyKeys,
+    questionnaireVersionIds,
     centerId: row.center_id,
     groupId: row.group_id,
     createdByUserId: row.created_by_user_id,
@@ -215,12 +239,27 @@ function mapCampaignRow(row) {
 
 function publicCampaign(campaign) {
   const group = findGroupById(campaign.groupId);
+  const selectedVersionIds = new Set(campaign.questionnaireVersionIds || []);
   return {
     ...campaign,
     questionnaires: campaign.familyKeys
       .map((familyKey) => getQuestionnaireFamily(familyKey))
       .filter(Boolean)
-      .map((family) => ({ ...family })),
+      .map((family) => ({
+        ...family,
+        versions: questionnaireVersions
+          .filter((definition) => (
+            definition.familyKey === family.key
+            && selectedVersionIds.has(definition.id)
+          ))
+          .map((definition) => ({
+            id: definition.id,
+            title: definition.title,
+            shortTitle: definition.shortTitle,
+            ageMin: definition.ageMin,
+            ageMax: definition.ageMax,
+          })),
+      })),
     group: group ? {
       id: group.id,
       name: group.name,
@@ -306,12 +345,7 @@ async function getDefinitionById(definitionId, executor = database) {
 
 async function getCampaignById(campaignId, executor = database) {
   const result = await executor.query(
-    `select c.*,
-       coalesce((
-         select array_agg(cf.family_key order by cf.position)
-         from unicornio_questionnaire_campaign_families cf
-         where cf.campaign_id = c.id
-       ), array[c.family_key]) as family_keys
+    `select c.*, ${CAMPAIGN_SELECTION_COLUMNS}
      from unicornio_questionnaire_campaigns c
      where c.id = $1`,
     [campaignId],
@@ -335,6 +369,32 @@ function assertScopedCampaignOwner(campaign, currentUser) {
   }
 }
 
+async function assertScopedCampaignAccess(campaign, currentUser) {
+  const hasAssignment = getUserGroupAssignments(currentUser?.id)
+    .some((assignment) => assignment.groupId === String(campaign.groupId));
+  if (
+    String(currentUser?.role || '').toUpperCase() !== 'PROFESSIONAL'
+    || !hasAssignment
+  ) {
+    throw new AppError('Campaña no encontrada.', 404, null, 'NOT_FOUND');
+  }
+  if (String(campaign.createdByUserId) === String(currentUser.id)) {
+    return;
+  }
+
+  const transferred = await database.query(
+    `select 1
+     from unicornio_questionnaire_alerts a
+     where a.campaign_id = $1
+       and a.owner_professional_legacy_id = $2
+     limit 1`,
+    [campaign.id, currentUser.id],
+  );
+  if (transferred.rowCount === 0) {
+    throw new AppError('Campaña no encontrada.', 404, null, 'NOT_FOUND');
+  }
+}
+
 async function createCampaign(data, currentUser) {
   ensureQuestionnairePilotAvailable();
   const groupId = String(data.groupId || '').trim();
@@ -344,16 +404,24 @@ async function createCampaign(data, currentUser) {
   }
   assertProfessionalGroupAccess(currentUser, groupId);
 
-  const requestedFamilyKeys = [...new Set(
-    (data.familyKeys || []).map((familyKey) => String(familyKey).trim()),
+  const requestedQuestionnaireVersionIds = [...new Set(
+    (Array.isArray(data.questionnaireVersionIds) ? data.questionnaireVersionIds : [])
+      .map((definitionId) => String(definitionId).trim()),
   )];
-  const knownFamilyKeys = new Set(questionnaireFamilies.map((family) => family.key));
+  const definitionById = new Map(
+    questionnaireVersions.map((definition) => [definition.id, definition]),
+  );
+  const requestedDefinitions = requestedQuestionnaireVersionIds
+    .map((definitionId) => definitionById.get(definitionId));
   if (
-    requestedFamilyKeys.length === 0
-    || requestedFamilyKeys.some((familyKey) => !knownFamilyKeys.has(familyKey))
+    requestedQuestionnaireVersionIds.length === 0
+    || requestedDefinitions.some((definition) => !definition)
   ) {
-    throw new AppError('Selecciona al menos un cuestionario válido.', 400, null, 'BAD_REQUEST');
+    throw new AppError('Selecciona al menos una franja de edad válida.', 400, null, 'BAD_REQUEST');
   }
+  const requestedFamilyKeys = [...new Set(
+    requestedDefinitions.map((definition) => definition.familyKey),
+  )];
 
   const title = String(data.title || 'Evaluación de bienestar').trim();
   const plannedFor = data.plannedFor ? new Date(data.plannedFor) : new Date();
@@ -397,12 +465,21 @@ async function createCampaign(data, currentUser) {
         [id, familyKey, position, now],
       );
     }
+    for (const [position, definitionId] of requestedQuestionnaireVersionIds.entries()) {
+      await client.query(
+        `insert into unicornio_questionnaire_campaign_versions (
+          campaign_id, questionnaire_version_id, position, created_at
+        ) values ($1, $2, $3, $4)`,
+        [id, definitionId, position, now],
+      );
+    }
   });
 
   await writeAudit(currentUser.id, 'CAMPAIGN_CREATED', 'CAMPAIGN', id, {
     groupId: group.id,
     centerId: group.centerId,
     familyKeys: requestedFamilyKeys,
+    questionnaireVersionIds: requestedQuestionnaireVersionIds,
   });
   const monitor = await requestCampaignConsents(id, currentUser);
   return monitor.campaign;
@@ -416,30 +493,28 @@ async function listCampaigns(currentUser) {
 
   if (role === 'PROFESSIONAL') {
     result = await database.query(
-      `select c.*,
-         coalesce((select array_agg(cf.family_key order by cf.position)
-           from unicornio_questionnaire_campaign_families cf where cf.campaign_id = c.id),
-           array[c.family_key]) as family_keys
+      `select c.*, ${CAMPAIGN_SELECTION_COLUMNS}
        from unicornio_questionnaire_campaigns c
-       where c.created_by_user_id = $1 order by c.created_at desc`,
+       where c.created_by_user_id = $1
+          or exists (
+            select 1
+            from unicornio_questionnaire_alerts a
+            where a.campaign_id = c.id
+              and a.owner_professional_legacy_id = $1
+          )
+       order by c.created_at desc`,
       [currentUser.id],
     );
   } else if (role === 'SCHOOL') {
     result = await database.query(
-      `select c.*,
-         coalesce((select array_agg(cf.family_key order by cf.position)
-           from unicornio_questionnaire_campaign_families cf where cf.campaign_id = c.id),
-           array[c.family_key]) as family_keys
+      `select c.*, ${CAMPAIGN_SELECTION_COLUMNS}
        from unicornio_questionnaire_campaigns c
        where c.center_id = $1 order by c.created_at desc`,
       [currentUser.schoolId],
     );
   } else {
     result = await database.query(
-      `select c.*,
-         coalesce((select array_agg(cf.family_key order by cf.position)
-           from unicornio_questionnaire_campaign_families cf where cf.campaign_id = c.id),
-           array[c.family_key]) as family_keys
+      `select c.*, ${CAMPAIGN_SELECTION_COLUMNS}
        from unicornio_questionnaire_campaigns c order by c.created_at desc`,
     );
   }
@@ -447,10 +522,12 @@ async function listCampaigns(currentUser) {
   return result.rows.map((row) => publicCampaign(mapCampaignRow(row)));
 }
 
-function selectDefinitionForStudent(student, familyKey, atDate) {
+function selectDefinitionForStudent(student, familyKey, atDate, questionnaireVersionIds = []) {
   const age = calculateAge(student.birthDate, atDate);
+  const allowedVersionIds = new Set(questionnaireVersionIds);
   const definition = questionnaireVersions.find(
     (item) => item.familyKey === familyKey
+      && (allowedVersionIds.size === 0 || allowedVersionIds.has(item.id))
       && age !== null
       && age >= item.ageMin
       && age <= item.ageMax,
@@ -480,8 +557,18 @@ async function requestCampaignConsents(campaignId, currentUser) {
 
   const participantRows = [];
   for (const student of groupStudents) {
+    const selections = campaign.familyKeys.map((familyKey) => ({
+      familyKey,
+      ...selectDefinitionForStudent(
+        student,
+        familyKey,
+        campaign.plannedFor || new Date(),
+        campaign.questionnaireVersionIds,
+      ),
+    }));
     const family = findFamilyForStudent(student.id);
-    const consent = family ? createConsentRequest({
+    const hasEligibleQuestionnaire = selections.some((selection) => selection.definition);
+    const consent = family && hasEligibleQuestionnaire ? createConsentRequest({
         studentId: student.id,
         familyUserId: family.id,
         legalTextVersionId: legalTextVersion.id,
@@ -489,12 +576,7 @@ async function requestCampaignConsents(campaignId, currentUser) {
         campaignId: campaign.id,
       }, currentUser, { allowProfessionalCampaign: true }) : null;
 
-    for (const familyKey of campaign.familyKeys) {
-      const { age, definition } = selectDefinitionForStudent(
-        student,
-        familyKey,
-        campaign.plannedFor || new Date(),
-      );
+    for (const { familyKey, age, definition } of selections) {
       const row = {
         id: newId('participant'),
         familyKey,
@@ -632,6 +714,7 @@ async function refreshParticipantEligibilityAtSession(campaign, atDate) {
         student || {},
         participant.family_key,
         atDate,
+        campaign.questionnaireVersionIds,
       );
       if (!definition) {
         await client.query(
@@ -707,6 +790,7 @@ async function openCampaign(campaignId, currentUser) {
   return publicCampaign({
     ...mapCampaignRow(result.rows[0]),
     familyKeys: campaign.familyKeys,
+    questionnaireVersionIds: campaign.questionnaireVersionIds,
   });
 }
 
@@ -741,6 +825,7 @@ async function closeCampaign(campaignId, currentUser) {
   return publicCampaign({
     ...mapCampaignRow(result),
     familyKeys: campaign.familyKeys,
+    questionnaireVersionIds: campaign.questionnaireVersionIds,
   });
 }
 
@@ -780,13 +865,14 @@ async function cancelCampaign(campaignId, currentUser) {
   return publicCampaign({
     ...mapCampaignRow(result),
     familyKeys: campaign.familyKeys,
+    questionnaireVersionIds: campaign.questionnaireVersionIds,
   });
 }
 
 async function getCampaignMonitor(campaignId, currentUser) {
   ensureQuestionnairePilotAvailable();
   const campaign = await getCampaignById(campaignId);
-  assertScopedCampaignOwner(campaign, currentUser);
+  await assertScopedCampaignAccess(campaign, currentUser);
 
   const participantsResult = await database.query(
     `select p.*, c.status as consent_status,
@@ -1052,7 +1138,7 @@ async function upsertAlert({
   if (executor) {
     return execute(executor);
   }
-  return database.transaction(execute);
+  return database.questionnaireTransaction(execute);
 }
 
 async function saveAnswer(attemptId, data, currentUser) {
@@ -1098,7 +1184,7 @@ async function saveAnswer(attemptId, data, currentUser) {
     { value: option.value, points: option.points },
     answerAad(attempt.id, questionNumber, attempt.campaign_id, attempt.student_id),
   );
-  await database.transaction(async (client) => {
+  await database.questionnaireTransaction(async (client) => {
     await client.query(
       `insert into unicornio_questionnaire_answers (
         id, attempt_id, question_number, encrypted_payload, encryption_key_version, answered_at
@@ -1145,6 +1231,7 @@ async function submitAttempt(attemptId, currentUser) {
       status: 'SUBMITTED',
       completionMessageKey: savedMessageKey,
       message: COMPLETION_MESSAGES[savedMessageKey] || COMPLETION_MESSAGES.SUPPORT_1,
+      isComplete: savedMessageKey !== 'PARTIAL',
     };
   }
   if (attempt.status !== 'IN_PROGRESS') {
@@ -1174,21 +1261,21 @@ async function submitAttempt(attemptId, currentUser) {
     ).value,
   }));
 
-  let evaluation;
-  try {
-    evaluation = evaluateQuestionnaire(definition, answers);
-  } catch (error) {
-    throw new AppError(error.message, 400, null, 'INCOMPLETE_QUESTIONNAIRE');
+  const evaluation = evaluateQuestionnaireSubmission(definition, answers);
+  const isComplete = evaluation.completion.status === 'COMPLETE';
+  let messageKey = 'PARTIAL';
+  if (isComplete) {
+    const previousCompletions = await database.query(
+      `select count(*)::integer as count
+       from unicornio_questionnaire_attempts a
+       join unicornio_questionnaire_participants p on p.id = a.participant_id
+       where p.student_id = $1 and a.status = 'SUBMITTED'`,
+      [currentUser.id],
+    );
+    messageKey = COMPLETION_MESSAGE_KEYS[
+      previousCompletions.rows[0].count % COMPLETION_MESSAGE_KEYS.length
+    ];
   }
-
-  const previousCompletions = await database.query(
-    `select count(*)::integer as count
-     from unicornio_questionnaire_attempts a
-     join unicornio_questionnaire_participants p on p.id = a.participant_id
-     where p.student_id = $1 and a.status = 'SUBMITTED'`,
-    [currentUser.id],
-  );
-  const messageKey = COMPLETION_MESSAGE_KEYS[previousCompletions.rows[0].count % COMPLETION_MESSAGE_KEYS.length];
   const now = nowIso();
 
   const encryptedResult = encryptQuestionnairePayload({
@@ -1198,8 +1285,9 @@ async function submitAttempt(attemptId, currentUser) {
     subscales: evaluation.subscales,
     triggeredRules: evaluation.triggeredRules,
     pendingClinicalRules: evaluation.pendingClinicalRules,
+    completion: evaluation.completion,
   }, resultAad(attempt.id, attempt.campaign_id, attempt.student_id));
-  await database.transaction(async (client) => {
+  await database.questionnaireTransaction(async (client) => {
     await client.query(
       `insert into unicornio_questionnaire_results (
         id, attempt_id, total_score, band_key, encrypted_payload, encryption_key_version,
@@ -1228,7 +1316,7 @@ async function submitAttempt(attemptId, currentUser) {
       [attempt.participant_id, now],
     );
 
-    if (evaluation.alertSeverity) {
+    if (isComplete && evaluation.alertSeverity) {
       await upsertAlert({
         campaignId: attempt.campaign_id,
         participantId: attempt.participant_id,
@@ -1247,11 +1335,18 @@ async function submitAttempt(attemptId, currentUser) {
     }
   });
 
-  await writeAudit(currentUser.id, 'ATTEMPT_SUBMITTED', 'ATTEMPT', attempt.id);
+  await writeAudit(currentUser.id, 'ATTEMPT_SUBMITTED', 'ATTEMPT', attempt.id, {
+    completionStatus: evaluation.completion.status,
+    answeredCount: evaluation.completion.answeredCount,
+    totalQuestions: evaluation.completion.totalQuestions,
+  });
   return {
     status: 'SUBMITTED',
     completionMessageKey: messageKey,
     message: COMPLETION_MESSAGES[messageKey],
+    isComplete,
+    answeredCount: evaluation.completion.answeredCount,
+    totalQuestions: evaluation.completion.totalQuestions,
   };
 }
 
@@ -1284,7 +1379,7 @@ async function requestHelp(attemptId, currentUser) {
   }
 
   const now = nowIso();
-  await database.transaction(async (client) => {
+  await database.questionnaireTransaction(async (client) => {
     await client.query(
       `update unicornio_questionnaire_attempts
        set status = 'HELP_REQUESTED', help_requested_at = $2, updated_at = $2 where id = $1`,
@@ -1318,7 +1413,7 @@ async function requestHelp(attemptId, currentUser) {
 async function listCampaignAlerts(campaignId, currentUser) {
   ensureQuestionnairePilotAvailable();
   const campaign = await getCampaignById(campaignId);
-  assertScopedCampaignOwner(campaign, currentUser);
+  await assertScopedCampaignAccess(campaign, currentUser);
   const result = await database.query(
     `select a.*, p.student_id
      from unicornio_questionnaire_alerts a
@@ -1349,7 +1444,7 @@ async function acknowledgeAlert(alertId, currentUser) {
   return database.transaction(async (client) => {
     const result = await client.query(
       `update unicornio_questionnaire_alerts a
-       set status = case when a.status = 'OPEN' then 'ACKNOWLEDGED' else a.status end,
+       set status = case when a.status in ('OPEN', 'TRANSFERRED') then 'ACKNOWLEDGED' else a.status end,
            acknowledged_by_user_id = coalesce(a.acknowledged_by_user_id, $2),
            acknowledged_at = coalesce(a.acknowledged_at, now()),
            updated_at = now()
@@ -1458,7 +1553,7 @@ async function transferAlert(alertId, transfer, currentUser) {
   }
   const target = findUserById(targetProfessionalId);
 
-  return database.transaction(async (client) => {
+  return database.questionnaireTransaction(async (client) => {
     const alertResult = await client.query(
       `select a.*, c.group_id, p.student_id
        from unicornio_questionnaire_alerts a
@@ -1536,24 +1631,28 @@ async function transferAlert(alertId, transfer, currentUser) {
 async function getStudentResult(campaignId, studentId, currentUser) {
   ensureQuestionnairePilotAvailable();
   const campaign = await getCampaignById(campaignId);
-  assertScopedCampaignOwner(campaign, currentUser);
-  const result = await database.query(
-    `select r.*, a.id as attempt_id, p.student_id, p.family_key,
+  await assertScopedCampaignAccess(campaign, currentUser);
+  const review = await database.query(
+    `select r.id as result_id, r.encrypted_payload as result_encrypted_payload,
+            r.reviewed_at,
+            a.id as attempt_id, a.status as attempt_status, a.help_requested_at,
+            p.student_id, p.family_key,
             p.questionnaire_version_id, v.short_title, v.age_min, v.age_max,
             v.questions, v.response_scale
-     from unicornio_questionnaire_results r
-     join unicornio_questionnaire_attempts a on a.id = r.attempt_id
-     join unicornio_questionnaire_participants p on p.id = a.participant_id
+     from unicornio_questionnaire_participants p
+     join unicornio_questionnaire_attempts a on a.participant_id = p.id
      join unicornio_questionnaire_versions v on v.id = p.questionnaire_version_id
+     left join unicornio_questionnaire_results r on r.attempt_id = a.id
      where p.campaign_id = $1 and p.student_id = $2
-     order by p.created_at`,
+       and (r.id is not null or a.status = 'HELP_REQUESTED')
+     order by p.created_at, a.attempt_number`,
     [campaign.id, studentId],
   );
-  if (result.rows.length === 0) {
-    throw new AppError('El alumno todavía no tiene un resultado.', 404, null, 'NOT_FOUND');
+  if (review.rows.length === 0) {
+    throw new AppError('El alumno todavía no tiene respuestas para revisar.', 404, null, 'NOT_FOUND');
   }
 
-  const attemptIds = result.rows.map((row) => row.attempt_id);
+  const attemptIds = review.rows.map((row) => row.attempt_id);
   const answerRows = await database.query(
     `select attempt_id, question_number, encrypted_payload
      from unicornio_questionnaire_answers
@@ -1569,25 +1668,32 @@ async function getStudentResult(campaignId, studentId, currentUser) {
   });
 
   const reviewedAt = nowIso();
-  await database.query(
-    `update unicornio_questionnaire_results
-     set reviewed_by_user_id = $2, reviewed_at = coalesce(reviewed_at, now()), updated_at = now()
-     where id = any($1::text[])`,
-    [result.rows.map((row) => row.id), currentUser.id],
-  );
+  const resultIds = review.rows.map((row) => row.result_id).filter(Boolean);
+  if (resultIds.length > 0) {
+    await database.query(
+      `update unicornio_questionnaire_results
+       set reviewed_by_user_id = $2, reviewed_at = coalesce(reviewed_at, now()), updated_at = now()
+       where id = any($1::text[])`,
+      [resultIds, currentUser.id],
+    );
+  }
   await writeAudit(currentUser.id, 'RESULTS_VIEWED', 'CAMPAIGN_STUDENT', `${campaignId}:${studentId}`, {
     campaignId,
     studentId,
-    resultCount: result.rows.length,
+    resultCount: resultIds.length,
+    helpRequestedCount: review.rows.filter((row) => row.attempt_status === 'HELP_REQUESTED').length,
+    answerCount: answerRows.rows.length,
   });
   const student = findUserById(studentId);
   return {
     student: student ? { id: student.id, name: student.name } : { id: studentId, name: 'Alumno no disponible' },
-    results: result.rows.map((row) => {
-      const clinical = decryptQuestionnairePayload(
-        row.encrypted_payload,
-        resultAad(row.attempt_id, campaign.id, studentId),
-      );
+    results: review.rows.map((row) => {
+      const clinical = row.result_encrypted_payload
+        ? decryptQuestionnairePayload(
+          row.result_encrypted_payload,
+          resultAad(row.attempt_id, campaign.id, studentId),
+        )
+        : null;
       const answerItems = (answersByAttempt.get(row.attempt_id) || []).map((answerRow) => {
         const value = decryptQuestionnairePayload(
           answerRow.encrypted_payload,
@@ -1604,21 +1710,28 @@ async function getStudentResult(campaignId, studentId, currentUser) {
         };
       });
       return {
-        id: row.id,
+        id: row.result_id || row.attempt_id,
+        attemptStatus: row.attempt_status,
+        helpRequestedAt: row.help_requested_at,
         familyKey: row.family_key,
         questionnaireTitle: row.short_title,
         ageRange: `${row.age_min}-${row.age_max}`,
-        totalScore: clinical.totalScore,
-        bandScore: clinical.bandScore ?? clinical.totalScore,
-        band: clinical.band,
-        subscales: clinical.subscales || [],
-        triggeredRules: clinical.triggeredRules,
-        pendingClinicalRules: clinical.pendingClinicalRules,
+        totalScore: clinical?.totalScore ?? null,
+        bandScore: clinical ? (clinical.bandScore ?? clinical.totalScore) : null,
+        band: clinical?.band || null,
+        subscales: clinical?.subscales || [],
+        triggeredRules: clinical?.triggeredRules || [],
+        pendingClinicalRules: clinical?.pendingClinicalRules || [],
+        completion: clinical?.completion || {
+          status: row.attempt_status === 'HELP_REQUESTED' ? 'HELP_REQUESTED' : 'COMPLETE',
+          answeredCount: answerItems.length,
+          totalQuestions: row.questions.length,
+        },
         answers: answerItems,
         reviewedAt: row.reviewed_at || reviewedAt,
       };
     }),
-    disclaimer: 'Resultado orientativo de cribado experimental. No constituye un diagnóstico.',
+    disclaimer: 'Las respuestas guardadas se muestran para revisión profesional. Solo los envíos completos incluyen puntuación orientativa; no constituye un diagnóstico.',
   };
 }
 
@@ -1685,6 +1798,7 @@ module.exports = {
   COMPLETION_MESSAGES,
   calculateAge,
   calculateDefinitionHash,
+  selectDefinitionForStudent,
   ensureQuestionnairePilotAvailable,
   initializeQuestionnaireModule,
   listQuestionnaireDefinitions,

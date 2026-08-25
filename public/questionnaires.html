@@ -76,6 +76,23 @@
             </div>
             <button id="new-campaign-button" class="icon-action" type="button" aria-label="Crear campaña">+</button>
           </div>
+          <div class="campaign-filters" role="search" aria-label="Filtrar campañas">
+            <label class="campaign-filter-field" for="campaign-search">
+              <span>Buscar</span>
+              <input id="campaign-search" type="search" placeholder="Nombre o grupo" autocomplete="off" />
+            </label>
+            <label class="campaign-filter-field" for="campaign-status-filter">
+              <span>Mostrar</span>
+              <select id="campaign-status-filter">
+                <option value="active" selected>Activas</option>
+                <option value="preparation">En preparación</option>
+                <option value="live">En directo</option>
+                <option value="finished">Finalizadas</option>
+                <option value="all">Todas</option>
+              </select>
+            </label>
+            <p id="campaign-filter-summary" class="campaign-filter-summary" aria-live="polite"></p>
+          </div>
           <div id="campaign-list" class="campaign-list" aria-live="polite"></div>
           <p id="campaign-list-empty" class="empty-copy" hidden>Aún no hay campañas. Crea la primera para un grupo asignado.</p>
         </aside>
@@ -187,9 +204,9 @@
             <fieldset class="questionnaire-catalog-fieldset">
               <legend>Qué cuestionarios se harán</legend>
               <div class="catalog-toolbar">
-                <p>Selecciona una o varias áreas. La versión se adapta automáticamente a la edad de cada alumno.</p>
+                <p>Elige por separado las franjas de edad de cada área. Cada alumno recibirá únicamente una versión que hayas activado para su edad.</p>
                 <label>
-                  Edad
+                  Mostrar edad
                   <select id="questionnaire-age-filter">
                     <option value="all">Todas</option>
                     <option value="9-12">9–12 años</option>
@@ -206,7 +223,7 @@
             <h3 id="campaign-summary-title">Sesión preparada</h3>
             <ol class="campaign-summary-steps">
               <li><span>1</span><div><strong>Centro y grupo</strong><small id="campaign-summary-group">Selecciona un grupo</small></div></li>
-              <li><span>2</span><div><strong>Cuestionarios</strong><small id="campaign-summary-count">0 seleccionados</small></div></li>
+              <li><span>2</span><div><strong>Cuestionarios</strong><small id="campaign-summary-count">0 áreas · 0 franjas</small></div></li>
               <li><span>3</span><div><strong>Consentimiento familiar</strong><small>Se solicitará automáticamente al crear la campaña.</small></div></li>
               <li><span>4</span><div><strong>Apertura</strong><small>Solo podrán entrar los alumnos con consentimiento aceptado.</small></div></li>
             </ol>
@@ -243,8 +260,15 @@
         </div>
         <input id="alert-action-id" type="hidden" />
         <input id="alert-action-kind" type="hidden" />
+        <label id="alert-transfer-target-field" hidden>
+          Profesional de destino
+          <select id="alert-transfer-target" name="targetProfessionalId">
+            <option value="">Selecciona un profesional</option>
+          </select>
+        </label>
+        <p id="alert-transfer-empty" class="form-note" hidden></p>
         <label>
-          Actuación y siguiente paso
+          <span id="alert-action-note-label">Actuación y siguiente paso</span>
           <textarea id="alert-action-note" rows="5" maxlength="1000" required></textarea>
         </label>
         <p id="alert-action-help" class="form-note"></p>

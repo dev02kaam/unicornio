@@ -894,12 +894,31 @@
     document.querySelectorAll('[data-companion-name]').forEach((node) => {
       node.textContent = character.name;
     });
+    document.querySelectorAll('[data-companion-image]').forEach((image) => {
+      const avatarAsset = getAvatarAsset(character);
+      if (image.getAttribute('src') !== avatarAsset) {
+        image.setAttribute('src', avatarAsset);
+      }
+    });
     document.querySelectorAll('[data-companion-panel-title]').forEach((node) => {
       node.textContent = `${character.name} te acompaña`;
     });
 
     document.querySelectorAll('.account-trigger .avatar-badge').forEach((badge) => {
       badge.classList.add('has-companion-avatar');
+      if (badge.closest('[data-companion-avatar="static"]')) {
+        let image = badge.querySelector('[data-companion-image]');
+        if (!image) {
+          image = document.createElement('img');
+          image.dataset.companionImage = '';
+          image.setAttribute('alt', '');
+          image.setAttribute('aria-hidden', 'true');
+          badge.replaceChildren(image);
+        }
+        image.setAttribute('src', getAvatarAsset(character));
+        return;
+      }
+
       let video = badge.querySelector('[data-companion-loop]');
       if (!video) {
         video = createLoopVideo(character);
@@ -1099,6 +1118,7 @@
     }, true);
 
     document.addEventListener('unicornio:request-start', (event) => {
+      if (event.detail?.companionSilent) return;
       runtime.requestCount += 1;
       const mutating = event.detail?.method && event.detail.method !== 'GET';
       setState(mutating ? 'thinking' : 'listening', {
@@ -1108,6 +1128,7 @@
     });
 
     document.addEventListener('unicornio:request-end', (event) => {
+      if (event.detail?.companionSilent) return;
       runtime.requestCount = Math.max(0, runtime.requestCount - 1);
       if (runtime.requestCount > 0) return;
       if (!event.detail?.ok) {
@@ -1172,6 +1193,9 @@
 
   window.UnicornioCompanion = {
     setState,
+    getAgeBand(user = runtime.user) {
+      return resolveAgeBand(user);
+    },
     setAgeContext(subject) {
       runtime.ageContext = subject || null;
       runtime.ageBand = resolveAgeBand();

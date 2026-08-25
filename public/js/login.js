@@ -30,12 +30,12 @@ form.addEventListener('submit', async (event) => {
       body: JSON.stringify(payload),
     });
 
-    const userId = response.data?.user?.id;
-    if (userId) {
+    const studentId = String(response.data?.user?.id || '');
+    if (studentId && String(response.data?.user?.role || '').toUpperCase() === 'STUDENT') {
       try {
-        window.sessionStorage.removeItem(`unicornio-student-welcome-login:${userId}`);
+        sessionStorage.removeItem(`unicornio_student_instructions_seen:${studentId}`);
       } catch (_error) {
-        // El almacenamiento de sesión puede estar desactivado; el acceso continúa igualmente.
+        // La secuencia sigue funcionando aunque el navegador bloquee sessionStorage.
       }
     }
 

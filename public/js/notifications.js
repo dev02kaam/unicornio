@@ -87,7 +87,7 @@ async function loadNotifications({ silent = false } = {}) {
   }
   loading = true;
   try {
-    const response = await apiRequest('/notifications');
+    const response = await apiRequest('/notifications', { companionSilent: silent });
     renderNotifications(response.data.notifications || []);
   } catch (error) {
     if (error?.status === 401) {

@@ -8,6 +8,7 @@ const {
 const {
   calculateAge,
   calculateDefinitionHash,
+  selectDefinitionForStudent,
 } = require('../server/services/questionnaires.service');
 
 const REVIEWED_DEPRESSION_HASHES = {
@@ -60,4 +61,30 @@ test('los límites de edad se calculan en la fecha prevista de la campaña', () 
   assert.equal(calculateAge('2014-07-31', sessionDate), 12);
   assert.equal(calculateAge('2013-07-31', sessionDate), 13);
   assert.equal(calculateAge('2008-07-31', sessionDate), 18);
+});
+
+test('la asignación respeta las franjas de edad activadas en la campaña', () => {
+  const sessionDate = new Date('2026-09-01T10:00:00.000Z');
+  const child = { birthDate: '2015-09-01' };
+  const childVersionId = 'depressive-mood-9-12-v1';
+  const teenVersionId = 'depressive-mood-13-16-v1';
+
+  assert.equal(
+    selectDefinitionForStudent(
+      child,
+      'depressive-mood',
+      sessionDate,
+      [childVersionId],
+    ).definition.id,
+    childVersionId,
+  );
+  assert.equal(
+    selectDefinitionForStudent(
+      child,
+      'depressive-mood',
+      sessionDate,
+      [teenVersionId],
+    ).definition,
+    null,
+  );
 });

@@ -1,5 +1,8 @@
 const campaignList = document.getElementById('campaign-list');
 const campaignListEmpty = document.getElementById('campaign-list-empty');
+const campaignSearch = document.getElementById('campaign-search');
+const campaignStatusFilter = document.getElementById('campaign-status-filter');
+const campaignFilterSummary = document.getElementById('campaign-filter-summary');
 const professionalSurface = document.getElementById('professional-surface');
 const operationsSurface = document.getElementById('operations-surface');
 const operationsList = document.getElementById('operations-list');
@@ -40,6 +43,10 @@ const alertActionForm = document.getElementById('alert-action-form');
 const alertActionTitle = document.getElementById('alert-action-title');
 const alertActionId = document.getElementById('alert-action-id');
 const alertActionKind = document.getElementById('alert-action-kind');
+const alertTransferTargetField = document.getElementById('alert-transfer-target-field');
+const alertTransferTarget = document.getElementById('alert-transfer-target');
+const alertTransferEmpty = document.getElementById('alert-transfer-empty');
+const alertActionNoteLabel = document.getElementById('alert-action-note-label');
 const alertActionNote = document.getElementById('alert-action-note');
 const alertActionHelp = document.getElementById('alert-action-help');
 const alertActionStatus = document.getElementById('alert-action-status');
@@ -72,13 +79,15 @@ const state = {
   groups: [],
   families: [],
   definitions: [],
-  selectedFamilyKeys: new Set(),
+  selectedDefinitionIds: new Set(),
   selectedCampaignId: null,
   monitor: null,
   alerts: [],
   alertSnapshot: null,
   pollingTimer: null,
   loadingMonitor: false,
+  campaignSearch: '',
+  campaignStatusFilter: 'active',
 };
 
 function escapeMarkup(value) {
@@ -140,8 +149,45 @@ function closeDialog(dialog) {
   }
 }
 
+function campaignIsActive(campaign) {
+  return !['CLOSED', 'CANCELLED'].includes(campaign.status);
+}
+
+function campaignMatchesStatus(campaign, filter) {
+  if (filter === 'all') return true;
+  if (filter === 'active') return campaignIsActive(campaign);
+  if (filter === 'preparation') {
+    return ['DRAFT', 'CONSENT_PENDING', 'READY'].includes(campaign.status);
+  }
+  if (filter === 'live') return campaign.status === 'LIVE';
+  if (filter === 'finished') return ['CLOSED', 'CANCELLED'].includes(campaign.status);
+  return true;
+}
+
+function normalizeCampaignSearch(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('es');
+}
+
+function filteredCampaigns() {
+  const query = normalizeCampaignSearch(state.campaignSearch.trim());
+  return state.campaigns.filter((campaign) => {
+    if (!campaignMatchesStatus(campaign, state.campaignStatusFilter)) return false;
+    if (!query) return true;
+    const searchable = normalizeCampaignSearch([
+      campaign.title,
+      campaign.group?.name,
+      campaignStatusMeta[campaign.status]?.label,
+    ].filter(Boolean).join(' '));
+    return searchable.includes(query);
+  });
+}
+
 function renderCampaigns() {
-  campaignList.innerHTML = state.campaigns.map((campaign) => {
+  const visibleCampaigns = filteredCampaigns();
+  campaignList.innerHTML = visibleCampaigns.map((campaign) => {
     const meta = campaignStatusMeta[campaign.status] || campaignStatusMeta.DRAFT;
     const current = campaign.id === state.selectedCampaignId;
     return `
@@ -154,7 +200,17 @@ function renderCampaigns() {
       </button>
     `;
   }).join('');
-  campaignListEmpty.hidden = state.campaigns.length > 0;
+  const total = state.campaigns.length;
+  const visible = visibleCampaigns.length;
+  campaignFilterSummary.textContent = total === 0
+    ? ''
+    : `${visible} de ${total} ${total === 1 ? 'campaña' : 'campañas'}`;
+  campaignListEmpty.hidden = visible > 0;
+  if (visible === 0) {
+    campaignListEmpty.textContent = total === 0
+      ? 'Aún no hay campañas. Crea la primera para un grupo asignado.'
+      : 'No hay campañas que coincidan. Cambia el filtro o la búsqueda.';
+  }
 }
 
 function renderOperations() {
@@ -182,12 +238,24 @@ function renderOperations() {
 function renderTimeline(status) {
   const currentStage = campaignStatusMeta[status]?.stage ?? 0;
   [...campaignTimeline.children].forEach((item, index) => {
-    item.classList.toggle('is-complete', index < currentStage);
-    item.classList.toggle('is-current', index === currentStage);
+    const complete = index < currentStage;
+    const current = index === currentStage;
+    item.classList.toggle('is-complete', complete);
+    item.classList.toggle('is-current', current);
+    item.dataset.stepState = current ? 'current' : complete ? 'complete' : 'pending';
+    if (current) {
+      item.setAttribute('aria-current', 'step');
+    } else {
+      item.removeAttribute('aria-current');
+    }
   });
 }
 
 function renderCampaignActions(campaign) {
+  if (String(campaign.createdByUserId) !== String(state.userId)) {
+    campaignActions.innerHTML = '<span class="muted-line">Seguimiento recibido mediante transferencia profesional.</span>';
+    return;
+  }
   const actions = [];
   if (['CONSENT_PENDING', 'READY'].includes(campaign.status)) {
     actions.push('<button class="button secondary" type="button" data-campaign-action="consents">Actualizar consentimientos</button>');
@@ -226,8 +294,9 @@ function renderParticipants(participants) {
   }
   participantList.innerHTML = participants.map((participant) => {
     const meta = participantStatusMeta[participant.status] || { label: participant.status, tone: 'neutral' };
-    const resultAction = participant.status === 'SUBMITTED'
-      ? `<button class="text-action" type="button" data-result-student="${escapeMarkup(participant.student.id)}">Revisar resultado</button>`
+    const canReviewAnswers = ['SUBMITTED', 'HELP_REQUESTED'].includes(participant.status);
+    const resultAction = canReviewAnswers
+      ? `<button class="text-action" type="button" data-result-student="${escapeMarkup(participant.student.id)}">${participant.status === 'HELP_REQUESTED' ? 'Ver respuestas' : 'Revisar resultado'}</button>`
       : '<span class="muted-line">—</span>';
     const consent = participant.consentStatus
       ? `Consentimiento: ${participant.consentStatus === 'ACCEPTED' ? 'aceptado' : participant.consentStatus.toLowerCase()}`
@@ -275,7 +344,7 @@ function alertStatusLabel(status) {
 }
 
 function renderAlerts() {
-  alertCount.textContent = String(state.alerts.filter((alert) => !['RESOLVED', 'TRANSFERRED'].includes(alert.status)).length);
+  alertCount.textContent = String(state.alerts.filter((alert) => alert.status !== 'RESOLVED').length);
   alertListEmpty.hidden = state.alerts.length > 0;
   const nextSnapshot = new Map(
     state.alerts.map((alert) => [alert.id, `${alert.status}:${alert.severity}`]),
@@ -298,7 +367,7 @@ function renderAlerts() {
   }
   state.alertSnapshot = nextSnapshot;
   alertList.innerHTML = state.alerts.map((alert) => {
-    const canAct = !['RESOLVED', 'TRANSFERRED'].includes(alert.status);
+    const canAct = alert.status !== 'RESOLVED';
     const severityLabel = alertSeverityLabel(alert.severity);
     const statusLabel = alertStatusLabel(alert.status);
     return `
@@ -311,7 +380,7 @@ function renderAlerts() {
         <time datetime="${escapeMarkup(alert.createdAt)}">${escapeMarkup(formatDate(alert.createdAt, { withTime: true }))}</time>
         ${canAct ? `
           <div class="alert-item__actions">
-            ${alert.status === 'OPEN' ? `<button class="text-action" type="button" data-alert-ack="${escapeMarkup(alert.id)}">Confirmar recepción</button>` : ''}
+            ${['OPEN', 'TRANSFERRED'].includes(alert.status) ? `<button class="text-action" type="button" data-alert-ack="${escapeMarkup(alert.id)}">Confirmar recepción</button>` : ''}
             <button class="text-action" type="button" data-alert-action="resolve" data-alert-id="${escapeMarkup(alert.id)}">Resolver</button>
             <button class="text-action" type="button" data-alert-action="transfer" data-alert-id="${escapeMarkup(alert.id)}">Transferir</button>
           </div>
@@ -346,8 +415,12 @@ async function loadMonitor({ silent = false } = {}) {
   state.loadingMonitor = true;
   try {
     const [monitorResponse, alertsResponse] = await Promise.all([
-      apiRequest(`/questionnaire-campaigns/${encodeURIComponent(state.selectedCampaignId)}/monitor`),
-      apiRequest(`/questionnaire-campaigns/${encodeURIComponent(state.selectedCampaignId)}/alerts`),
+      apiRequest(`/questionnaire-campaigns/${encodeURIComponent(state.selectedCampaignId)}/monitor`, {
+        companionSilent: silent,
+      }),
+      apiRequest(`/questionnaire-campaigns/${encodeURIComponent(state.selectedCampaignId)}/alerts`, {
+        companionSilent: silent,
+      }),
     ]);
     state.monitor = monitorResponse.data;
     state.alerts = alertsResponse.data.alerts || [];
@@ -385,9 +458,9 @@ async function refreshCampaigns() {
   }
 }
 
-async function pollNotifications() {
+async function pollNotifications({ silent = false } = {}) {
   try {
-    const response = await apiRequest('/notifications');
+    const response = await apiRequest('/notifications', { companionSilent: silent });
     const unread = (response.data.notifications || []).filter((item) => !item.isRead).length;
     notificationCount.textContent = String(unread);
     notificationCount.hidden = unread === 0;
@@ -402,7 +475,7 @@ function startPolling() {
   clearInterval(state.pollingTimer);
   state.pollingTimer = setInterval(() => {
     loadMonitor({ silent: true });
-    pollNotifications();
+    pollNotifications({ silent: true });
   }, 5000);
 }
 
@@ -456,43 +529,63 @@ function updateCampaignGroupSummary() {
     : 'Selecciona un grupo';
 }
 
-function familyAgeRanges(familyKey) {
-  return state.definitions
-    .filter((definition) => definition.familyKey === familyKey)
-    .map((definition) => `${definition.ageMin}–${definition.ageMax}`);
-}
-
-function familyMatchesAgeFilter(familyKey, filter) {
+function definitionMatchesAgeFilter(definition, filter) {
   if (filter === 'all') return true;
   const [minimum, maximum] = filter.split('-').map(Number);
-  return state.definitions.some((definition) => (
+  return definition.ageMin <= maximum && definition.ageMax >= minimum;
+}
+
+function definitionsForFamily(familyKey, filter = 'all') {
+  return state.definitions.filter((definition) => (
     definition.familyKey === familyKey
-    && definition.ageMin <= maximum
-    && definition.ageMax >= minimum
+    && definitionMatchesAgeFilter(definition, filter)
   ));
 }
 
 function updateCatalogSummary() {
-  const count = state.selectedFamilyKeys.size;
-  campaignSummaryCount.textContent = `${count} ${count === 1 ? 'seleccionado' : 'seleccionados'}`;
+  const selectedDefinitions = state.definitions.filter(
+    (definition) => state.selectedDefinitionIds.has(definition.id),
+  );
+  const areaCount = new Set(selectedDefinitions.map((definition) => definition.familyKey)).size;
+  const bandCount = selectedDefinitions.length;
+  const areaLabel = areaCount === 1 ? 'área' : 'áreas';
+  const bandLabel = bandCount === 1 ? 'franja' : 'franjas';
+  campaignSummaryCount.textContent = `${areaCount} ${areaLabel} · ${bandCount} ${bandLabel}`;
 }
 
 function renderQuestionnaireCatalog() {
   const filter = questionnaireAgeFilter.value || 'all';
-  const families = state.families.filter((family) => familyMatchesAgeFilter(family.key, filter));
+  const families = state.families.filter(
+    (family) => definitionsForFamily(family.key, filter).length > 0,
+  );
   questionnaireCatalog.innerHTML = families.map((family) => {
-    const checked = state.selectedFamilyKeys.has(family.key);
-    const ranges = [...new Set(familyAgeRanges(family.key))].join(' y ');
+    const definitions = definitionsForFamily(family.key, filter);
+    const hasSelectedDefinition = definitions.some(
+      (definition) => state.selectedDefinitionIds.has(definition.id),
+    );
+    const familyTitleId = `questionnaire-family-${family.key}`;
     return `
-      <label class="questionnaire-catalog-item${checked ? ' is-selected' : ''}">
-        <input type="checkbox" name="familyKey" value="${escapeMarkup(family.key)}" ${checked ? 'checked' : ''} />
-        <span class="questionnaire-catalog-item__check" aria-hidden="true"></span>
+      <article class="questionnaire-catalog-item${hasSelectedDefinition ? ' is-selected' : ''}">
         <span class="questionnaire-catalog-item__copy">
-          <strong>${escapeMarkup(family.label)}</strong>
+          <strong id="${escapeMarkup(familyTitleId)}">${escapeMarkup(family.label)}</strong>
           <small>${escapeMarkup(family.description)}</small>
         </span>
-        <span class="questionnaire-catalog-item__age">${escapeMarkup(ranges)} años</span>
-      </label>
+        <div class="questionnaire-catalog-item__target">
+          <span class="questionnaire-catalog-item__target-label">Seleccionar para</span>
+          <div class="questionnaire-age-options" role="group" aria-labelledby="${escapeMarkup(familyTitleId)}">
+            ${definitions.map((definition) => {
+              const checked = state.selectedDefinitionIds.has(definition.id);
+              return `
+                <label class="questionnaire-age-option${checked ? ' is-selected' : ''}">
+                  <input type="checkbox" name="questionnaireVersionId" value="${escapeMarkup(definition.id)}" ${checked ? 'checked' : ''} />
+                  <span class="questionnaire-age-option__check" aria-hidden="true"></span>
+                  <span>${escapeMarkup(`${definition.ageMin}–${definition.ageMax} años`)}</span>
+                </label>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      </article>
     `;
   }).join('');
   if (families.length === 0) {
@@ -504,7 +597,7 @@ function renderQuestionnaireCatalog() {
 function openCampaignDialog() {
   campaignFormStatus.textContent = '';
   campaignDateInput.value = defaultLocalDateTime();
-  state.selectedFamilyKeys.clear();
+  state.selectedDefinitionIds.clear();
   questionnaireAgeFilter.value = 'all';
   campaignCenterSelect.innerHTML = availableCenters().map((center) => `
     <option value="${escapeMarkup(center.id)}">${escapeMarkup(center.name)}</option>
@@ -522,8 +615,8 @@ async function submitCampaign(event) {
   if (state.groups.length === 0) {
     return;
   }
-  if (state.selectedFamilyKeys.size === 0) {
-    campaignFormStatus.textContent = 'Selecciona al menos un cuestionario.';
+  if (state.selectedDefinitionIds.size === 0) {
+    campaignFormStatus.textContent = 'Selecciona al menos una franja de edad.';
     questionnaireCatalog.focus({ preventScroll: false });
     return;
   }
@@ -537,11 +630,15 @@ async function submitCampaign(event) {
       body: JSON.stringify({
         title: formData.get('title'),
         groupId: formData.get('groupId'),
-        familyKeys: [...state.selectedFamilyKeys],
+        questionnaireVersionIds: [...state.selectedDefinitionIds],
         plannedFor: new Date(formData.get('plannedFor')).toISOString(),
       }),
     });
     closeDialog(campaignDialog);
+    state.campaignSearch = '';
+    state.campaignStatusFilter = 'active';
+    campaignSearch.value = '';
+    campaignStatusFilter.value = 'active';
     await refreshCampaigns();
     await selectCampaign(response.data.campaign.id);
   } catch (error) {
@@ -602,38 +699,105 @@ async function showResult(studentId) {
     resultContent.innerHTML = `
       <p>${escapeMarkup(result.disclaimer)}</p>
       <div class="student-result-list">
-        ${(result.results || []).map((questionnaireResult) => `
-          <section class="student-result-section">
+        ${(result.results || []).map((questionnaireResult) => {
+          const completion = questionnaireResult.completion || {};
+          const isHelpRequested = completion.status === 'HELP_REQUESTED'
+            || questionnaireResult.attemptStatus === 'HELP_REQUESTED';
+          const isPartial = completion.status === 'PARTIAL';
+          const isUnscored = isHelpRequested || isPartial;
+          const answers = questionnaireResult.answers || [];
+          const answeredCount = Number(completion.answeredCount ?? answers.length);
+          const totalQuestions = Number(completion.totalQuestions ?? answers.length);
+          let completionStatus = 'complete';
+          if (isHelpRequested) completionStatus = 'help-requested';
+          else if (isPartial) completionStatus = 'partial';
+          return `
+          <section class="student-result-section" data-completion-status="${completionStatus}">
             <div class="student-result-section__heading">
               <div><span class="eyebrow">${escapeMarkup(questionnaireResult.ageRange)} años</span><h3>${escapeMarkup(questionnaireResult.questionnaireTitle)}</h3></div>
+              ${isHelpRequested ? '<span class="state-badge" data-tone="danger">Ayuda solicitada</span>' : ''}
+              ${!isHelpRequested && isPartial ? '<span class="state-badge" data-tone="neutral">Envío parcial</span>' : ''}
             </div>
+            ${isHelpRequested ? `
+              <p class="result-context-note">El alumno pidió ayuda antes de enviar. Se muestran las respuestas que quedaron guardadas hasta ese momento.</p>
+            ` : ''}
             <div class="result-summary">
-              <div><span class="eyebrow">Puntuación</span><strong>${Number(questionnaireResult.totalScore)}</strong></div>
-              <div><span class="eyebrow">Banda orientativa</span><strong>${escapeMarkup(questionnaireResult.band?.label || questionnaireResult.band?.key || 'Sin banda')}</strong></div>
+              ${isUnscored ? `
+                <div><span class="eyebrow">${isHelpRequested ? 'Respuestas guardadas' : 'Respuestas'}</span><strong>${answeredCount} de ${totalQuestions}</strong></div>
+                <div><span class="eyebrow">${isHelpRequested ? 'Puntuación' : 'Resultado'}</span><strong>${isHelpRequested ? 'Sin calcular' : 'Sin puntuar'}</strong></div>
+              ` : `
+                <div><span class="eyebrow">Puntuación</span><strong>${Number(questionnaireResult.totalScore)}</strong></div>
+                <div><span class="eyebrow">Banda orientativa</span><strong>${escapeMarkup(questionnaireResult.band?.label || questionnaireResult.band?.key || 'Sin banda')}</strong></div>
+              `}
             </div>
             ${(questionnaireResult.subscales || []).length ? `
               <div class="result-subscales" aria-label="Subescalas">
                 ${questionnaireResult.subscales.map((subscale) => `<span><strong>${escapeMarkup(subscale.label || subscale.key)}</strong> ${Number(subscale.score)}</span>`).join('')}
               </div>
             ` : ''}
-            <details>
-              <summary>Ver respuestas</summary>
+            <details${isHelpRequested ? ' open' : ''}>
+              <summary>Ver respuestas (${answers.length})</summary>
               <div class="result-answer-list">
-                ${(questionnaireResult.answers || []).map((answer) => `
-                  <div class="result-answer">
-                    <strong>${Number(answer.questionNumber)}</strong>
-                    <span>${escapeMarkup(answer.question)}</span>
-                    <span>${escapeMarkup(answer.label)} (${Number(answer.points)})</span>
-                  </div>
-                `).join('')}
+                ${answers.length ? answers.map((answer) => `
+                    <div class="result-answer">
+                      <strong>${Number(answer.questionNumber)}</strong>
+                      <span>${escapeMarkup(answer.question)}</span>
+                      <span>${escapeMarkup(answer.label)} (${Number(answer.points)})</span>
+                    </div>
+                  `).join('') : '<p class="result-answer-empty">No hay respuestas guardadas para revisar.</p>'}
               </div>
             </details>
           </section>
-        `).join('')}
+        `;
+        }).join('')}
       </div>
     `;
   } catch (error) {
     resultContent.innerHTML = `<p class="inline-status">${escapeMarkup(getApiErrorMessage(error))}</p>`;
+  }
+}
+
+function transferCandidateEntries(groupUsers) {
+  return (groupUsers || [])
+    .filter((entry) => (
+      entry.user?.isActive !== false
+      && String(entry.user?.role || '').toUpperCase() === 'PROFESSIONAL'
+      && entry.assignment?.isActive !== false
+      && String(entry.user?.id) !== String(state.userId)
+    ))
+    .sort((a, b) => a.user.name.localeCompare(b.user.name, 'es'));
+}
+
+async function loadAlertTransferTargets(alertId) {
+  const groupId = state.monitor?.campaign?.group?.id;
+  if (!groupId) {
+    alertActionStatus.textContent = 'No se pudo identificar el grupo de la alerta.';
+    return;
+  }
+
+  try {
+    const response = await apiRequest(`/groups/${encodeURIComponent(groupId)}/users`);
+    if (alertActionKind.value !== 'transfer' || alertActionId.value !== alertId) return;
+    const candidates = transferCandidateEntries(response.data.users);
+    alertTransferTarget.innerHTML = `
+      <option value="">Selecciona un profesional</option>
+      ${candidates.map((entry) => `
+        <option value="${escapeMarkup(entry.user.id)}">${escapeMarkup(entry.user.name)}</option>
+      `).join('')}
+    `;
+    const hasCandidates = candidates.length > 0;
+    alertTransferTarget.disabled = !hasCandidates;
+    alertActionSubmit.disabled = !hasCandidates;
+    alertTransferEmpty.hidden = hasCandidates;
+    alertTransferEmpty.textContent = hasCandidates
+      ? ''
+      : 'No hay otro profesional activo asignado a este grupo. El centro debe asignarlo antes de transferir la alerta.';
+    if (hasCandidates) alertTransferTarget.focus();
+  } catch (error) {
+    if (alertActionKind.value !== 'transfer' || alertActionId.value !== alertId) return;
+    alertTransferTarget.disabled = true;
+    alertActionSubmit.disabled = true;
+    alertActionStatus.textContent = getApiErrorMessage(error);
   }
 }
 
@@ -643,12 +807,26 @@ function openAlertAction(kind, alertId) {
   alertActionNote.value = '';
   alertActionStatus.textContent = '';
   const isTransfer = kind === 'transfer';
+  alertTransferTargetField.hidden = !isTransfer;
+  alertTransferEmpty.hidden = true;
+  alertTransferTarget.required = isTransfer;
+  alertTransferTarget.disabled = isTransfer;
+  alertTransferTarget.innerHTML = isTransfer
+    ? '<option value="">Cargando profesionales…</option>'
+    : '<option value="">Selecciona un profesional</option>';
+  alertActionSubmit.disabled = isTransfer;
   alertActionTitle.textContent = isTransfer ? 'Transferir alerta' : 'Registrar actuación y resolver';
+  alertActionNoteLabel.textContent = isTransfer ? 'Motivo y siguiente paso acordado' : 'Actuación y siguiente paso';
   alertActionHelp.textContent = isTransfer
-    ? 'Indica a qué persona o circuito se transfiere y cuál es el siguiente paso.'
+    ? 'La persona seleccionada recibirá una notificación y asumirá el seguimiento de esta alerta.'
     : 'Describe la actuación realizada antes de cerrar la alerta.';
-  alertActionSubmit.textContent = isTransfer ? 'Registrar transferencia' : 'Resolver alerta';
+  alertActionSubmit.textContent = isTransfer ? 'Transferir alerta' : 'Resolver alerta';
   alertActionDialog.showModal();
+  if (isTransfer) {
+    loadAlertTransferTargets(alertId);
+  } else {
+    alertActionNote.focus();
+  }
 }
 
 async function acknowledgeAlert(alertId) {
@@ -667,12 +845,21 @@ async function submitAlertAction(event) {
   event.preventDefault();
   const kind = alertActionKind.value;
   const id = alertActionId.value;
+  const targetProfessionalId = alertTransferTarget.value;
+  if (kind === 'transfer' && !targetProfessionalId) {
+    alertActionStatus.textContent = 'Selecciona el profesional que continuará el seguimiento.';
+    alertTransferTarget.focus();
+    return;
+  }
   alertActionSubmit.disabled = true;
   alertActionStatus.textContent = 'Guardando…';
   try {
     await apiRequest(`/questionnaire-alerts/${encodeURIComponent(id)}/${kind}`, {
       method: 'POST',
-      body: JSON.stringify({ note: alertActionNote.value }),
+      body: JSON.stringify({
+        ...(kind === 'transfer' ? { targetProfessionalId } : {}),
+        note: alertActionNote.value,
+      }),
     });
     closeDialog(alertActionDialog);
     await loadMonitor();
@@ -714,14 +901,20 @@ async function initialize() {
       state.families = definitionsResponse?.data?.families || [];
       state.definitions = definitionsResponse?.data?.definitions || [];
       professionalSurface.hidden = false;
-      renderCampaigns();
       const requestedCampaign = new URLSearchParams(window.location.search).get('campaignId');
-      const selected = state.campaigns.find((item) => item.id === requestedCampaign)
-        || state.campaigns[0];
+      const requested = state.campaigns.find((item) => item.id === requestedCampaign);
+      if (requested && !campaignMatchesStatus(requested, state.campaignStatusFilter)) {
+        state.campaignStatusFilter = 'all';
+      } else if (state.campaigns.length > 0 && !state.campaigns.some(campaignIsActive)) {
+        state.campaignStatusFilter = 'all';
+      }
+      campaignStatusFilter.value = state.campaignStatusFilter;
+      renderCampaigns();
+      const selected = requested || filteredCampaigns()[0] || state.campaigns[0];
       if (selected) {
         await selectCampaign(selected.id);
       }
-      await pollNotifications();
+      await pollNotifications({ silent: true });
       startPolling();
     } else {
       operationsSurface.hidden = false;
@@ -771,20 +964,40 @@ alertList?.addEventListener('click', (event) => {
 });
 
 newCampaignButton?.addEventListener('click', openCampaignDialog);
+campaignSearch?.addEventListener('input', () => {
+  state.campaignSearch = campaignSearch.value;
+  renderCampaigns();
+});
+campaignStatusFilter?.addEventListener('change', async () => {
+  state.campaignStatusFilter = campaignStatusFilter.value;
+  const visibleCampaigns = filteredCampaigns();
+  renderCampaigns();
+  if (
+    visibleCampaigns.length > 0
+    && !visibleCampaigns.some((campaign) => campaign.id === state.selectedCampaignId)
+  ) {
+    await selectCampaign(visibleCampaigns[0].id);
+  }
+});
 campaignForm?.addEventListener('submit', submitCampaign);
 alertActionForm?.addEventListener('submit', submitAlertAction);
 campaignCenterSelect?.addEventListener('change', renderGroupOptions);
 campaignGroupSelect?.addEventListener('change', updateCampaignGroupSummary);
 questionnaireAgeFilter?.addEventListener('change', renderQuestionnaireCatalog);
 questionnaireCatalog?.addEventListener('change', (event) => {
-  const input = event.target.closest('input[name="familyKey"]');
+  const input = event.target.closest('input[name="questionnaireVersionId"]');
   if (!input) return;
   if (input.checked) {
-    state.selectedFamilyKeys.add(input.value);
+    state.selectedDefinitionIds.add(input.value);
   } else {
-    state.selectedFamilyKeys.delete(input.value);
+    state.selectedDefinitionIds.delete(input.value);
   }
-  input.closest('.questionnaire-catalog-item')?.classList.toggle('is-selected', input.checked);
+  input.closest('.questionnaire-age-option')?.classList.toggle('is-selected', input.checked);
+  const catalogItem = input.closest('.questionnaire-catalog-item');
+  catalogItem?.classList.toggle(
+    'is-selected',
+    Boolean(catalogItem.querySelector('input[name="questionnaireVersionId"]:checked')),
+  );
   updateCatalogSummary();
 });
 

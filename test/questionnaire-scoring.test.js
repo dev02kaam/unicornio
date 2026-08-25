@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { questionnaireVersions } = require('../server/data/questionnaires/catalog');
 const {
   evaluateQuestionnaire,
+  evaluateQuestionnaireSubmission,
   getBand,
 } = require('../server/services/questionnaire-scoring.service');
 
@@ -41,6 +42,34 @@ test('no permite evaluar si falta una respuesta', () => {
     () => evaluateQuestionnaire(definition, incomplete),
     /pregunta 20/,
   );
+});
+
+test('un envío parcial conserva el avance sin calcular puntuación ni banda', () => {
+  const definition = questionnaireVersions.find((item) => item.id === 'depressive-mood-9-12-v1');
+  const partial = evaluateQuestionnaireSubmission(
+    definition,
+    answersForTotal(definition, 12).slice(0, 7),
+  );
+  assert.deepEqual(partial.completion, {
+    status: 'PARTIAL',
+    answeredCount: 7,
+    totalQuestions: 20,
+  });
+  assert.equal(partial.totalScore, null);
+  assert.equal(partial.band, null);
+  assert.equal(partial.alertSeverity, null);
+});
+
+test('un envío completo mantiene la evaluación habitual', () => {
+  const definition = questionnaireVersions.find((item) => item.id === 'depressive-mood-9-12-v1');
+  const complete = evaluateQuestionnaireSubmission(definition, answersForTotal(definition, 12));
+  assert.deepEqual(complete.completion, {
+    status: 'COMPLETE',
+    answeredCount: 20,
+    totalQuestions: 20,
+  });
+  assert.equal(complete.totalScore, 12);
+  assert.ok(complete.band);
 });
 
 test('activa los centinelas infantiles solo desde A menudo', () => {
