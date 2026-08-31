@@ -4,7 +4,7 @@ const { runMigrations } = require('../server/migrations');
 
 dotenv.config();
 
-function assertMigrationDatabaseIsolation(migrationUrl, applicationUrl) {
+function assertMigrationDatabaseIsolation(migrationUrl, applicationUrl, allowSharedRole = false) {
   if (!migrationUrl) {
     throw new Error('MIGRATION_DATABASE_URL es obligatoria.');
   }
@@ -27,7 +27,7 @@ function assertMigrationDatabaseIsolation(migrationUrl, applicationUrl) {
       'MIGRATION_DATABASE_URL contiene credenciales de ejemplo. Sustituye usuario_ddl y clave por credenciales PostgreSQL reales.',
     );
   }
-  if (applicationUrl && migrationUrl === applicationUrl) {
+  if (!allowSharedRole && applicationUrl && migrationUrl === applicationUrl) {
     throw new Error('MIGRATION_DATABASE_URL debe ser distinta de DATABASE_URL y usar un rol DDL separado.');
   }
 }
@@ -56,21 +56,21 @@ function formatMigrationError(error) {
 
 async function migrate() {
   const migrationUrl = process.env.MIGRATION_DATABASE_URL || '';
-  assertMigrationDatabaseIsolation(migrationUrl, process.env.DATABASE_URL || '');
+  const allowSharedRole = String(process.env.ALLOW_SHARED_DATABASE_ROLE || '').toLowerCase() === 'true';
+  assertMigrationDatabaseIsolation(migrationUrl, process.env.DATABASE_URL || '', allowSharedRole);
 
   const sslMode = String(process.env.MIGRATION_DATABASE_SSL_MODE || 'verify-full').toLowerCase();
   const ca = process.env.MIGRATION_DATABASE_CA || '';
   if (!['disable', 'verify-full'].includes(sslMode)) {
     throw new Error('MIGRATION_DATABASE_SSL_MODE debe ser disable o verify-full.');
   }
-  if (sslMode === 'verify-full' && !ca) {
-    throw new Error('MIGRATION_DATABASE_CA es obligatoria con TLS verify-full.');
-  }
-
   const pool = new Pool({
     connectionString: migrationUrl,
     ssl: sslMode === 'verify-full'
-      ? { rejectUnauthorized: true, ca: ca.replace(/\\n/g, '\n') }
+      ? {
+        rejectUnauthorized: true,
+        ...(ca ? { ca: ca.replace(/\\n/g, '\n') } : {}),
+      }
       : false,
     max: 2,
     connectionTimeoutMillis: 5000,

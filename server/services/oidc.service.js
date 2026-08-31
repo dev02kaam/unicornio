@@ -64,7 +64,7 @@ async function beginOidcLogin(session, options = {}) {
     redirect_uri: config.redirectUri,
     response_type: 'code',
     scope: 'openid profile email',
-    audience: config.audience,
+    acr_values: (config.mfaAcrValues || []).join(' '),
     code_challenge: codeChallenge,
     code_challenge_method: 'S256',
     state,
@@ -113,7 +113,13 @@ async function completeOidcLogin(currentUrl, session, options = {}) {
     throw new AppError('El proveedor no acredito MFA.', 403);
   }
 
-  const user = await repository.findByOidcIdentity({ issuer: claims.iss, subject: claims.sub });
+  const user = await repository.findByOidcIdentity({
+    issuer: claims.iss,
+    subject: claims.sub,
+    email: claims.email,
+    emailVerified: claims.email_verified === true,
+    allowAutoLink: config.autoLinkVerifiedEmail === true,
+  });
   if (!user || !['SCHOOL', 'TEACHER', 'PROFESSIONAL'].includes(String(user.role).toUpperCase())) {
     throw new AppError('La identidad no esta provisionada.', 403);
   }

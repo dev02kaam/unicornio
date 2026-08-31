@@ -67,8 +67,10 @@ test('production solo acepta el perfil completo y bloquea datos reales sin aprob
     DATABASE_CA: 'CA de prueba',
     SESSION_SECRET: 'session-secret-with-at-least-32-characters',
     APP_ORIGIN: 'https://unicornio.example.test',
+    OIDC_ENABLED: 'true',
     OIDC_ISSUER: 'https://idp.example.test',
     OIDC_CLIENT_ID: 'unicornio',
+    OIDC_CLIENT_SECRET: 'client-secret-only-for-tests',
     OIDC_AUDIENCE: 'unicornio-api',
     OIDC_REDIRECT_URI: 'https://unicornio.example.test/api/auth/oidc/callback',
     OIDC_MFA_ACR_VALUES: 'urn:example:mfa',
@@ -86,6 +88,92 @@ test('production solo acepta el perfil completo y bloquea datos reales sin aprob
   assert.throws(
     () => buildEnv({ ...complete, REAL_DATA_PILOT_ENABLED: 'true' }),
     /DPIA_APPROVAL_REFERENCE/,
+  );
+  assert.throws(
+    () => buildEnv({
+      ...complete,
+      REAL_DATA_PILOT_ENABLED: 'true',
+      ALLOW_SHARED_DATABASE_ROLE: 'true',
+    }),
+    /ALLOW_SHARED_DATABASE_ROLE=false/,
+  );
+});
+
+test('production sin piloto real puede bloquear OIDC y usar secretos nativos de Render', () => {
+  const config = buildEnv({
+    APP_PROFILE: 'production',
+    RENDER_EXTERNAL_URL: 'https://unicornio.onrender.com',
+    DATABASE_URL: 'postgresql://app@example.test/unicornio',
+    DATABASE_SSL_MODE: 'verify-full',
+    SESSION_SECRET: 'session-secret-with-at-least-32-characters',
+    LOCAL_ADULT_AUTH_ENABLED: 'true',
+    OIDC_ENABLED: 'false',
+    DATA_KEY_PROVIDER: 'render-secret-file',
+    DATA_KEY_CURRENT_VERSION: 'v1',
+    DATA_KEYRING_FILE: '/etc/secrets/unicornio-keyring.json',
+    EMERGENCY_ADMIN_TOTP_SECRET: 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP',
+    RETENTION_RESPONSES_DAYS: '30',
+    RETENTION_RESULTS_DAYS: '30',
+    RETENTION_NOTIFICATIONS_DAYS: '30',
+    RETENTION_SESSIONS_DAYS: '1',
+    RETENTION_AUDIT_DAYS: '365',
+  });
+
+  assert.equal(config.appOrigin, 'https://unicornio.onrender.com');
+  assert.equal(config.localAdultAuthEnabled, true);
+  assert.equal(config.oidc.enabled, false);
+  assert.equal(config.oidc.redirectUri, 'https://unicornio.onrender.com/api/auth/oidc/callback');
+  assert.equal(config.databaseCa, '');
+  assert.throws(
+    () => buildEnv({
+      ...config,
+      APP_PROFILE: 'production',
+      DATABASE_URL: config.databaseUrl,
+      DATABASE_SSL_MODE: config.databaseSslMode,
+      SESSION_SECRET: config.sessionSecret,
+      APP_ORIGIN: config.appOrigin,
+      LOCAL_ADULT_AUTH_ENABLED: 'true',
+      OIDC_ENABLED: 'false',
+      DATA_KEY_PROVIDER: config.dataKeyProvider,
+      DATA_KEY_CURRENT_VERSION: config.dataKeyCurrentVersion,
+      DATA_KEYRING_FILE: config.dataKeyringFile,
+      EMERGENCY_ADMIN_TOTP_SECRET: config.emergencyAdminTotpSecret,
+      RETENTION_RESPONSES_DAYS: '30',
+      RETENTION_RESULTS_DAYS: '30',
+      RETENTION_NOTIFICATIONS_DAYS: '30',
+      RETENTION_SESSIONS_DAYS: '1',
+      RETENTION_AUDIT_DAYS: '365',
+      REAL_DATA_PILOT_ENABLED: 'true',
+    }),
+    /OIDC_ENABLED=true.*LOCAL_ADULT_AUTH_ENABLED=false/,
+  );
+});
+
+test('production no permite dos mecanismos adultos simultaneos', () => {
+  assert.throws(
+    () => buildEnv({
+      APP_PROFILE: 'production',
+      DATABASE_URL: 'postgresql://app@example.test/unicornio',
+      DATABASE_SSL_MODE: 'verify-full',
+      SESSION_SECRET: 'session-secret-with-at-least-32-characters',
+      APP_ORIGIN: 'https://unicornio.example.test',
+      LOCAL_ADULT_AUTH_ENABLED: 'true',
+      OIDC_ENABLED: 'true',
+      OIDC_ISSUER: 'https://idp.example.test',
+      OIDC_CLIENT_ID: 'unicornio',
+      OIDC_CLIENT_SECRET: 'client-secret-only-for-tests',
+      OIDC_MFA_ACR_VALUES: 'urn:example:mfa',
+      DATA_KEY_PROVIDER: 'render-secret-file',
+      DATA_KEY_CURRENT_VERSION: 'v1',
+      DATA_KEYRING_FILE: '/etc/secrets/unicornio-keyring.json',
+      EMERGENCY_ADMIN_TOTP_SECRET: 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP',
+      RETENTION_RESPONSES_DAYS: '30',
+      RETENTION_RESULTS_DAYS: '30',
+      RETENTION_NOTIFICATIONS_DAYS: '30',
+      RETENTION_SESSIONS_DAYS: '1',
+      RETENTION_AUDIT_DAYS: '365',
+    }),
+    /activa solo OIDC_ENABLED o LOCAL_ADULT_AUTH_ENABLED/,
   );
 });
 

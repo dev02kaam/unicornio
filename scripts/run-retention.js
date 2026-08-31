@@ -5,27 +5,31 @@ const { runRetention } = require('../server/services/retention.service');
 
 dotenv.config();
 
-function assertRetentionDatabaseIsolation(retentionUrl, applicationUrl) {
+function assertRetentionDatabaseIsolation(retentionUrl, applicationUrl, allowSharedRole = false) {
   if (!retentionUrl) throw new Error('RETENTION_DATABASE_URL es obligatoria.');
-  if (applicationUrl && retentionUrl === applicationUrl) {
+  if (!allowSharedRole && applicationUrl && retentionUrl === applicationUrl) {
     throw new Error('RETENTION_DATABASE_URL debe usar un rol de mantenimiento distinto del rol de aplicacion.');
   }
 }
 
 async function main() {
   const retentionUrl = process.env.RETENTION_DATABASE_URL || '';
-  assertRetentionDatabaseIsolation(retentionUrl, process.env.DATABASE_URL || '');
+  const allowSharedRole = String(process.env.ALLOW_SHARED_DATABASE_ROLE || '').toLowerCase() === 'true';
+  assertRetentionDatabaseIsolation(retentionUrl, process.env.DATABASE_URL || '', allowSharedRole);
   const config = buildEnv(process.env);
   const sslMode = String(process.env.RETENTION_DATABASE_SSL_MODE || config.databaseSslMode).toLowerCase();
   const ca = process.env.RETENTION_DATABASE_CA || config.databaseCa;
   if (!['disable', 'verify-full'].includes(sslMode)) {
     throw new Error('RETENTION_DATABASE_SSL_MODE debe ser disable o verify-full.');
   }
-  if (sslMode === 'verify-full' && !ca) throw new Error('RETENTION_DATABASE_CA es obligatoria.');
-
   const pool = new Pool({
     connectionString: retentionUrl,
-    ssl: sslMode === 'verify-full' ? { rejectUnauthorized: true, ca: ca.replace(/\\n/g, '\n') } : false,
+    ssl: sslMode === 'verify-full'
+      ? {
+        rejectUnauthorized: true,
+        ...(ca ? { ca: ca.replace(/\\n/g, '\n') } : {}),
+      }
+      : false,
     max: 1,
     connectionTimeoutMillis: 5000,
     idleTimeoutMillis: 5000,

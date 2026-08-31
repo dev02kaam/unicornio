@@ -7,6 +7,7 @@ const {
   configureQuestionnaireKeyProvider,
 } = require('../server/services/questionnaire-crypto.service');
 const { StaticKeyProvider } = require('../server/services/key-provider.service');
+const { parseKeyring } = require('../server/services/render-secret-file-key-provider.service');
 const { needsRotation } = require('../server/services/data-key-rotation.service');
 const { assertKeyMaintenanceIsolation } = require('../scripts/rotate-data-key');
 
@@ -67,5 +68,29 @@ test('la rotacion detecta envelopes historicos y exige un rol de mantenimiento',
   assert.throws(
     () => assertKeyMaintenanceIsolation('postgres://app@localhost/db', 'postgres://app@localhost/db'),
     /mantenimiento distinto/i,
+  );
+  assert.doesNotThrow(
+    () => assertKeyMaintenanceIsolation(
+      'postgres://app@localhost/db',
+      'postgres://app@localhost/db',
+      true,
+    ),
+  );
+});
+
+test('el proveedor de archivo secreto carga un keyring versionado sin exponer claves', () => {
+  const provider = parseKeyring(JSON.stringify({
+    keys: {
+      v1: Buffer.alloc(32, 7).toString('base64'),
+      v2: Buffer.alloc(32, 8).toString('base64'),
+    },
+  }), 'v2');
+
+  assert.equal(provider.isReady(), true);
+  assert.equal(provider.getCurrentVersion(), 'v2');
+  assert.deepEqual(provider.getKey('v1'), Buffer.alloc(32, 7));
+  assert.throws(
+    () => parseKeyring(JSON.stringify({ keys: { v1: 'no-es-una-clave' } }), 'v1'),
+    /32 bytes/,
   );
 });

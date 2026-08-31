@@ -37,6 +37,9 @@ async function login(payload, options = {}) {
   if (config.appProfile === 'production') {
     const identity = await repository.findLocalUserByEmail(email);
     const allowedLocalRoles = ['STUDENT', 'FAMILY', 'ADMIN'];
+    if (config.localAdultAuthEnabled) {
+      allowedLocalRoles.push('SCHOOL', 'TEACHER', 'PROFESSIONAL');
+    }
     if (!identity || !identity.isActive || !allowedLocalRoles.includes(identity.role) || !identity.passwordHash) {
       throw new AppError('Credenciales invalidas.', 401);
     }

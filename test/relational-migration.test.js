@@ -44,6 +44,11 @@ test('el ejecutor de migraciones exige una URL distinta de la aplicacion', () =>
     'postgresql://migration/db',
     'postgresql://app/db',
   ));
+  assert.doesNotThrow(() => assertMigrationDatabaseIsolation(
+    'postgresql://app/db',
+    'postgresql://app/db',
+    true,
+  ));
 });
 
 test('el ejecutor rechaza marcadores de ejemplo y conserva errores utiles sin URLs', () => {

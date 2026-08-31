@@ -2,7 +2,7 @@
 
 ## Claves
 
-El repositorio no contiene claves. El adaptador indicado por `DATA_KEY_PROVIDER_MODULE` debe obtener el keyring desde el gestor de secretos y mantener disponible la version anterior durante el recifrado. Cambia `DATA_KEY_CURRENT_VERSION`, despliega el keyring y ejecuta `npm run rotate:data-key` con un rol de mantenimiento. Verifica los contadores y el evento `DATA_KEY_ROTATED` antes de retirar una clave historica.
+El repositorio no contiene claves. En Render, el proveedor `render-secret-file` lee el keyring desde el Secret File indicado por `DATA_KEYRING_FILE`; para otros gestores, el adaptador indicado por `DATA_KEY_PROVIDER_MODULE` debe obtenerlo. Mantiene disponible la version anterior durante el recifrado. Cambia `DATA_KEY_CURRENT_VERSION`, despliega el keyring y ejecuta `npm run rotate:data-key` con un rol de mantenimiento. Verifica los contadores y el evento `DATA_KEY_ROTATED` antes de retirar una clave historica.
 
 ## Retencion
 

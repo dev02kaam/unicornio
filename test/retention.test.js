@@ -12,4 +12,11 @@ test('retencion exige todos los plazos y un rol de mantenimiento separado', () =
     () => assertRetentionDatabaseIsolation('postgres://app@localhost/db', 'postgres://app@localhost/db'),
     /distinto/i,
   );
+  assert.doesNotThrow(
+    () => assertRetentionDatabaseIsolation(
+      'postgres://app@localhost/db',
+      'postgres://app@localhost/db',
+      true,
+    ),
+  );
 });

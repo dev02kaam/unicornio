@@ -6,7 +6,8 @@ const {
 } = require('./questionnaire-crypto.service');
 
 async function loadConfiguredKeyProvider(config = env) {
-  if (config.appProfile !== 'production' && !config.dataKeyProviderModule) {
+  const usesRenderSecretFile = config.dataKeyProvider === 'render-secret-file';
+  if (config.appProfile !== 'production' && !config.dataKeyProviderModule && !usesRenderSecretFile) {
     try {
       return getQuestionnaireKeyProvider();
     } catch (_error) {
@@ -14,18 +15,24 @@ async function loadConfiguredKeyProvider(config = env) {
     }
   }
 
-  if (!path.isAbsolute(config.dataKeyProviderModule || '')) {
-    throw new Error('DATA_KEY_PROVIDER_MODULE debe ser una ruta absoluta a un adaptador confiable.');
+  let adapter;
+  if (usesRenderSecretFile) {
+    adapter = require('./render-secret-file-key-provider.service');
+  } else {
+    if (!path.isAbsolute(config.dataKeyProviderModule || '')) {
+      throw new Error('DATA_KEY_PROVIDER_MODULE debe ser una ruta absoluta a un adaptador confiable.');
+    }
+    // El path absoluto se valida arriba y lo controla exclusivamente el despliegue.
+    // eslint-disable-next-line security/detect-non-literal-require
+    adapter = require(config.dataKeyProviderModule);
   }
-  // El path absoluto se valida arriba y lo controla exclusivamente el despliegue.
-  // eslint-disable-next-line security/detect-non-literal-require
-  const adapter = require(config.dataKeyProviderModule);
   if (typeof adapter.createKeyProvider !== 'function') {
     throw new Error('El adaptador de claves debe exportar createKeyProvider().');
   }
   const provider = await adapter.createKeyProvider({
     provider: config.dataKeyProvider,
     currentVersion: config.dataKeyCurrentVersion,
+    keyringFile: config.dataKeyringFile,
   });
   configureQuestionnaireKeyProvider(provider);
   if (!provider.isReady?.() || provider.getCurrentVersion() !== config.dataKeyCurrentVersion) {

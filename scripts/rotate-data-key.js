@@ -6,22 +6,26 @@ const { rotateQuestionnaireData } = require('../server/services/data-key-rotatio
 
 dotenv.config();
 
-function assertKeyMaintenanceIsolation(maintenanceUrl, applicationUrl) {
+function assertKeyMaintenanceIsolation(maintenanceUrl, applicationUrl, allowSharedRole = false) {
   if (!maintenanceUrl) throw new Error('KEY_MAINTENANCE_DATABASE_URL es obligatoria.');
-  if (applicationUrl && maintenanceUrl === applicationUrl) {
+  if (!allowSharedRole && applicationUrl && maintenanceUrl === applicationUrl) {
     throw new Error('La rotacion requiere un rol de mantenimiento distinto del rol de aplicacion.');
   }
 }
 
 async function main() {
   const maintenanceUrl = process.env.KEY_MAINTENANCE_DATABASE_URL || '';
-  assertKeyMaintenanceIsolation(maintenanceUrl, process.env.DATABASE_URL || '');
+  const allowSharedRole = String(process.env.ALLOW_SHARED_DATABASE_ROLE || '').toLowerCase() === 'true';
+  assertKeyMaintenanceIsolation(maintenanceUrl, process.env.DATABASE_URL || '', allowSharedRole);
   const config = buildEnv(process.env);
   const provider = await loadConfiguredKeyProvider(config);
   const pool = new Pool({
     connectionString: maintenanceUrl,
     ssl: config.databaseSslMode === 'verify-full'
-      ? { rejectUnauthorized: true, ca: config.databaseCa.replace(/\\n/g, '\n') }
+      ? {
+        rejectUnauthorized: true,
+        ...(config.databaseCa ? { ca: config.databaseCa.replace(/\\n/g, '\n') } : {}),
+      }
       : false,
     max: 1,
     connectionTimeoutMillis: 5000,

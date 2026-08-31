@@ -5,6 +5,7 @@ dotenv.config();
 
 const APP_PROFILES = new Set(['demo', 'production']);
 const DATABASE_SSL_MODES = new Set(['disable', 'require', 'verify-full']);
+const BUILT_IN_DATA_KEY_PROVIDERS = new Set(['render-secret-file']);
 
 function readBoolean(value, fallback = false) {
   if (value === undefined || value === '') return fallback;
@@ -29,19 +30,25 @@ function assertProductionConfig(config) {
   const failures = [];
   if (!config.databaseUrl) failures.push('DATABASE_URL');
   if (config.databaseSslMode !== 'verify-full') failures.push('DATABASE_SSL_MODE=verify-full');
-  if (!config.databaseCa) failures.push('DATABASE_CA');
   if (!config.sessionSecret || config.sessionSecret.length < 32) failures.push('SESSION_SECRET (minimo 32 caracteres)');
   if (!config.appOrigin) failures.push('APP_ORIGIN');
-  if (!config.oidc.issuer) failures.push('OIDC_ISSUER');
-  if (!config.oidc.clientId) failures.push('OIDC_CLIENT_ID');
-  if (!config.oidc.audience) failures.push('OIDC_AUDIENCE');
-  if (!config.oidc.redirectUri) failures.push('OIDC_REDIRECT_URI');
-  if (config.oidc.mfaAcrValues.length === 0) failures.push('OIDC_MFA_ACR_VALUES');
+  if (config.oidc.enabled) {
+    if (!config.oidc.issuer) failures.push('OIDC_ISSUER');
+    if (!config.oidc.clientId) failures.push('OIDC_CLIENT_ID');
+    if (!config.oidc.clientSecret) failures.push('OIDC_CLIENT_SECRET');
+    if (!config.oidc.audience) failures.push('OIDC_AUDIENCE');
+    if (!config.oidc.redirectUri) failures.push('OIDC_REDIRECT_URI');
+    if (config.oidc.mfaAcrValues.length === 0) failures.push('OIDC_MFA_ACR_VALUES');
+  }
   if (!config.dataKeyProvider || ['env', 'environment', 'local'].includes(config.dataKeyProvider)) {
     failures.push('DATA_KEY_PROVIDER externo');
   }
   if (!config.dataKeyCurrentVersion) failures.push('DATA_KEY_CURRENT_VERSION');
-  if (!config.dataKeyProviderModule) failures.push('DATA_KEY_PROVIDER_MODULE');
+  if (BUILT_IN_DATA_KEY_PROVIDERS.has(config.dataKeyProvider)) {
+    if (!config.dataKeyringFile) failures.push('DATA_KEYRING_FILE');
+  } else if (!config.dataKeyProviderModule) {
+    failures.push('DATA_KEY_PROVIDER_MODULE');
+  }
   if (!config.emergencyAdminTotpSecret || config.emergencyAdminTotpSecret.length < 32) {
     failures.push('EMERGENCY_ADMIN_TOTP_SECRET (base32, minimo 32 caracteres)');
   }
@@ -52,8 +59,14 @@ function assertProductionConfig(config) {
   if (config.publicRegistrationEnabled) failures.push('PUBLIC_REGISTRATION_ENABLED debe estar desactivado');
   if (config.dataFile) failures.push('DATA_FILE no esta permitido');
   if (config.autoRunMigrations) failures.push('AUTO_RUN_MIGRATIONS debe estar desactivado');
+  if (config.oidc.enabled && config.localAdultAuthEnabled) {
+    failures.push('activa solo OIDC_ENABLED o LOCAL_ADULT_AUTH_ENABLED');
+  }
   if (config.realDataPilotEnabled) {
     const approvals = config.pilotApprovals;
+    if (!config.oidc.enabled) failures.push('OIDC_ENABLED=true');
+    if (config.localAdultAuthEnabled) failures.push('LOCAL_ADULT_AUTH_ENABLED=false');
+    if (config.allowSharedDatabaseRole) failures.push('ALLOW_SHARED_DATABASE_ROLE=false');
     if (!approvals.dpia) failures.push('DPIA_APPROVAL_REFERENCE');
     if (!approvals.externalSecurityReview) failures.push('EXTERNAL_SECURITY_REVIEW_REFERENCE');
     if (!approvals.backupRestore) failures.push('BACKUP_RESTORE_EVIDENCE');
@@ -79,6 +92,12 @@ function buildEnv(source = process.env) {
 
   const nodeEnv = source.NODE_ENV || (appProfile === 'production' ? 'production' : 'development');
   const ephemeralSecret = crypto.randomBytes(32).toString('hex');
+  const appOrigin = source.APP_ORIGIN
+    || source.RENDER_EXTERNAL_URL
+    || (appProfile === 'demo' ? 'http://localhost:3001' : '');
+  const oidcRedirectUri = source.OIDC_REDIRECT_URI
+    || (appOrigin ? `${appOrigin.replace(/\/$/, '')}/api/auth/oidc/callback` : '');
+  const oidcClientId = source.OIDC_CLIENT_ID || '';
   const config = {
     appProfile,
     port: Number(source.PORT || 3001),
@@ -87,8 +106,8 @@ function buildEnv(source = process.env) {
     sessionIdleMinutes: readPositiveNumber(source.SESSION_IDLE_MINUTES, 30),
     sessionAbsoluteHours: readPositiveNumber(source.SESSION_ABSOLUTE_HOURS, 8),
     sessionCookieSecure: appProfile === 'production' || readBoolean(source.SESSION_COOKIE_SECURE),
-    appOrigin: source.APP_ORIGIN || source.CORS_ORIGIN || (appProfile === 'demo' ? 'http://localhost:3001' : ''),
-    corsOrigin: source.CORS_ORIGIN || source.APP_ORIGIN || 'http://localhost:3001',
+    appOrigin: appOrigin || source.CORS_ORIGIN || '',
+    corsOrigin: source.CORS_ORIGIN || appOrigin || 'http://localhost:3001',
     databaseUrl: source.DATABASE_URL || '',
     databaseSslMode,
     databaseSsl: databaseSslMode !== 'disable',
@@ -102,6 +121,8 @@ function buildEnv(source = process.env) {
     demoSeedEnabled: readBoolean(source.DEMO_SEED_ENABLED),
     publicRegistrationEnabled: readBoolean(source.PUBLIC_REGISTRATION_ENABLED, appProfile === 'demo'),
     autoRunMigrations: readBoolean(source.AUTO_RUN_MIGRATIONS),
+    allowSharedDatabaseRole: readBoolean(source.ALLOW_SHARED_DATABASE_ROLE),
+    localAdultAuthEnabled: readBoolean(source.LOCAL_ADULT_AUTH_ENABLED),
     questionnairePilotEnabled: readBoolean(source.QUESTIONNAIRE_PILOT_ENABLED),
     questionnaireDataKey: source.QUESTIONNAIRE_DATA_KEY || '',
     questionnaireDataKeyVersion: source.QUESTIONNAIRE_DATA_KEY_VERSION || 'v1',
@@ -109,6 +130,7 @@ function buildEnv(source = process.env) {
     dataKeyProvider: String(source.DATA_KEY_PROVIDER || '').toLowerCase(),
     dataKeyCurrentVersion: source.DATA_KEY_CURRENT_VERSION || '',
     dataKeyProviderModule: source.DATA_KEY_PROVIDER_MODULE || '',
+    dataKeyringFile: source.DATA_KEYRING_FILE || '',
     emergencyAdminTotpSecret: source.EMERGENCY_ADMIN_TOTP_SECRET || '',
     realDataPilotEnabled: readBoolean(source.REAL_DATA_PILOT_ENABLED),
     pilotApprovals: {
@@ -120,11 +142,13 @@ function buildEnv(source = process.env) {
     },
     trustProxy: source.TRUST_PROXY || '',
     oidc: {
+      enabled: readBoolean(source.OIDC_ENABLED),
       issuer: source.OIDC_ISSUER || '',
-      clientId: source.OIDC_CLIENT_ID || '',
+      clientId: oidcClientId,
       clientSecret: source.OIDC_CLIENT_SECRET || '',
-      audience: source.OIDC_AUDIENCE || '',
-      redirectUri: source.OIDC_REDIRECT_URI || '',
+      audience: source.OIDC_AUDIENCE || oidcClientId,
+      redirectUri: oidcRedirectUri,
+      autoLinkVerifiedEmail: readBoolean(source.OIDC_AUTO_LINK_VERIFIED_EMAIL),
       mfaAcrValues: String(source.OIDC_MFA_ACR_VALUES || '')
         .split(',').map((value) => value.trim()).filter(Boolean),
     },
