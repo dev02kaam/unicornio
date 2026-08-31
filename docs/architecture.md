@@ -10,7 +10,7 @@ El flujo de una peticion autenticada es: edge TLS/HSTS -> Helmet/CSP -> limite d
 
 - SCHOOL, TEACHER y PROFESSIONAL: contrasena local Argon2id sin dependencias externas cuando no hay datos reales; OIDC, PKCE S256 y MFA obligatorio al activar el piloto real.
 - STUDENT y FAMILY: invitacion de 256 bits, hash SHA-256, un uso, 24 horas, contraseña Argon2id.
-- ADMIN: una cuenta local de emergencia, provisionada fuera de UI, TOTP y rotacion auditada.
+- ADMIN: contrasena local en la demo de clientes; TOTP y rotacion auditada solo al activar datos reales.
 - El vinculo OIDC persistido se identifica por `(issuer, subject)`. Opcionalmente, el primer acceso puede enlazar un unico adulto preprovisionado por correo verificado, solo tras MFA y si no existe ninguna identidad previa; despues el correo deja de intervenir.
 
 ## Persistencia

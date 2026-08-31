@@ -24,12 +24,16 @@ function createRepository(identity) {
   };
 }
 
-test('production permite acceso adulto local cuando se habilita explicitamente', async () => {
+test('production sin datos reales permite acceso adulto local', async () => {
   const identity = createIdentity();
   const result = await login(
     { email: identity.email, password: 'UnaFraseSegura-2026' },
     {
-      config: { appProfile: 'production', localAdultAuthEnabled: true },
+      config: {
+        appProfile: 'production',
+        realDataPilotEnabled: false,
+        localAdultAuthEnabled: false,
+      },
       repository: createRepository(identity),
     },
   );
@@ -39,14 +43,54 @@ test('production permite acceso adulto local cuando se habilita explicitamente',
   assert.equal(result.auth.internalId, identity.internalId);
 });
 
-test('production bloquea acceso adulto local cuando no se habilita', async () => {
+test('el piloto con datos reales bloquea acceso adulto local', async () => {
   const identity = createIdentity('TEACHER');
 
   await assert.rejects(
     login(
       { email: identity.email, password: 'UnaFraseSegura-2026' },
       {
-        config: { appProfile: 'production', localAdultAuthEnabled: false },
+        config: {
+          appProfile: 'production',
+          realDataPilotEnabled: true,
+          localAdultAuthEnabled: false,
+        },
+        repository: createRepository(identity),
+      },
+    ),
+    (error) => error.statusCode === 401,
+  );
+});
+
+test('production sin datos reales permite ADMIN sin codigo TOTP', async () => {
+  const identity = createIdentity('ADMIN');
+  const result = await login(
+    { email: identity.email, password: 'UnaFraseSegura-2026' },
+    {
+      config: {
+        appProfile: 'production',
+        realDataPilotEnabled: false,
+        localAdultAuthEnabled: false,
+      },
+      repository: createRepository(identity),
+    },
+  );
+
+  assert.equal(result.user.role, 'ADMIN');
+});
+
+test('el piloto con datos reales mantiene TOTP para ADMIN', async () => {
+  const identity = createIdentity('ADMIN');
+  await assert.rejects(
+    login(
+      { email: identity.email, password: 'UnaFraseSegura-2026' },
+      {
+        config: {
+          appProfile: 'production',
+          realDataPilotEnabled: true,
+          localAdultAuthEnabled: false,
+          emergencyAdminTotpSecret: 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP',
+        },
         repository: createRepository(identity),
       },
     ),

@@ -64,9 +64,6 @@ function assertProductionConfig(config) {
   } else if (!config.dataKeyProviderModule) {
     failures.push('DATA_KEY_PROVIDER_MODULE');
   }
-  if (!config.emergencyAdminTotpSecret || config.emergencyAdminTotpSecret.length < 32) {
-    failures.push('EMERGENCY_ADMIN_TOTP_SECRET (base32, minimo 32 caracteres)');
-  }
   Object.entries(config.retentionDays).forEach(([name, value]) => {
     if (!Number.isFinite(value)) failures.push(`RETENTION_${name.toUpperCase()}_DAYS`);
   });
@@ -79,6 +76,9 @@ function assertProductionConfig(config) {
   }
   if (config.realDataPilotEnabled) {
     const approvals = config.pilotApprovals;
+    if (!config.emergencyAdminTotpSecret || config.emergencyAdminTotpSecret.length < 32) {
+      failures.push('EMERGENCY_ADMIN_TOTP_SECRET (base32, minimo 32 caracteres)');
+    }
     if (!config.oidc.enabled) failures.push('OIDC_ENABLED=true');
     if (config.localAdultAuthEnabled) failures.push('LOCAL_ADULT_AUTH_ENABLED=false');
     if (config.dataKeyProvider === 'render-env-keyring') {

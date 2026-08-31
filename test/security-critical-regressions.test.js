@@ -77,7 +77,6 @@ test('production solo acepta el perfil completo y bloquea datos reales sin aprob
     DATA_KEY_PROVIDER: 'external-vault',
     DATA_KEY_CURRENT_VERSION: 'v2',
     DATA_KEY_PROVIDER_MODULE: 'C:\\deploy\\unicornio-key-adapter.js',
-    EMERGENCY_ADMIN_TOTP_SECRET: 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP',
     RETENTION_RESPONSES_DAYS: '30',
     RETENTION_RESULTS_DAYS: '90',
     RETENTION_NOTIFICATIONS_DAYS: '30',
@@ -112,7 +111,6 @@ test('production sin piloto real puede bloquear OIDC y usar un keyring privado d
     DATA_KEY_PROVIDER: 'render-env-keyring',
     DATA_KEY_CURRENT_VERSION: 'v1',
     DATA_KEY_V1: keyV1,
-    EMERGENCY_ADMIN_TOTP_SECRET: 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP',
     RETENTION_RESPONSES_DAYS: '30',
     RETENTION_RESULTS_DAYS: '30',
     RETENTION_NOTIFICATIONS_DAYS: '30',
@@ -123,6 +121,7 @@ test('production sin piloto real puede bloquear OIDC y usar un keyring privado d
   assert.equal(config.appOrigin, 'https://unicornio.onrender.com');
   assert.equal(config.localAdultAuthEnabled, true);
   assert.equal(config.oidc.enabled, false);
+  assert.equal(config.emergencyAdminTotpSecret, '');
   assert.equal(config.oidc.redirectUri, 'https://unicornio.onrender.com/api/auth/oidc/callback');
   assert.equal(config.databaseCa, '');
   assert.equal(config.dataKeyEnvironmentKeys.v1, keyV1);
@@ -139,7 +138,6 @@ test('production sin piloto real puede bloquear OIDC y usar un keyring privado d
       DATA_KEY_PROVIDER: config.dataKeyProvider,
       DATA_KEY_CURRENT_VERSION: config.dataKeyCurrentVersion,
       DATA_KEY_V1: config.dataKeyEnvironmentKeys.v1,
-      EMERGENCY_ADMIN_TOTP_SECRET: config.emergencyAdminTotpSecret,
       RETENTION_RESPONSES_DAYS: '30',
       RETENTION_RESULTS_DAYS: '30',
       RETENTION_NOTIFICATIONS_DAYS: '30',

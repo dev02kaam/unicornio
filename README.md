@@ -8,7 +8,7 @@ Aplicacion educativa e infanto-juvenil con demo local aislada y base tecnica par
 - CSRF sincronizado, `Origin` exacto, Fetch Metadata, CSP/Helmet y cuerpos JSON de 64 KiB.
 - Adultos mediante contrasena local antes del piloto real, u OIDC con MFA cuando se habiliten datos reales.
 - Familias y alumnado mediante invitaciones aleatorias de un uso y 24 horas; hashes Argon2id y migracion transparente desde bcrypt.
-- Administrador local de emergencia unico, con TOTP obligatorio en production.
+- Administrador local con contrasena en la demo; TOTP obligatorio solo al activar datos reales.
 - PostgreSQL con migraciones explicitas, contexto RLS por peticion, auditoria append-only y roles separados.
 - AES-256-GCM con AAD por tabla, registro, campo, campana y alumno; proveedor versionado y trabajo de rotacion.
 - Logs Pino con request ID y redaccion; `/livez`, `/readyz`, retencion y CI de seguridad.
@@ -55,7 +55,7 @@ Las cuentas demo usan exclusivamente la contraseña `Demo1234!`. Nunca ejecutes 
 
 ## Production
 
-`APP_PROFILE=production` falla al arrancar si faltan PostgreSQL, TLS `verify-full`, secretos de sesion, TOTP de emergencia, proveedor externo de claves o plazos de retencion; tambien rechaza semillas, registro publico, preview, migraciones automaticas y `DATA_FILE`. `DATABASE_CA` es opcional cuando el certificado encadena con las autoridades raiz de Node.js. Sin datos reales, `LOCAL_ADULT_AUTH_ENABLED=true` permite que SCHOOL, TEACHER y PROFESSIONAL usen su correo y contrasena de PostgreSQL sin proveedores externos. OIDC debe permanecer apagado en ese modo.
+`APP_PROFILE=production` falla al arrancar si faltan PostgreSQL, TLS `verify-full`, secretos de sesion, proveedor de claves o plazos de retencion; tambien rechaza semillas, registro publico, preview, migraciones automaticas y `DATA_FILE`. `DATABASE_CA` es opcional cuando el certificado encadena con las autoridades raiz de Node.js. Mientras `REAL_DATA_PILOT_ENABLED=false`, todos los roles usan su correo y contrasena de PostgreSQL, incluido ADMIN, sin OIDC ni TOTP.
 
 Las migraciones se ejecutan con `npm run migrate` y `MIGRATION_DATABASE_URL`; la aplicacion no aplica DDL al arrancar. La instancia PostgreSQL puede ser la misma. Por defecto, aplicacion, DDL, retencion y mantenimiento usan roles distintos. Un despliegue inicial sin datos reales puede optar explicitamente por un unico usuario con `ALLOW_SHARED_DATABASE_ROLE=true`; el piloto real rechaza esta excepcion.
 
@@ -76,7 +76,7 @@ En desarrollo local se mantiene `render-secret-file` con la ruta configurada en 
 
 ### Acceso adulto sin proveedor externo
 
-Con `REAL_DATA_PILOT_ENABLED=false`, configura `LOCAL_ADULT_AUTH_ENABLED=true` y `OIDC_ENABLED=false`. Las cuentas SCHOOL, TEACHER y PROFESSIONAL preprovisionadas entran por `POST /api/auth/login` con su correo y contrasena. No se necesita Auth0, Google ni otro servicio. Las contrasenas se guardan con Argon2id y el cambio de contrasena revoca las sesiones anteriores.
+Con `REAL_DATA_PILOT_ENABLED=false` y `OIDC_ENABLED=false`, todas las cuentas preprovisionadas entran por `POST /api/auth/login` con su correo y contrasena. No se necesita Auth0, Google, TOTP ni otro servicio. Las contrasenas se guardan con Argon2id y el cambio de contrasena revoca las sesiones anteriores.
 
 ### Auth0 opcional para un futuro piloto real
 
