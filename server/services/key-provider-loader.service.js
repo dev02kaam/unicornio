@@ -37,7 +37,7 @@ async function loadConfiguredKeyProvider(config = env) {
     provider: config.dataKeyProvider,
     currentVersion: config.dataKeyCurrentVersion,
     keyringFile: config.dataKeyringFile,
-    keyringJson: config.dataKeyringJson,
+    environmentKeys: config.dataKeyEnvironmentKeys,
   });
   configureQuestionnaireKeyProvider(provider);
   if (!provider.isReady?.() || provider.getCurrentVersion() !== config.dataKeyCurrentVersion) {

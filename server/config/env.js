@@ -15,6 +15,19 @@ function readPositiveNumber(value, fallback) {
   return Number.isFinite(number) && number > 0 ? number : Number.NaN;
 }
 
+function readVersionedDataKeys(source) {
+  const keys = {};
+  Object.entries(source).forEach(([name, value]) => {
+    const match = /^DATA_KEY_(V[1-9][0-9]*)$/i.exec(name);
+    if (match && value) keys[match[1].toLowerCase()] = String(value).trim();
+  });
+  return Object.freeze(keys);
+}
+
+function dataKeyVariableName(version) {
+  return `DATA_KEY_${String(version || '').toUpperCase()}`;
+}
+
 function resolveDatabaseSslMode(source, appProfile) {
   if (source.DATABASE_SSL_MODE) return String(source.DATABASE_SSL_MODE).toLowerCase();
   if (source.DATABASE_SSL === 'false') return 'disable';
@@ -45,7 +58,9 @@ function assertProductionConfig(config) {
   if (config.dataKeyProvider === 'render-secret-file') {
     if (!config.dataKeyringFile) failures.push('DATA_KEYRING_FILE');
   } else if (config.dataKeyProvider === 'render-env-keyring') {
-    if (!config.dataKeyringJson) failures.push('DATA_KEYRING_JSON');
+    if (!config.dataKeyEnvironmentKeys[config.dataKeyCurrentVersion]) {
+      failures.push(dataKeyVariableName(config.dataKeyCurrentVersion));
+    }
   } else if (!config.dataKeyProviderModule) {
     failures.push('DATA_KEY_PROVIDER_MODULE');
   }
@@ -134,7 +149,7 @@ function buildEnv(source = process.env) {
     dataKeyCurrentVersion: source.DATA_KEY_CURRENT_VERSION || '',
     dataKeyProviderModule: source.DATA_KEY_PROVIDER_MODULE || '',
     dataKeyringFile: source.DATA_KEYRING_FILE || '',
-    dataKeyringJson: source.DATA_KEYRING_JSON || '',
+    dataKeyEnvironmentKeys: readVersionedDataKeys(source),
     emergencyAdminTotpSecret: source.EMERGENCY_ADMIN_TOTP_SECRET || '',
     realDataPilotEnabled: readBoolean(source.REAL_DATA_PILOT_ENABLED),
     pilotApprovals: {

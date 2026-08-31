@@ -98,18 +98,16 @@ test('el proveedor de archivo secreto carga un keyring versionado sin exponer cl
   );
 });
 
-test('el proveedor de entorno carga DATA_KEYRING_JSON sin escribirlo en disco', async () => {
+test('el proveedor de entorno carga DATA_KEY_VN sin escribir claves en disco', async () => {
   const provider = await createEnvironmentKeyProvider({
     currentVersion: 'v1',
-    keyringJson: JSON.stringify({
-      keys: { v1: Buffer.alloc(32, 9).toString('base64') },
-    }),
+    environmentKeys: { v1: Buffer.alloc(32, 9).toString('base64') },
   });
 
   assert.equal(provider.getCurrentVersion(), 'v1');
   assert.deepEqual(provider.getKey('v1'), Buffer.alloc(32, 9));
   await assert.rejects(
-    createEnvironmentKeyProvider({ currentVersion: 'v1', keyringJson: '' }),
-    /DATA_KEYRING_JSON/,
+    createEnvironmentKeyProvider({ currentVersion: 'v1' }),
+    /DATA_KEY_VN/,
   );
 });

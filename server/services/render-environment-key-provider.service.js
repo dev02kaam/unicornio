@@ -1,17 +1,12 @@
-const { Buffer } = require('node:buffer');
-
 const {
   parseKeyring,
-  MAX_KEYRING_BYTES,
 } = require('./render-secret-file-key-provider.service');
 
-async function createKeyProvider({ currentVersion, keyringJson }) {
-  const contents = String(keyringJson || '').trim();
-  const size = Buffer.byteLength(contents, 'utf8');
-  if (size <= 0 || size > MAX_KEYRING_BYTES) {
-    throw new Error('DATA_KEYRING_JSON es obligatorio y no puede superar 64 KiB.');
+async function createKeyProvider({ currentVersion, environmentKeys }) {
+  if (!environmentKeys || typeof environmentKeys !== 'object' || Array.isArray(environmentKeys)) {
+    throw new Error('Faltan las variables DATA_KEY_VN del keyring.');
   }
-  return parseKeyring(contents, currentVersion);
+  return parseKeyring(JSON.stringify({ keys: environmentKeys }), currentVersion);
 }
 
 module.exports = { createKeyProvider };

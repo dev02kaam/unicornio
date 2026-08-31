@@ -2,7 +2,7 @@
 
 ## Claves
 
-El repositorio no contiene claves. La demo de clientes en Render usa `render-env-keyring` y recibe el JSON mediante la variable privada `DATA_KEYRING_JSON`; los datos reales rechazan este modo y requieren Secret File u otro gestor externo. En local, `render-secret-file` lee la ruta privada de `.env.local`. Mantiene disponible la version anterior durante el recifrado. Cambia `DATA_KEY_CURRENT_VERSION`, despliega el keyring y ejecuta `npm run rotate:data-key` con un rol de mantenimiento. Verifica los contadores y el evento `DATA_KEY_ROTATED` antes de retirar una clave historica.
+El repositorio no contiene claves. La demo de clientes en Render usa `render-env-keyring` y recibe cada version mediante variables privadas `DATA_KEY_V1`, `DATA_KEY_V2`, etc.; los datos reales rechazan este modo y requieren Secret File u otro gestor externo. En local, `render-secret-file` lee la ruta privada de `.env.local`. Mantiene disponible la version anterior durante el recifrado. Cambia `DATA_KEY_CURRENT_VERSION`, despliega el keyring y ejecuta `npm run rotate:data-key` con un rol de mantenimiento. Verifica los contadores y el evento `DATA_KEY_ROTATED` antes de retirar una clave historica.
 
 ## Retencion
 

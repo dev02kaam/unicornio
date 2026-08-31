@@ -59,15 +59,14 @@ Las cuentas demo usan exclusivamente la contraseña `Demo1234!`. Nunca ejecutes 
 
 Las migraciones se ejecutan con `npm run migrate` y `MIGRATION_DATABASE_URL`; la aplicacion no aplica DDL al arrancar. La instancia PostgreSQL puede ser la misma. Por defecto, aplicacion, DDL, retencion y mantenimiento usan roles distintos. Un despliegue inicial sin datos reales puede optar explicitamente por un unico usuario con `ALLOW_SHARED_DATABASE_ROLE=true`; el piloto real rechaza esta excepcion.
 
-Para esta demo en Render, `DATA_KEY_PROVIDER=render-env-keyring` carga un keyring versionado desde la variable privada `DATA_KEYRING_JSON`. Su valor completo usa este formato y nunca debe guardarse en Git:
+Para esta demo en Render, `DATA_KEY_PROVIDER=render-env-keyring` carga cada version desde una variable privada independiente. No uses JSON ni guardes las claves en Git:
 
-```json
-{
-  "keys": {
-    "v1": "CLAVE_BASE64_DE_32_BYTES"
-  }
-}
+```env
+DATA_KEY_CURRENT_VERSION=v1
+DATA_KEY_V1=CLAVE_BASE64_DE_32_BYTES
 ```
+
+Al rotar, conserva `DATA_KEY_V1`, anade `DATA_KEY_V2` y solo entonces cambia `DATA_KEY_CURRENT_VERSION=v2`.
 
 En desarrollo local se mantiene `render-secret-file` con la ruta configurada en `.env.local`. Para otros gestores, `DATA_KEY_PROVIDER_MODULE` sigue admitiendo una ruta absoluta a un adaptador confiable que exporta `createKeyProvider()`.
 
