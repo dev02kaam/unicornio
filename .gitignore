@@ -3,6 +3,7 @@ node_modules/
 .DS_Store
 coverage/
 dist/
+.media/
 *.log
 server/data/runtime-state.json
 server/data/runtime-state.json.tmp
