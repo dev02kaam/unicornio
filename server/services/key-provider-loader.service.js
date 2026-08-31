@@ -7,7 +7,9 @@ const {
 
 async function loadConfiguredKeyProvider(config = env) {
   const usesRenderSecretFile = config.dataKeyProvider === 'render-secret-file';
-  if (config.appProfile !== 'production' && !config.dataKeyProviderModule && !usesRenderSecretFile) {
+  const usesRenderEnvironment = config.dataKeyProvider === 'render-env-keyring';
+  const usesBuiltInProvider = usesRenderSecretFile || usesRenderEnvironment;
+  if (config.appProfile !== 'production' && !config.dataKeyProviderModule && !usesBuiltInProvider) {
     try {
       return getQuestionnaireKeyProvider();
     } catch (_error) {
@@ -18,6 +20,8 @@ async function loadConfiguredKeyProvider(config = env) {
   let adapter;
   if (usesRenderSecretFile) {
     adapter = require('./render-secret-file-key-provider.service');
+  } else if (usesRenderEnvironment) {
+    adapter = require('./render-environment-key-provider.service');
   } else {
     if (!path.isAbsolute(config.dataKeyProviderModule || '')) {
       throw new Error('DATA_KEY_PROVIDER_MODULE debe ser una ruta absoluta a un adaptador confiable.');
@@ -33,6 +37,7 @@ async function loadConfiguredKeyProvider(config = env) {
     provider: config.dataKeyProvider,
     currentVersion: config.dataKeyCurrentVersion,
     keyringFile: config.dataKeyringFile,
+    keyringJson: config.dataKeyringJson,
   });
   configureQuestionnaireKeyProvider(provider);
   if (!provider.isReady?.() || provider.getCurrentVersion() !== config.dataKeyCurrentVersion) {

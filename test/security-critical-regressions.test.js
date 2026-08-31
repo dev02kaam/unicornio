@@ -99,7 +99,10 @@ test('production solo acepta el perfil completo y bloquea datos reales sin aprob
   );
 });
 
-test('production sin piloto real puede bloquear OIDC y usar secretos nativos de Render', () => {
+test('production sin piloto real puede bloquear OIDC y usar un keyring privado de Render', () => {
+  const keyringJson = JSON.stringify({
+    keys: { v1: Buffer.alloc(32, 7).toString('base64') },
+  });
   const config = buildEnv({
     APP_PROFILE: 'production',
     RENDER_EXTERNAL_URL: 'https://unicornio.onrender.com',
@@ -108,9 +111,9 @@ test('production sin piloto real puede bloquear OIDC y usar secretos nativos de 
     SESSION_SECRET: 'session-secret-with-at-least-32-characters',
     LOCAL_ADULT_AUTH_ENABLED: 'true',
     OIDC_ENABLED: 'false',
-    DATA_KEY_PROVIDER: 'render-secret-file',
+    DATA_KEY_PROVIDER: 'render-env-keyring',
     DATA_KEY_CURRENT_VERSION: 'v1',
-    DATA_KEYRING_FILE: '/etc/secrets/unicornio-keyring.json',
+    DATA_KEYRING_JSON: keyringJson,
     EMERGENCY_ADMIN_TOTP_SECRET: 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP',
     RETENTION_RESPONSES_DAYS: '30',
     RETENTION_RESULTS_DAYS: '30',
@@ -124,6 +127,7 @@ test('production sin piloto real puede bloquear OIDC y usar secretos nativos de 
   assert.equal(config.oidc.enabled, false);
   assert.equal(config.oidc.redirectUri, 'https://unicornio.onrender.com/api/auth/oidc/callback');
   assert.equal(config.databaseCa, '');
+  assert.equal(config.dataKeyringJson, keyringJson);
   assert.throws(
     () => buildEnv({
       ...config,
@@ -136,7 +140,7 @@ test('production sin piloto real puede bloquear OIDC y usar secretos nativos de 
       OIDC_ENABLED: 'false',
       DATA_KEY_PROVIDER: config.dataKeyProvider,
       DATA_KEY_CURRENT_VERSION: config.dataKeyCurrentVersion,
-      DATA_KEYRING_FILE: config.dataKeyringFile,
+      DATA_KEYRING_JSON: config.dataKeyringJson,
       EMERGENCY_ADMIN_TOTP_SECRET: config.emergencyAdminTotpSecret,
       RETENTION_RESPONSES_DAYS: '30',
       RETENTION_RESULTS_DAYS: '30',

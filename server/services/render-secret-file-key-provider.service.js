@@ -19,7 +19,7 @@ function parseKeyring(contents, currentVersion) {
   try {
     document = JSON.parse(contents);
   } catch (_error) {
-    throw new Error('El archivo secreto del keyring no contiene JSON valido.');
+    throw new Error('El keyring no contiene JSON valido.');
   }
 
   if (!document || Array.isArray(document) || typeof document.keys !== 'object' || !document.keys) {

@@ -59,7 +59,7 @@ Las cuentas demo usan exclusivamente la contraseña `Demo1234!`. Nunca ejecutes 
 
 Las migraciones se ejecutan con `npm run migrate` y `MIGRATION_DATABASE_URL`; la aplicacion no aplica DDL al arrancar. La instancia PostgreSQL puede ser la misma. Por defecto, aplicacion, DDL, retencion y mantenimiento usan roles distintos. Un despliegue inicial sin datos reales puede optar explicitamente por un unico usuario con `ALLOW_SHARED_DATABASE_ROLE=true`; el piloto real rechaza esta excepcion.
 
-En Render, `DATA_KEY_PROVIDER=render-secret-file` carga un keyring versionado desde `DATA_KEYRING_FILE`. Sube un Secret File llamado `unicornio-keyring.json`, disponible en `/etc/secrets/unicornio-keyring.json`, con este formato:
+Para esta demo en Render, `DATA_KEY_PROVIDER=render-env-keyring` carga un keyring versionado desde la variable privada `DATA_KEYRING_JSON`. Su valor completo usa este formato y nunca debe guardarse en Git:
 
 ```json
 {
@@ -69,7 +69,7 @@ En Render, `DATA_KEY_PROVIDER=render-secret-file` carga un keyring versionado de
 }
 ```
 
-Para otros gestores, `DATA_KEY_PROVIDER_MODULE` sigue admitiendo una ruta absoluta a un adaptador confiable que exporta `createKeyProvider()`.
+En desarrollo local se mantiene `render-secret-file` con la ruta configurada en `.env.local`. Para otros gestores, `DATA_KEY_PROVIDER_MODULE` sigue admitiendo una ruta absoluta a un adaptador confiable que exporta `createKeyProvider()`.
 
 `REAL_DATA_PILOT_ENABLED=true` exige OIDC con MFA y referencias de EIPD, revision externa, restauracion de backup, protocolo de incidentes y aprobacion clinica. Este control tecnico no sustituye la revision humana.
 

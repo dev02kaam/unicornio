@@ -5,8 +5,6 @@ dotenv.config();
 
 const APP_PROFILES = new Set(['demo', 'production']);
 const DATABASE_SSL_MODES = new Set(['disable', 'require', 'verify-full']);
-const BUILT_IN_DATA_KEY_PROVIDERS = new Set(['render-secret-file']);
-
 function readBoolean(value, fallback = false) {
   if (value === undefined || value === '') return fallback;
   return String(value).toLowerCase() === 'true';
@@ -44,8 +42,10 @@ function assertProductionConfig(config) {
     failures.push('DATA_KEY_PROVIDER externo');
   }
   if (!config.dataKeyCurrentVersion) failures.push('DATA_KEY_CURRENT_VERSION');
-  if (BUILT_IN_DATA_KEY_PROVIDERS.has(config.dataKeyProvider)) {
+  if (config.dataKeyProvider === 'render-secret-file') {
     if (!config.dataKeyringFile) failures.push('DATA_KEYRING_FILE');
+  } else if (config.dataKeyProvider === 'render-env-keyring') {
+    if (!config.dataKeyringJson) failures.push('DATA_KEYRING_JSON');
   } else if (!config.dataKeyProviderModule) {
     failures.push('DATA_KEY_PROVIDER_MODULE');
   }
@@ -66,6 +66,9 @@ function assertProductionConfig(config) {
     const approvals = config.pilotApprovals;
     if (!config.oidc.enabled) failures.push('OIDC_ENABLED=true');
     if (config.localAdultAuthEnabled) failures.push('LOCAL_ADULT_AUTH_ENABLED=false');
+    if (config.dataKeyProvider === 'render-env-keyring') {
+      failures.push('DATA_KEY_PROVIDER distinto de render-env-keyring para datos reales');
+    }
     if (config.allowSharedDatabaseRole) failures.push('ALLOW_SHARED_DATABASE_ROLE=false');
     if (!approvals.dpia) failures.push('DPIA_APPROVAL_REFERENCE');
     if (!approvals.externalSecurityReview) failures.push('EXTERNAL_SECURITY_REVIEW_REFERENCE');
@@ -131,6 +134,7 @@ function buildEnv(source = process.env) {
     dataKeyCurrentVersion: source.DATA_KEY_CURRENT_VERSION || '',
     dataKeyProviderModule: source.DATA_KEY_PROVIDER_MODULE || '',
     dataKeyringFile: source.DATA_KEYRING_FILE || '',
+    dataKeyringJson: source.DATA_KEYRING_JSON || '',
     emergencyAdminTotpSecret: source.EMERGENCY_ADMIN_TOTP_SECRET || '',
     realDataPilotEnabled: readBoolean(source.REAL_DATA_PILOT_ENABLED),
     pilotApprovals: {

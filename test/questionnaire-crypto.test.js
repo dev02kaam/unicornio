@@ -8,6 +8,9 @@ const {
 } = require('../server/services/questionnaire-crypto.service');
 const { StaticKeyProvider } = require('../server/services/key-provider.service');
 const { parseKeyring } = require('../server/services/render-secret-file-key-provider.service');
+const {
+  createKeyProvider: createEnvironmentKeyProvider,
+} = require('../server/services/render-environment-key-provider.service');
 const { needsRotation } = require('../server/services/data-key-rotation.service');
 const { assertKeyMaintenanceIsolation } = require('../scripts/rotate-data-key');
 
@@ -92,5 +95,21 @@ test('el proveedor de archivo secreto carga un keyring versionado sin exponer cl
   assert.throws(
     () => parseKeyring(JSON.stringify({ keys: { v1: 'no-es-una-clave' } }), 'v1'),
     /32 bytes/,
+  );
+});
+
+test('el proveedor de entorno carga DATA_KEYRING_JSON sin escribirlo en disco', async () => {
+  const provider = await createEnvironmentKeyProvider({
+    currentVersion: 'v1',
+    keyringJson: JSON.stringify({
+      keys: { v1: Buffer.alloc(32, 9).toString('base64') },
+    }),
+  });
+
+  assert.equal(provider.getCurrentVersion(), 'v1');
+  assert.deepEqual(provider.getKey('v1'), Buffer.alloc(32, 9));
+  await assert.rejects(
+    createEnvironmentKeyProvider({ currentVersion: 'v1', keyringJson: '' }),
+    /DATA_KEYRING_JSON/,
   );
 });
