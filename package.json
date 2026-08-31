@@ -5,7 +5,7 @@
   "description": "Base tecnica de Proyecto Unicornio con autenticacion, usuarios y frontend minimo.",
   "main": "server/app.js",
   "scripts": {
-    "dev": "node --watch server/app.js",
+    "dev": "node --env-file-if-exists=.env.local --watch server/app.js",
     "start": "node server/app.js",
     "migrate": "node scripts/migrate.js",
     "seed:demo": "node scripts/seed-demo.js",
