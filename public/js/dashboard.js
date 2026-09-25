@@ -1525,6 +1525,11 @@ async function loadProfile() {
     }
     const context = currentUser.context || null;
     const role = String(currentUser.role || '').toUpperCase();
+    renderDashboardQuickActions(role);
+    if (dashboardWelcome) {
+      const firstName = String(currentUser.name || '').split(' ')[0] || 'de nuevo';
+      dashboardWelcome.textContent = role === 'STUDENT' ? `¡Hola, ${firstName}!` : `Hola, ${firstName}`;
+    }
     const assignmentsResponse = await apiRequest(`/users/${currentUser.id}/assignments`);
     const assignments = assignmentsResponse.data;
     let consentSummary = null;
@@ -1551,12 +1556,7 @@ async function loadProfile() {
       };
     }
 
-    renderDashboardQuickActions(role);
     const heroCenter = summaryOptions.center || assignments?.centers?.[0]?.center || context?.center || null;
-    if (dashboardWelcome) {
-      const firstName = String(currentUser.name || '').split(' ')[0] || 'de nuevo';
-      dashboardWelcome.textContent = role === 'STUDENT' ? `¡Hola, ${firstName}!` : `Hola, ${firstName}`;
-    }
     if (dashboardRoleLabel) {
       dashboardRoleLabel.textContent = role === 'STUDENT' ? 'Tu espacio' : (roleLabels[role] || 'Área privada');
     }
@@ -1609,7 +1609,10 @@ async function loadProfile() {
       window.location.replace('/login.html');
       return;
     }
-
+    if (dashboardSubtitle) {
+      dashboardSubtitle.textContent = 'No se han podido cargar los datos del panel. Recarga la página para volver a intentarlo.';
+      dashboardSubtitle.setAttribute('role', 'alert');
+    }
   }
 }
 

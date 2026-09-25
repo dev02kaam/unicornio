@@ -72,6 +72,7 @@ let writeQueue = Promise.resolve();
 let persistenceError = null;
 let persistenceMode = 'none';
 const rlsContext = new AsyncLocalStorage();
+const readContext = new AsyncLocalStorage();
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function getMissingMigrationIds(expectedMigrationIds, appliedRows) {
@@ -546,6 +547,9 @@ function enqueueWrite(task, label) {
 }
 
 function persistCollection(name) {
+  if (readContext.getStore()) {
+    throw new Error('Las lecturas relacionales no pueden sobrescribir colecciones legacy.');
+  }
   return enqueueWrite(async () => {
     const client = await pool.connect();
     try {
@@ -616,17 +620,19 @@ const database = {
     console.log('Proyecto Unicornio conectado a PostgreSQL.');
   },
   getUsers() {
-    return state.users;
+    return this.getCollection('users');
   },
   setUsers(users) {
+    if (readContext.getStore()) throw new Error('No se puede modificar una vista de lectura.');
     state.users = users;
     persistCollection('users');
     return state.users;
   },
   getCollection(name) {
-    return state[name];
+    return (readContext.getStore() || state)[name];
   },
   setCollection(name, items) {
+    if (readContext.getStore()) throw new Error('No se puede modificar una vista de lectura.');
     state[name] = items;
     persistCollection(name);
     return state[name];
@@ -719,12 +725,17 @@ const database = {
     if (!userId) throw new Error('El contexto RLS requiere una identidad.');
     return rlsContext.run({ userId: String(userId) }, callback);
   },
+  runWithReadCollections(collections, callback) {
+    return readContext.run(collections, callback);
+  },
   nextUserId() {
+    if (readContext.getStore()) throw new Error('No se puede modificar una vista de lectura.');
     sequences.users += 1;
     persistSequence('users');
     return String(sequences.users);
   },
   nextId(name, prefix) {
+    if (readContext.getStore()) throw new Error('No se puede modificar una vista de lectura.');
     if (!Object.prototype.hasOwnProperty.call(sequences, name)) {
       sequences[name] = 0;
     }

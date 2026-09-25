@@ -817,7 +817,7 @@ function hasValidConsent(studentId) {
   }
 }
 
-function getConsentStatusValue(studentId, currentUser) {
+function getConsentStatusValue(studentId, currentUser, { audit = true } = {}) {
   if (!canViewStudentConsentStatus(currentUser, studentId)) {
     throw new AppError('No tienes permiso para consultar este estudiante.', 403, null, 'FORBIDDEN');
   }
@@ -835,7 +835,7 @@ function getConsentStatusValue(studentId, currentUser) {
   const latestConsent = consents[0] || null;
   const validity = hasValidConsent(student.id);
 
-  if (latestConsent) {
+  if (latestConsent && audit) {
     createConsentAuditLog({
       consentId: latestConsent.id,
       action: CONSENT_AUDIT_ACTIONS.CONSENT_VIEWED,
@@ -859,7 +859,7 @@ function getConsentStatusValue(studentId, currentUser) {
   };
 }
 
-function getConsentById(consentId, currentUser) {
+function getConsentById(consentId, currentUser, { audit = true } = {}) {
   const consent = findConsentById(consentId);
   if (!consent) {
     throw new AppError('Consentimiento no encontrado.', 404, null, 'NOT_FOUND');
@@ -867,7 +867,7 @@ function getConsentById(consentId, currentUser) {
 
   assertConsentPermission(consent, currentUser);
 
-  createConsentAuditLog({
+  if (audit) createConsentAuditLog({
     consentId: consent.id,
     action: CONSENT_AUDIT_ACTIONS.CONSENT_VIEWED,
     performedByUserId: currentUser.id,

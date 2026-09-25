@@ -15,6 +15,7 @@ const {
   getConsentAudit,
 } = require('../services/consents.service');
 const { database } = require('../config/database');
+const { recordConsentView } = require('../repositories/dashboard-read.repository');
 const { sendSuccess } = require('../utils/response');
 const { AppError } = require('../utils/errors');
 const { syncParticipantFromConsent } = require('../services/questionnaires.service');
@@ -38,9 +39,11 @@ async function createConsentController(req, res, next) {
   }
 }
 
-function getConsentByIdController(req, res, next) {
+async function getConsentByIdController(req, res, next) {
   try {
-    const consent = getConsentById(req.params.id, req.user);
+    const relationalRead = Boolean(req.dashboardReadCollections);
+    const consent = getConsentById(req.params.id, req.user, { audit: !relationalRead });
+    if (relationalRead) await recordConsentView(consent, req.user);
     return sendSuccess(res, { consent }, 'Consentimiento encontrado.');
   } catch (error) {
     return next(error);
@@ -91,9 +94,11 @@ async function expireConsentController(req, res, next) {
   }
 }
 
-function getStudentConsentStatusController(req, res, next) {
+async function getStudentConsentStatusController(req, res, next) {
   try {
-    const status = getConsentStatusValue(req.params.studentId, req.user);
+    const relationalRead = Boolean(req.dashboardReadCollections);
+    const status = getConsentStatusValue(req.params.studentId, req.user, { audit: !relationalRead });
+    if (relationalRead) await recordConsentView(status.consent, req.user, 'STUDENT_STATUS_VIEW');
     return sendSuccess(res, { status }, 'Estado de consentimiento consultado correctamente.');
   } catch (error) {
     return next(error);
