@@ -2,6 +2,7 @@ const express = require('express');
 const { validateRequest } = require('../middlewares/schema.middleware');
 const { paramsSchema, emptyBodySchema } = require('../schemas/common.schemas');
 const { authMiddleware } = require('../middlewares/auth.middleware');
+const { questionnaireContextMiddleware } = require('../middlewares/questionnaire-context.middleware');
 const { requireRole } = require('../middlewares/role.middleware');
 const {
   validateConsentRequest,
@@ -28,6 +29,10 @@ const {
 const consentsRouter = express.Router();
 
 consentsRouter.use(authMiddleware);
+consentsRouter.use((req, res, next) => (
+  req.method === 'POST' && /^\/consents(?:\/|$)/.test(req.path)
+    ? questionnaireContextMiddleware(req, res, next) : next()
+));
 
 consentsRouter.get('/legal-text-versions/active', getActiveLegalTextVersionController);
 consentsRouter.get('/legal-text-versions', listLegalTextVersionsController);

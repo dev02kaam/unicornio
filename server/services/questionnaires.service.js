@@ -15,6 +15,7 @@ const {
   getActiveLegalTextVersion,
 } = require('./consents.service');
 const { findUserById } = require('./users.service');
+const { mutateProductionConsent } = require('../repositories/questionnaire-context.repository');
 const {
   questionnaireFamilies,
   questionnaireVersions,
@@ -444,8 +445,11 @@ async function createCampaign(data, currentUser) {
     await client.query(
       `insert into unicornio_questionnaire_campaigns (
         id, family_key, center_id, group_id, created_by_user_id, title, status,
-        planned_for, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, 'DRAFT', $7, $8, $8)`,
+        planned_for, created_at, updated_at, center_uuid, group_uuid, created_by_user_uuid
+      ) values ($1, $2, $3, $4, $5, $6, 'DRAFT', $7, $8, $8,
+        (select id from unicornio_centers where $3 in (legacy_id, public_id::text)),
+        (select id from unicornio_groups where $4 in (legacy_id, public_id::text)),
+        (select id from unicornio_users where $5 in (legacy_id, public_id::text)))`,
       [
         id,
         requestedFamilyKeys[0],
@@ -568,13 +572,16 @@ async function requestCampaignConsents(campaignId, currentUser) {
     }));
     const family = findFamilyForStudent(student.id);
     const hasEligibleQuestionnaire = selections.some((selection) => selection.definition);
-    const consent = family && hasEligibleQuestionnaire ? createConsentRequest({
-        studentId: student.id,
-        familyUserId: family.id,
-        legalTextVersionId: legalTextVersion.id,
-        centerId: campaign.centerId,
-        campaignId: campaign.id,
-      }, currentUser, { allowProfessionalCampaign: true }) : null;
+    const requestConsent = () => createConsentRequest({
+      studentId: student.id,
+      familyUserId: family.id,
+      legalTextVersionId: legalTextVersion.id,
+      centerId: campaign.centerId,
+      campaignId: campaign.id,
+    }, currentUser, { allowProfessionalCampaign: true });
+    const consent = family && hasEligibleQuestionnaire
+      ? (env.appProfile === 'production' ? await mutateProductionConsent(requestConsent) : requestConsent())
+      : null;
 
     for (const { familyKey, age, definition } of selections) {
       const row = {
@@ -608,10 +615,15 @@ async function requestCampaignConsents(campaignId, currentUser) {
       await client.query(
         `insert into unicornio_questionnaire_participants (
           id, campaign_id, family_key, student_id, family_user_id, consent_id,
-          questionnaire_version_id, status, ineligible_reason, created_at, updated_at
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
+          questionnaire_version_id, status, ineligible_reason, created_at, updated_at,
+          student_user_uuid, family_user_uuid
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10,
+          (select id from unicornio_users where $4 in (legacy_id, public_id::text)),
+          (select id from unicornio_users where $5 in (legacy_id, public_id::text)))
         on conflict (campaign_id, student_id, family_key) do update set
           family_user_id = excluded.family_user_id,
+          student_user_uuid = excluded.student_user_uuid,
+          family_user_uuid = excluded.family_user_uuid,
           consent_id = excluded.consent_id,
           questionnaire_version_id = excluded.questionnaire_version_id,
           status = case

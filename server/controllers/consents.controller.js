@@ -16,9 +16,14 @@ const {
 } = require('../services/consents.service');
 const { database } = require('../config/database');
 const { recordConsentView } = require('../repositories/dashboard-read.repository');
+const { mutateProductionConsent } = require('../repositories/questionnaire-context.repository');
 const { sendSuccess } = require('../utils/response');
 const { AppError } = require('../utils/errors');
 const { syncParticipantFromConsent } = require('../services/questionnaires.service');
+
+function mutateConsent(req, operation) {
+  return req.questionnaireContext ? mutateProductionConsent(operation) : operation();
+}
 
 function listConsentsController(req, res, next) {
   try {
@@ -31,7 +36,7 @@ function listConsentsController(req, res, next) {
 
 async function createConsentController(req, res, next) {
   try {
-    const consent = createConsentRequest(req.body || {}, req.user);
+    const consent = await mutateConsent(req, () => createConsentRequest(req.body || {}, req.user));
     await database.flush();
     return sendSuccess(res, { consent }, 'Solicitud de consentimiento creada correctamente.', 201);
   } catch (error) {
@@ -52,7 +57,7 @@ async function getConsentByIdController(req, res, next) {
 
 async function acceptConsentController(req, res, next) {
   try {
-    const consent = acceptConsent(req.params.id, req.user);
+    const consent = await mutateConsent(req, () => acceptConsent(req.params.id, req.user));
     await database.flush();
     await syncParticipantFromConsent(consent);
     return sendSuccess(res, { consent }, 'Consentimiento aceptado correctamente.');
@@ -63,7 +68,7 @@ async function acceptConsentController(req, res, next) {
 
 async function rejectConsentController(req, res, next) {
   try {
-    const consent = rejectConsent(req.params.id, req.user);
+    const consent = await mutateConsent(req, () => rejectConsent(req.params.id, req.user));
     await database.flush();
     await syncParticipantFromConsent(consent);
     return sendSuccess(res, { consent }, 'Consentimiento rechazado correctamente.');
@@ -74,7 +79,7 @@ async function rejectConsentController(req, res, next) {
 
 async function revokeConsentController(req, res, next) {
   try {
-    const consent = revokeConsent(req.params.id, req.body?.reason, req.user);
+    const consent = await mutateConsent(req, () => revokeConsent(req.params.id, req.body?.reason, req.user));
     await database.flush();
     await syncParticipantFromConsent(consent);
     return sendSuccess(res, { consent }, 'Consentimiento revocado correctamente.');
@@ -85,7 +90,7 @@ async function revokeConsentController(req, res, next) {
 
 async function expireConsentController(req, res, next) {
   try {
-    const consent = expireConsent(req.params.id, req.user);
+    const consent = await mutateConsent(req, () => expireConsent(req.params.id, req.user));
     await database.flush();
     await syncParticipantFromConsent(consent);
     return sendSuccess(res, { consent }, 'Consentimiento marcado como caducado.');

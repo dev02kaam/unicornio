@@ -1,4 +1,5 @@
 const { AsyncLocalStorage } = require('node:async_hooks');
+const { randomUUID } = require('node:crypto');
 const { createDemoUsers } = require('../data/demoUsers');
 const { createDemoAcademicYears } = require('../data/demoAcademicYears');
 const { createDemoCenters } = require('../data/demoCenters');
@@ -73,6 +74,7 @@ let persistenceError = null;
 let persistenceMode = 'none';
 const rlsContext = new AsyncLocalStorage();
 const readContext = new AsyncLocalStorage();
+const consentChanges = new AsyncLocalStorage();
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function getMissingMigrationIds(expectedMigrationIds, appliedRows) {
@@ -80,11 +82,11 @@ function getMissingMigrationIds(expectedMigrationIds, appliedRows) {
   return (expectedMigrationIds || []).filter((id) => !appliedIds.has(String(id)));
 }
 
-async function setLocalRequestIdentity(client, userId) {
+async function setLocalRequestIdentity(client, userId, legacyUserId = null) {
   const identity = String(userId || '');
   const isUuid = UUID_PATTERN.test(identity);
   await client.query("select set_config('app.user_id', $1, true)", [isUuid ? identity : '']);
-  await client.query("select set_config('app.legacy_user_id', $1, true)", [isUuid ? '' : identity]);
+  await client.query("select set_config('app.legacy_user_id', $1, true)", [legacyUserId || (isUuid ? '' : identity)]);
 }
 
 async function runTransaction(callback, { questionnaireServiceWrite = false } = {}) {
@@ -96,7 +98,7 @@ async function runTransaction(callback, { questionnaireServiceWrite = false } = 
   try {
     await client.query('begin');
     const userId = rlsContext.getStore()?.userId;
-    if (userId) await setLocalRequestIdentity(client, userId);
+    if (userId) await setLocalRequestIdentity(client, userId, rlsContext.getStore()?.legacyUserId);
     if (questionnaireServiceWrite) {
       await client.query("select set_config('app.questionnaire_service_write', 'on', true)");
     }
@@ -548,6 +550,11 @@ function enqueueWrite(task, label) {
 
 function persistCollection(name) {
   if (readContext.getStore()) {
+    const changes = consentChanges.getStore();
+    if (changes && ['consents', 'consentAuditLogs'].includes(name)) {
+      changes.dirty.add(name);
+      return Promise.resolve();
+    }
     throw new Error('Las lecturas relacionales no pueden sobrescribir colecciones legacy.');
   }
   return enqueueWrite(async () => {
@@ -632,6 +639,11 @@ const database = {
     return (readContext.getStore() || state)[name];
   },
   setCollection(name, items) {
+    if (readContext.getStore() && consentChanges.getStore() && ['consents', 'consentAuditLogs'].includes(name)) {
+      readContext.getStore()[name] = items;
+      persistCollection(name);
+      return items;
+    }
     if (readContext.getStore()) throw new Error('No se puede modificar una vista de lectura.');
     state[name] = items;
     persistCollection(name);
@@ -704,7 +716,7 @@ const database = {
     const client = await pool.connect();
     try {
       await client.query('begin');
-      await setLocalRequestIdentity(client, userId);
+      await setLocalRequestIdentity(client, userId, rlsContext.getStore()?.legacyUserId);
       const result = await client.query(text, params);
       await client.query('commit');
       return result;
@@ -721,12 +733,23 @@ const database = {
   questionnaireTransaction(callback) {
     return runTransaction(callback, { questionnaireServiceWrite: true });
   },
-  runAsUser(userId, callback) {
+  runAsUser(userId, callback, { legacyUserId = null } = {}) {
     if (!userId) throw new Error('El contexto RLS requiere una identidad.');
-    return rlsContext.run({ userId: String(userId) }, callback);
+    return rlsContext.run({ userId: String(userId), legacyUserId }, callback);
   },
   runWithReadCollections(collections, callback) {
     return readContext.run(collections, callback);
+  },
+  captureConsentChanges(callback) {
+    if (!readContext.getStore()) throw new Error('Falta el contexto relacional de consentimientos.');
+    const changes = {
+      previous: structuredClone({ consents: this.getCollection('consents'), consentAuditLogs: this.getCollection('consentAuditLogs') }),
+      dirty: new Set(),
+    };
+    consentChanges.run(changes, () => {
+      try { changes.result = callback(); } catch (error) { changes.error = error; }
+    });
+    return changes;
   },
   nextUserId() {
     if (readContext.getStore()) throw new Error('No se puede modificar una vista de lectura.');
@@ -735,6 +758,7 @@ const database = {
     return String(sequences.users);
   },
   nextId(name, prefix) {
+    if (consentChanges.getStore() && ['consents', 'consentAuditLogs'].includes(name)) return `${prefix}-${randomUUID()}`;
     if (readContext.getStore()) throw new Error('No se puede modificar una vista de lectura.');
     if (!Object.prototype.hasOwnProperty.call(sequences, name)) {
       sequences[name] = 0;

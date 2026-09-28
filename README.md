@@ -59,6 +59,8 @@ Las cuentas demo usan exclusivamente la contraseña `Demo1234!`. Nunca ejecutes 
 
 Las migraciones se ejecutan con `npm run migrate` y `MIGRATION_DATABASE_URL`; la aplicacion no aplica DDL al arrancar. La instancia PostgreSQL puede ser la misma. Por defecto, aplicacion, DDL, retencion y mantenimiento usan roles distintos. Un despliegue inicial sin datos reales puede optar explicitamente por un unico usuario con `ALLOW_SHARED_DATABASE_ROLE=true`; el piloto real rechaza esta excepcion.
 
+Para utilizar los cuestionarios, configura `QUESTIONNAIRE_PILOT_ENABLED=true` en el entorno del servicio de Render y despliega de nuevo. Cambiar el `.env` local no cambia las variables de Render. El módulo usa los permisos de grupo y consentimientos existentes; esta opción no activa `REAL_DATA_PILOT_ENABLED` ni requiere volver a cargar semillas.
+
 Para esta demo en Render, `DATA_KEY_PROVIDER=render-env-keyring` carga cada version desde una variable privada independiente. No uses JSON ni guardes las claves en Git:
 
 ```env

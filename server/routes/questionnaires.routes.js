@@ -1,5 +1,6 @@
 const express = require('express');
 const { authMiddleware } = require('../middlewares/auth.middleware');
+const { questionnaireContextMiddleware, questionnaireParamsMiddleware } = require('../middlewares/questionnaire-context.middleware');
 const { validateRequest } = require('../middlewares/schema.middleware');
 const {
   alertIdParamsSchema,
@@ -39,6 +40,7 @@ const {
 
 const questionnairesRouter = express.Router();
 questionnairesRouter.use(authMiddleware);
+questionnairesRouter.use(questionnaireContextMiddleware);
 
 questionnairesRouter.get('/questionnaire-definitions', listDefinitionsController);
 questionnairesRouter.get('/questionnaire-campaigns', listCampaignsController);
@@ -49,7 +51,7 @@ questionnairesRouter.post('/questionnaire-campaigns/:campaignId/open', validateR
 questionnairesRouter.post('/questionnaire-campaigns/:campaignId/close', validateRequest({ params: campaignIdParamsSchema, body: emptyBodySchema }), closeCampaignController);
 questionnairesRouter.post('/questionnaire-campaigns/:campaignId/cancel', validateRequest({ params: campaignIdParamsSchema, body: emptyBodySchema }), cancelCampaignController);
 questionnairesRouter.get('/questionnaire-campaigns/:campaignId/alerts', validateRequest({ params: campaignIdParamsSchema }), listAlertsController);
-questionnairesRouter.get('/questionnaire-campaigns/:campaignId/results/:studentId', validateRequest({ params: resultParamsSchema }), getResultController);
+questionnairesRouter.get('/questionnaire-campaigns/:campaignId/results/:studentId', validateRequest({ params: resultParamsSchema }), questionnaireParamsMiddleware, getResultController);
 
 questionnairesRouter.get('/me/questionnaire-assignments', listStudentAssignmentsController);
 questionnairesRouter.post('/questionnaire-participants/:participantId/attempts', validateRequest({ params: participantIdParamsSchema, body: emptyBodySchema }), startAttemptController);
