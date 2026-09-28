@@ -1,6 +1,7 @@
 const studentGate = document.getElementById('student-gate');
 const studentGateMessage = document.getElementById('student-gate-message');
 const assignmentView = document.getElementById('assignment-view');
+const assignmentIntro = document.getElementById('assignment-intro');
 const assignmentList = document.getElementById('assignment-list');
 const assignmentEmpty = document.getElementById('assignment-empty');
 const runnerView = document.getElementById('runner-view');
@@ -145,51 +146,32 @@ function handleError(error) {
   return false;
 }
 
-function assignmentStatusLabel(assignment) {
-  if (assignment.status === 'SUBMITTED') {
-    return 'Completado';
-  }
-  if (assignment.status === 'HELP_REQUESTED') {
-    return 'Ayuda solicitada';
-  }
-  if (assignment.status === 'AWAITING_CONSENT') {
-    return 'Esperando consentimiento familiar';
-  }
-  if (assignment.status === 'AVAILABLE' && assignment.campaignStatus !== 'LIVE') {
-    return 'Preparado; espera a que se abra la sesión';
-  }
-  if (assignment.status === 'AVAILABLE') {
-    return 'Disponible ahora';
-  }
-  if (assignment.status === 'IN_PROGRESS') {
-    return 'Continuar';
-  }
-  if (assignment.status === 'INELIGIBLE') {
-    return 'No disponible para tu edad';
-  }
-  return 'No disponible';
+function currentAssignment() {
+  const now = Date.now();
+  const available = state.assignments.filter((assignment) => (
+    assignment.campaignStatus === 'LIVE'
+    && ['AVAILABLE', 'IN_PROGRESS'].includes(assignment.status)
+    && (!assignment.liveExpiresAt || new Date(assignment.liveExpiresAt).getTime() > now)
+  ));
+  return available.find((assignment) => assignment.status === 'IN_PROGRESS') || available[0];
 }
 
 function renderAssignments() {
+  const assignment = currentAssignment();
   showOnly(assignmentView);
-  assignmentEmpty.hidden = state.assignments.length > 0;
-  assignmentList.innerHTML = state.assignments.map((assignment) => {
-    const actionable = assignment.campaignStatus === 'LIVE'
-      && ['AVAILABLE', 'IN_PROGRESS'].includes(assignment.status);
-    const requestedHelp = assignment.status === 'HELP_REQUESTED';
-    return `
+  assignmentIntro.hidden = !assignment;
+  assignmentEmpty.hidden = Boolean(assignment);
+  assignmentList.hidden = !assignment;
+  assignmentList.innerHTML = assignment ? `
       <article class="assignment-item">
         <div>
-          <span class="state-badge" data-tone="${actionable ? 'success' : (requestedHelp ? 'danger' : 'neutral')}">${escapeMarkup(assignmentStatusLabel(assignment))}</span>
+          <span class="state-badge" data-tone="success">${assignment.status === 'IN_PROGRESS' ? 'Continuar' : 'Disponible ahora'}</span>
           <h2>${escapeMarkup(assignment.title)}</h2>
           <p>${escapeMarkup(assignment.questionnaireTitle || 'Cuestionario experimental')} · ${escapeMarkup(assignment.ageRange || 'Edad no disponible')}</p>
         </div>
-        ${actionable
-          ? `<button class="button primary" type="button" data-start-participant="${escapeMarkup(assignment.id)}">${assignment.status === 'IN_PROGRESS' ? 'Continuar' : 'Empezar'}</button>`
-          : (requestedHelp ? `<button class="button secondary" type="button" data-show-help>Ver aviso de ayuda</button>` : '')}
+        <button class="button primary" type="button" data-start-participant="${escapeMarkup(assignment.id)}">${assignment.status === 'IN_PROGRESS' ? 'Continuar' : 'Empezar'}</button>
       </article>
-    `;
-  }).join('');
+    ` : '';
 }
 
 function setQuestionVideoLoading(isLoading) {
@@ -651,7 +633,7 @@ async function initialize() {
     state.assignments = response.data.assignments || [];
     const participantId = new URLSearchParams(window.location.search).get('participantId');
     const requested = state.assignments.find((assignment) => assignment.id === participantId);
-    if (requested && ['AVAILABLE', 'IN_PROGRESS'].includes(requested.status) && requested.campaignStatus === 'LIVE') {
+    if (requested && requested.id === currentAssignment()?.id) {
       await startAttempt(requested.id);
     } else if (requested?.status === 'HELP_REQUESTED') {
       showOnly(helpView);
@@ -672,9 +654,6 @@ assignmentList?.addEventListener('click', (event) => {
   if (startButton) {
     startAttempt(startButton.dataset.startParticipant);
     return;
-  }
-  if (event.target.closest('[data-show-help]')) {
-    showOnly(helpView);
   }
 });
 

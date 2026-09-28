@@ -20,7 +20,7 @@
   <body class="questionnaire-app questionnaire-student auth-pending">
     <!--
       Impeccable design contract
-      Context: student assignment list and one-question-at-a-time supervised response flow.
+      Context: current student assignment and one-question-at-a-time supervised response flow.
       Brand: Unicornio cosmos, calm and age-respectful; no clinical scoring language.
       Reuse: established color tokens, controls and companion imagery.
       Divergence: distraction-free runner with a persistent help control is safety-critical.
@@ -65,13 +65,13 @@
       </section>
 
       <section id="assignment-view" class="assignment-view card" hidden>
-        <header class="student-intro">
-          <span class="eyebrow">Cuestionarios disponibles</span>
+        <header id="assignment-intro" class="student-intro">
+          <span class="eyebrow">Tu cuestionario</span>
           <h1>Tu espacio para responder</h1>
           <p>Solo verás una pregunta cada vez. Tus respuestas se guardan al avanzar y puedes pedir ayuda en cualquier momento.</p>
         </header>
         <div id="assignment-list" class="assignment-list"></div>
-        <p id="assignment-empty" class="empty-copy" hidden>No tienes cuestionarios disponibles ahora.</p>
+        <p id="assignment-empty" class="empty-copy" hidden>Ahora no tienes ningún cuestionario pendiente.</p>
       </section>
 
       <section id="runner-view" class="runner-view card" hidden>
